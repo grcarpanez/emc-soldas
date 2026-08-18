@@ -43,6 +43,9 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar casca base do Frontend PWA (`frontend/index.html`, `manifest.json`, `sw.js`).
 - [x] Implementar tokens de design system e layout base (*Industrial Integrity* em `frontend/assets/css/`).
 - [x] Criar arquivos de governança e contexto (`AGENTS.md`, `docs/PLANO.md`, `docs/STATUS.md`, `docs/ERROS.md`).
+- [x] Configurar controle de versão Git (`.gitignore`, `.gitattributes`, `.env.example`).
+- [x] Executar primeiro commit blindado de segurança (`main`).
+- [ ] Conectar repositório remoto no GitHub (`origin`) e efetuar primeiro push (pendente de criação/autorização do usuário).
 
 ### Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria
 - [ ] Implementar classe base `SoftDeleteModel` e `AuditableModel`.
