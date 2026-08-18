@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 2)  
-**Fase Atual:** Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria (Concluída)  
-**Próxima Fase:** Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 3)  
+**Fase Atual:** Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) (Concluída)  
+**Próxima Fase:** Fase 4 - Cadastros Estruturais e Dicionários Centrais  
 
 ---
 
@@ -14,7 +14,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | :--- | :--- | :--- | :--- |
 | **Fase 1** | Infraestrutura, Base do Projeto e Governança de Configuração | **Concluída** | 100% |
 | **Fase 2** | Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria | **Concluída** | 100% |
-| **Fase 3** | Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) | Pendente | 0% |
+| **Fase 3** | Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) | **Concluída** | 100% |
 | **Fase 4** | Cadastros Estruturais e Dicionários Centrais | Pendente | 0% |
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | Pendente | 0% |
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | Pendente | 0% |
@@ -63,12 +63,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar bateria de testes automatizados (`python backend/manage.py test core`) com 100% de sucesso.
 
 ### Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)
-- [ ] Implementar autenticação customizada com suporte a hash PBKDF2 e PIN de 6 dígitos.
-- [ ] Configurar JWT em Cookie de Sessão HttpOnly (`SameSite=Strict`) e token CSRF.
-- [ ] Criar endpoints de Login, Logout, Soft Lock (PIN), Hard Lock e Recuperação de Senha.
-- [ ] Implementar Onboarding de colaboradores por e-mail com link de ativação de senha.
-- [ ] Implementar bloqueio temporário anti-bruteforce (5 tentativas falhas em 15 min = 1h de bloqueio) e endpoint de desbloqueio pelo Admin.
-- [ ] Criar classes de permissão RBAC com validação estrita dos 10 toggles no backend (`403 Forbidden`).
+- [x] Implementar autenticação customizada com suporte a hash PBKDF2 e PIN de 6 dígitos (`apps/authentication/models.py`).
+- [x] Configurar classe customizada de autenticação JWT via Cookie de Sessão HttpOnly (`CookieJWTAuthentication`) com `SameSite=Strict`.
+- [x] Criar endpoints de Login, Logout, Me, Soft Lock (PIN de 6 dígitos), Hard Lock (3 erros) e Recuperação de Senha por código de 8 dígitos.
+- [x] Implementar Onboarding de colaboradores com envio de convite por e-mail e link seguro de ativação (`POST /api/usuarios/convidar/` e `POST /api/auth/activate-account/`).
+- [x] Implementar bloqueio temporário anti-bruteforce (5 tentativas falhas em 15 min = 1h de bloqueio) e endpoint de desbloqueio pelo Admin (`POST /api/usuarios/{id}/desbloquear/`).
+- [x] Criar e validar classes de permissão RBAC com os 10 toggles dinâmicos no backend retornando `403 Forbidden` (`core/permissions.py`).
+- [x] Implementar injeção automática de contexto de autoria nos models a partir de `AuditUserMiddleware`.
+- [x] Criar e executar suíte de testes automatizados com 100% de aprovação (21 testes).
 
 ### Fase 4 - Cadastros Estruturais e Dicionários Centrais
 - [ ] Implementar CRUD de `DicionarioUom` e `DicionarioAtributo`.
@@ -161,4 +163,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)**, implementando autenticação customizada com suporte a hash PBKDF2 e PIN de 6 dígitos, JWT em Cookie HttpOnly (`SameSite=Strict`), Soft Lock por ociosidade, Onboarding por convite de e-mail, proteção anti-bruteforce e validação de permissões RBAC com os 10 toggles dinâmicos.
+Iniciar a **Fase 4 - Cadastros Estruturais e Dicionários Centrais**, implementando os endpoints de CRUD e regras de negócio para Dicionário UOM (`DicionarioUom`), Dicionário de Atributos (`DicionarioAtributo`), Categorias Financeiras (`CategoriaFinanceira`), Contas Bancárias (`ContaBancaria`), Meios de Pagamento (`MeioPagamento`) e Regras de Pagamento (`RegraPagamento`), protegidos pelas permissões RBAC correspondentes.

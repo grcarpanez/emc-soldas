@@ -13,6 +13,7 @@ urlpatterns = [
 
     # Endpoints da API REST (Kebab-case conforme FSD)
     path('api/auth/', include('apps.authentication.urls')),
+    path('api/', include('apps.authentication.user_urls')),
     path('api/cadastros/', include('apps.cadastros.urls')),
     path('api/catalogo/', include('apps.catalogo.urls')),
     path('api/compras/', include('apps.compras.urls')),

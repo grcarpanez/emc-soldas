@@ -70,6 +70,19 @@ class AuditableModel(models.Model):
     class Meta:
         abstract = True
 
+    def save(self, *args, **kwargs):
+        # Injeta automaticamente o usuário autenticado da thread se não informado
+        from core.middleware import get_current_user
+        current_user = get_current_user()
+        user_id = getattr(current_user, 'id', None) if current_user else None
+
+        if user_id:
+            if not self.pk and not self.created_by_id:
+                self.created_by_id = user_id
+            self.updated_by_id = user_id
+
+        super().save(*args, **kwargs)
+
 
 class SoftDeleteModel(models.Model):
     """
@@ -103,6 +116,11 @@ class SoftDeleteModel(models.Model):
         self.deleted_at = timezone.now()
         if user_id:
             self.deleted_by_id = user_id
+        else:
+            from core.middleware import get_current_user
+            current_user = get_current_user()
+            if current_user and getattr(current_user, 'id', None):
+                self.deleted_by_id = current_user.id
         self.save(update_fields=['deleted_at', 'deleted_by_id'])
 
     def restore(self):

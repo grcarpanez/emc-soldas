@@ -3,6 +3,9 @@ Modelos de Usuários, Autenticação e Permissões Dinâmicas (RBAC).
 Em conformidade com docs/FSD.md - Entidades Usuario e Permissao.
 """
 from django.db import models
+from django.contrib.auth.hashers import make_password, check_password
+from django.utils import timezone
+from datetime import timedelta
 from core.models import BaseModel
 
 
@@ -86,6 +89,64 @@ class Usuario(BaseModel):
     def is_admin(self) -> bool:
         return self.role == 'Admin'
 
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    @property
+    def has_pin(self) -> bool:
+        return bool(self.pin_hash)
+
+    def get_username(self) -> str:
+        return self.email
+
+    def set_password(self, raw_password: str):
+        """Define o hash seguro da senha utilizando PBKDF2/Argon2 nativo do Django."""
+        self.password_hash = make_password(raw_password)
+
+    def check_password(self, raw_password: str) -> bool:
+        """Verifica a exatidão da senha com defesa contra timing attacks."""
+        if not self.password_hash:
+            return False
+        return check_password(raw_password, self.password_hash)
+
+    def set_pin(self, raw_pin: str):
+        """Define o hash do PIN numérico de 6 dígitos para o Soft Lock."""
+        self.pin_hash = make_password(str(raw_pin).strip())
+
+    def check_pin(self, raw_pin: str) -> bool:
+        """Verifica se o PIN fornecido coincide com o hash gravado."""
+        if not self.pin_hash:
+            return False
+        return check_password(str(raw_pin).strip(), self.pin_hash)
+
+    def is_locked(self) -> bool:
+        """Verifica se o usuário está atualmente bloqueado por anti-bruteforce."""
+        if self.bloqueado_ate and self.bloqueado_ate > timezone.now():
+            return True
+        return False
+
+    def registrar_falha_login(self, max_tentativas: int = 5, minutos_bloqueio: int = 60):
+        """
+        Incrementa contador de tentativas falhas.
+        Se atingir max_tentativas (5), aplica bloqueio temporário (1 hora).
+        """
+        self.tentativas_login_falhas += 1
+        if self.tentativas_login_falhas >= max_tentativas:
+            self.bloqueado_ate = timezone.now() + timedelta(minutes=minutos_bloqueio)
+        self.save(update_fields=['tentativas_login_falhas', 'bloqueado_ate', 'updated_at'])
+
+    def resetar_falhas_login(self):
+        """Reseta o contador de falhas e remove o bloqueio após login com sucesso."""
+        self.tentativas_login_falhas = 0
+        self.bloqueado_ate = None
+        self.last_login = timezone.now()
+        self.save(update_fields=['tentativas_login_falhas', 'bloqueado_ate', 'last_login', 'updated_at'])
+
 
 class Permissao(models.Model):
     """
@@ -148,3 +209,60 @@ class Permissao(models.Model):
 
     def __str__(self):
         return f"Permissões de {self.usuario.nome}"
+
+
+class TokenSeguranca(models.Model):
+    """
+    Armazena tokens de uso único para recuperação de senha (código de 8 dígitos)
+    e links de convite seguro de onboarding de colaboradores.
+    """
+    TIPO_CHOICES = [
+        ('RECOVERY', 'Recuperação de Senha'),
+        ('INVITE', 'Convite de Onboarding'),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.CASCADE,
+        related_name='tokens_seguranca',
+        db_column='usuario_id',
+        verbose_name="Usuário"
+    )
+    token = models.CharField(
+        max_length=128,
+        unique=True,
+        db_index=True,
+        verbose_name="Código / Token Criptográfico"
+    )
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_CHOICES,
+        verbose_name="Tipo do Token"
+    )
+    expira_em = models.DateTimeField(
+        verbose_name="Data/Hora de Expiração"
+    )
+    utilizado = models.BooleanField(
+        default=False,
+        verbose_name="Token Utilizado"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Criado em"
+    )
+
+    class Meta:
+        db_table = 'tokens_seguranca'
+        verbose_name = 'Token de Segurança'
+        verbose_name_plural = 'Tokens de Segurança'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Token {self.tipo} - {self.usuario.email} (Utilizado: {self.utilizado})"
+
+    @property
+    def is_valido(self) -> bool:
+        """Verifica se o token ainda não foi utilizado e se está dentro do prazo de validade."""
+        return not self.utilizado and self.expira_em > timezone.now()
+

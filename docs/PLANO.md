@@ -107,19 +107,19 @@ Modelar as 29 entidades funcionais do sistema no Django ORM seguindo rigorosamen
 Construir o ecossistema de autenticação segura baseado em JWT armazenado em Cookie HttpOnly (`SameSite=Strict`), Soft Lock por ociosidade (30 minutos) com destravamento por PIN de 6 dígitos (ou WebAuthn), Hard Lock por tentativas excessivas/expiração, Onboarding de usuários via convite seguro por e-mail, Recuperação de senha por código de 8 dígitos, Proteção Anti-Bruteforce com bloqueio temporário e Matriz de Permissões com 10 Toggles Dinâmicos aplicados no Backend.
 
 ### Checklist de Tarefas
-- [ ] Implementar autenticação customizada com suporte a `Usuario` (e-mail, senha com hash PBKDF2/Argon2, PIN de 6 dígitos em `pin_hash`).
-- [ ] Implementar emissão e leitura de JWT via Cookie de Sessão HttpOnly com defesa CSRF (`X-CSRFToken`).
-- [ ] Criar endpoints de autenticação:
+- [x] Implementar autenticação customizada com suporte a `Usuario` (e-mail, senha com hash PBKDF2/Argon2, PIN de 6 dígitos em `pin_hash`).
+- [x] Implementar emissão e leitura de JWT via Cookie de Sessão HttpOnly com defesa CSRF (`X-CSRFToken`).
+- [x] Criar endpoints de autenticação:
   - `POST /api/auth/login/` (com proteção anti-bruteforce: 5 tentativas falhas = bloqueio de 1 hora).
   - `POST /api/auth/logout/` (invalidação de tokens e destruição do cookie).
   - `POST /api/auth/set-pin/` (cadastro e alteração do PIN de 6 dígitos).
   - `POST /api/auth/unlock-pin/` (destravamento do Soft Lock, com trava de 3 erros levando ao Hard Lock).
   - `POST /api/auth/forgot-password/` (envio de código de 8 dígitos com validade de 30 min via SMTP/console).
   - `POST /api/auth/reset-password/` (redefinição de senha com validação do código).
-- [ ] Implementar onboarding de colaboradores (`POST /api/usuarios/convidar/`) gerando link seguro para criação da senha própria.
-- [ ] Implementar endpoint de desbloqueio manual pelo Admin (`POST /api/usuarios/{id}/desbloquear/`).
-- [ ] Construir classes de permissão do DRF (`HasPermissionToggle`) para validar os 10 toggles dinâmicos no backend.
-- [ ] Implementar middleware para capturar o usuário autenticado da sessão e injetar automaticamente em `created_by_id`, `updated_by_id` e `deleted_by_id`.
+- [x] Implementar onboarding de colaboradores (`POST /api/usuarios/convidar/`) gerando link seguro para criação da senha própria.
+- [x] Implementar endpoint de desbloqueio manual pelo Admin (`POST /api/usuarios/{id}/desbloquear/`).
+- [x] Construir classes de permissão do DRF (`HasPermissionToggle`) para validar os 10 toggles dinâmicos no backend.
+- [x] Implementar middleware para capturar o usuário autenticado da sessão e injetar automaticamente em `created_by_id`, `updated_by_id` e `deleted_by_id`.
 
 ### Critérios de Pronto
 - Login via Cookie HttpOnly funcional.
