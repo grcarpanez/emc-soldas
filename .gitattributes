@@ -1,0 +1,48 @@
+# ==========================================
+# .gitattributes - Padronização de Finais de Linha e Tipos de Arquivo
+# ==========================================
+
+# Auto-normalização para arquivos de texto
+* text=auto eol=lf
+
+# Código Python
+*.py text eol=lf diff=python
+
+# Frontend Web & PWA
+*.html text eol=lf diff=html
+*.css text eol=lf diff=css
+*.js text eol=lf
+*.json text eol=lf
+*.webmanifest text eol=lf
+
+# Documentação & Markdown
+*.md text eol=lf
+*.txt text eol=lf
+
+# Arquivos de Configuração
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.env.example text eol=lf
+
+# Shell & Scripts
+*.sh text eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Imagens & Binários
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.svg text eol=lf
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
