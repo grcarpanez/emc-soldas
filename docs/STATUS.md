@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 6 - Catálogo Base, Materiais, Insumos e Produtos - Motor BOM)  
-**Fase Atual:** Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) (Pronta para início)  
-**Próxima Fase:** Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 7 - Módulo de Compras, Notas Fiscais de Entrada e Retroalimentação de Custos)  
+**Fase Atual:** Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) (Pronta para início)  
+**Próxima Fase:** Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)  
 
 ---
 
@@ -20,7 +20,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 4** | Cadastros Estruturais e Dicionários Centrais | **Concluída** | 100% |
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | **Concluída** | 100% |
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | **Concluída** | 100% |
-| **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | Pendente | 0% |
+| **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | **Concluída** | 100% |
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | Pendente | 0% |
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | Pendente | 0% |
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | Pendente | 0% |
@@ -114,10 +114,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte de testes automatizados com 100% de sucesso (50 testes no total acumulado do projeto).
 
 ### Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)
-- [ ] Implementar registro de Notas Fiscais de Entrada (`DocumentoFiscalCompra` e `NotaCompraItem`).
-- [ ] Implementar rotina de retroalimentação automática de custos no Catálogo de Itens.
-- [ ] Configurar upload seguro de XML/PDF com validação de MIME-Type profundo.
-- [ ] Implementar histórico de compras e preços por fornecedor.
+- [x] Implementar registro de Notas Fiscais de Entrada (`DocumentoFiscalCompra` e `NotaCompraItem` via `/api/documentos-fiscais-compra/` e `/api/nota-compra-itens/`).
+- [x] Implementar rotina de retroalimentação automática de custos no Catálogo de Itens (`ultimo_custo_compra` e `data_ultima_compra`).
+- [x] Configurar upload seguro de XML/PDF com validação de MIME-Type profundo, magic numbers e NoExec (`/api/documentos-fiscais-compra/{id}/anexar-arquivo/` e `download-anexo/`).
+- [x] Implementar consulta de histórico de compras e preços por fornecedor (`/api/documentos-fiscais-compra/historico-precos/`).
+- [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_compras` (`HasComprasAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (74 testes no total acumulado do projeto).
 
 ### Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)
 - [ ] Implementar criação ágil de Orçamentos com 3 tipos de itens (Produtos, Itens e Lançamentos Livres).
@@ -184,4 +186,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)**, desenvolvendo os serializers, viewsets e rotas para `DocumentoFiscalCompra` (`/api/documentos-fiscais-compra/`) e `NotaCompraItem` (`/api/nota-compra-itens/`), implementando o upload protegido de arquivos físicos (XML/PDF), a rotina de retroalimentação automática que atualiza o `ultimo_custo_compra` e `data_ultima_compra` no Catálogo de Itens, e a consulta de histórico de preços por fornecedor, protegidos pelo toggle `acesso_compras`.
+Iniciar a **Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)**, desenvolvendo os serializers, viewsets e rotas para `Orcamento` (`/api/orcamentos/`), `OrcamentoItem` (`/api/orcamento-itens/`) e `OrcamentoPropostaPagamento` (`/api/orcamento-propostas-pagamento/`), implementando os 3 tipos de itens (Produtos, Itens e Lançamentos Livres), a persistência imutável de Snapshots (`custo_snapshot`, `valor_venda_snapshot`), o controle de status duplo (Operacional vs Financeiro), a renovação de orçamento com alerta de inflação de insumos/mão de obra, o cancelamento justificado obrigatório (mínimo 10 caracteres) e a geração do PDF comercial com desconto oculto quando zerado, protegidos pelo toggle `acesso_comercial`.

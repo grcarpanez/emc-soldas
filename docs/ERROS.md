@@ -73,4 +73,22 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Substituição de `path('.../<str:cnpj>/')` por `re_path(r'^utilitarios/consulta-cnpj/(?P<cnpj>.+?)/?$')` em `backend/apps/cadastros/urls.py`, permitindo que consultas recebam tanto o CNPJ limpo (`33000167000101`) quanto formatado com barras, pontos e traços.
 - **Como evitar no futuro:** Em rotas que recebem parâmetros com possíveis caracteres de separação de caminho (como documentos formatados com barra), utilizar `re_path` ou `<path:param>` com sanitização interna dos dígitos.
 
+---
+
+## 2026-08-18 - Bloqueio de Validação Aninhada por UniqueTogetherValidator do DRF em Sub-itens de Compra
+
+- **Sintoma:** Criação de `DocumentoFiscalCompra` com sub-lista `itens_comprados` retornava `400 Bad Request` com o erro `'documento_fiscal': ['Este campo é obrigatório']` nos itens da lista.
+- **Causa:** O Django REST Framework infere automaticamente um `UniqueTogetherValidator` em `ModelSerializer` quando o model possui `UniqueConstraint` envolvendo a chave estrangeira do pai (`documento_fiscal`, `item`). Em requisições aninhadas, o objeto pai ainda não foi persistido no banco no momento da validação dos filhos, fazendo com que o validador nativo falhe por ausência do ID pai.
+- **Solução aplicada:** Definição de `validators = []` na `class Meta` de `NotaCompraItemSerializer` e transferência da validação anti-duplicação de itens para o método `validate()` do serializer pai `DocumentoFiscalCompraSerializer`, mantendo a garantia final na `UniqueConstraint` do banco de dados MySQL.
+- **Como evitar no futuro:** Em serializers de entidades relacionais 1:N que suportam escrita aninhada (como itens de notas fiscais, itens de orçamento e itens de fatura), desativar o validador automático do DRF com `validators = []` e realizar a checagem de itens repetidos no método `validate()` do serializer pai.
+
+---
+
+## 2026-08-18 - Rejeição Precoce de Chave de Acesso NFe Formatada por MaxLengthValidator do DRF
+
+- **Sintoma:** Ao enviar chaves de acesso NFe formatadas com espaços ou traços (ex: `3526 0833 0001 6755 0010...` com 48 a 54 caracteres), a API retornava `400 Bad Request` com mensagem `'Certifique-se de que este campo não tenha mais de 44 caracteres.'` antes de executar o método `validate_chave_acesso`.
+- **Causa:** O DRF herda o `max_length=44` do modelo ORM no `CharField` padrão e executa a validação de comprimento máximo antes de disparar a limpeza/sanitização no método `validate_chave_acesso`.
+- **Solução aplicada:** Declaração explícita do campo `chave_acesso = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)` no `DocumentoFiscalCompraSerializer`, permitindo receber a string formatada pelo frontend, para então extrair estritamente os dígitos numéricos e validar o comprimento final exato de 44 dígitos antes de gravar no banco de dados.
+- **Como evitar no futuro:** Sempre que um campo do modelo tiver tamanho estrito no banco mas puder receber dados de entrada formatados (máscaras de CPF, CNPJ, Chaves NFe, Telefones), declarar o campo no serializer com margem de caracteres suficiente para conter a máscara antes da extração dos dígitos.
+
 
