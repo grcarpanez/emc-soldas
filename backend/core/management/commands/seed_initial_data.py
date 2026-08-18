@@ -23,21 +23,21 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE("Iniciando povoamento de dados estruturais (Seeders)..."))
 
-        # 1. Dicionário UOM
+        # 1. Dicionário UOM (100% Maiúsculas sem Acento)
         uoms = [
-            ("UN", "Unidade"),
-            ("m", "Metro"),
-            ("m²", "Metro Quadrado"),
-            ("cm²", "Centímetro Quadrado"),
-            ("mm", "Milímetro"),
-            ("kg", "Quilograma"),
-            ("g", "Grama"),
-            ("L", "Litro"),
-            ("mL", "Mililitro"),
-            ("CX", "Caixa"),
-            ("BARRA", "Barra"),
-            ("PCT", "Pacote"),
-            ("H", "Hora"),
+            ("UN", "UNIDADE"),
+            ("M", "METRO"),
+            ("M2", "METRO QUADRADO"),
+            ("CM2", "CENTIMETRO QUADRADO"),
+            ("MM", "MILIMETRO"),
+            ("KG", "QUILOGRAMA"),
+            ("G", "GRAMA"),
+            ("L", "LITRO"),
+            ("ML", "MILILITRO"),
+            ("CX", "CAIXA"),
+            ("BARRA", "BARRA"),
+            ("PCT", "PACOTE"),
+            ("H", "HORA"),
         ]
         uom_count = 0
         for sigla, desc in uoms:
@@ -49,15 +49,15 @@ class Command(BaseCommand):
                 uom_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario UOM populado ({uom_count} novas unidades)."))
 
-        # 2. Dicionário de Atributos Técnicos
+        # 2. Dicionário de Atributos Técnicos (100% Maiúsculas sem Acento)
         atributos = [
-            "Espessura",
-            "Diâmetro",
-            "Material / Liga",
-            "Rosca",
-            "Comprimento",
-            "Marca / Fabricante",
-            "Acabamento",
+            "ESPESSURA",
+            "DIAMETRO",
+            "MATERIAL / LIGA",
+            "ROSCA",
+            "COMPRIMENTO",
+            "MARCA / FABRICANTE",
+            "ACABAMENTO",
         ]
         attr_count = 0
         for nome_attr in atributos:
@@ -68,16 +68,16 @@ class Command(BaseCommand):
                 attr_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario de Atributos populado ({attr_count} novos atributos)."))
 
-        # 3. Meios de Pagamento
+        # 3. Meios de Pagamento (100% Maiúsculas sem Acento)
         meios = [
             ("PIX", False),
-            ("Dinheiro", False),
-            ("Boleto Bancário", False),
-            ("Cartão de Crédito", True),
-            ("Cartão de Débito", True),
-            ("Transferência TED/DOC", False),
-            ("Depósito Bancário", False),
-            ("Cheque", False),
+            ("DINHEIRO", False),
+            ("BOLETO BANCARIO", False),
+            ("CARTAO DE CREDITO", True),
+            ("CARTAO DE DEBITO", True),
+            ("TRANSFERENCIA TED/DOC", False),
+            ("DEPOSITO BANCARIO", False),
+            ("CHEQUE", False),
         ]
         meios_dict = {}
         meio_count = 0
@@ -91,16 +91,16 @@ class Command(BaseCommand):
                 meio_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Meios de Pagamento populados ({meio_count} novos meios)."))
 
-        # 4. Regras de Pagamento / Condições Comerciais
+        # 4. Regras de Pagamento / Condições Comerciais (100% Maiúsculas sem Acento)
         regras = [
-            ("À Vista no Pix (5% Desc.)", "PIX", "A_VISTA", 1, 0, 0, 5.00),
-            ("À Vista em Dinheiro", "Dinheiro", "A_VISTA", 1, 0, 0, 0.00),
-            ("Boleto 28 Dias", "Boleto Bancário", "A_PRAZO", 1, 28, 0, 0.00),
-            ("Boleto 30/60 Dias", "Boleto Bancário", "PARCELADO", 2, 30, 30, 0.00),
-            ("Boleto 30/60/90 Dias", "Boleto Bancário", "PARCELADO", 3, 30, 30, 0.00),
-            ("Cartão de Débito", "Cartão de Débito", "A_VISTA", 1, 0, 0, 0.00),
-            ("Cartão de Crédito à Vista", "Cartão de Crédito", "A_VISTA", 1, 30, 0, 0.00),
-            ("Cartão de Crédito 3x", "Cartão de Crédito", "PARCELADO", 3, 30, 30, 0.00),
+            ("A VISTA NO PIX (5% DESC.)", "PIX", "A_VISTA", 1, 0, 0, 5.00),
+            ("A VISTA EM DINHEIRO", "DINHEIRO", "A_VISTA", 1, 0, 0, 0.00),
+            ("BOLETO 28 DIAS", "BOLETO BANCARIO", "A_PRAZO", 1, 28, 0, 0.00),
+            ("BOLETO 30/60 DIAS", "BOLETO BANCARIO", "PARCELADO", 2, 30, 30, 0.00),
+            ("BOLETO 30/60/90 DIAS", "BOLETO BANCARIO", "PARCELADO", 3, 30, 30, 0.00),
+            ("CARTAO DE DEBITO", "CARTAO DE DEBITO", "A_VISTA", 1, 0, 0, 0.00),
+            ("CARTAO DE CREDITO A VISTA", "CARTAO DE CREDITO", "A_VISTA", 1, 30, 0, 0.00),
+            ("CARTAO DE CREDITO 3X", "CARTAO DE CREDITO", "PARCELADO", 3, 30, 30, 0.00),
         ]
         regra_count = 0
         for nome_regra, meio_nome, tipo_cobr, num_parc, prazo_1, interv, desc_padrao in regras:
@@ -121,19 +121,19 @@ class Command(BaseCommand):
                     regra_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Regras de Pagamento populadas ({regra_count} novas regras)."))
 
-        # 5. Categorias Financeiras
+        # 5. Categorias Financeiras (100% Maiúsculas sem Acento e Enum UPPERCASE)
         categorias = [
-            ("Receita de Venda de Produtos", "Receita", None),
-            ("Receita de Serviços e Reformas", "Receita", None),
-            ("Outras Receitas Operacionais", "Receita", None),
-            ("Insumos e Matérias-Primas", "Despesa", None),
-            ("Folha de Pagamento e Pró-Labore", "Despesa", None),
-            ("Tarifas e Maquininhas", "Despesa", None),
-            ("Impostos e Tributos", "Despesa", None),
-            ("Manutenção e Ferramental", "Despesa", None),
-            ("Água, Luz e Internet", "Despesa", None),
-            ("Outras Despesas Operacionais", "Despesa", None),
-            ("Transferência Inter-Contas", "Transferência", None),
+            ("RECEITA DE VENDA DE PRODUTOS", "RECEITA", None),
+            ("RECEITA DE SERVICOS E REFORMAS", "RECEITA", None),
+            ("OUTRAS RECEITAS OPERACIONAIS", "RECEITA", None),
+            ("INSUMOS E MATERIAS-PRIMAS", "DESPESA", None),
+            ("FOLHA DE PAGAMENTO E PRO-LABORE", "DESPESA", None),
+            ("TARIFAS E MAQUININHAS", "DESPESA", None),
+            ("IMPOSTOS E TRIBUTOS", "DESPESA", None),
+            ("MANUTENCAO E FERRAMENTAL", "DESPESA", None),
+            ("AGUA, LUZ E INTERNET", "DESPESA", None),
+            ("OUTRAS DESPESAS OPERACIONAIS", "DESPESA", None),
+            ("TRANSFERENCIA INTER-CONTAS", "TRANSFERENCIA", None),
         ]
         cat_count = 0
         for nome_cat, tipo_cat, _ in categorias:
@@ -145,10 +145,10 @@ class Command(BaseCommand):
                 cat_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Categorias Financeiras populadas ({cat_count} novas categorias)."))
 
-        # 6. Contas Bancárias Iniciais
+        # 6. Contas Bancárias Iniciais (100% Maiúsculas sem Acento)
         contas = [
-            ("Caixa Físico Oficina", 0.00, 0.00),
-            ("Conta Corrente Principal", 0.00, 1000.00),
+            ("CAIXA FISICO OFICINA", 0.00, 0.00),
+            ("CONTA CORRENTE PRINCIPAL", 0.00, 1000.00),
         ]
         conta_count = 0
         for nome_conta, saldo, limite in contas:
@@ -160,23 +160,23 @@ class Command(BaseCommand):
                 conta_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Contas Bancarias populadas ({conta_count} novas contas)."))
 
-        # 7. Configuração Global (Singleton id=1)
+        # 7. Configuração Global (Singleton id=1 - 100% Maiúsculas sem Acento)
         config, created = ConfiguracaoGlobal.objects.get_or_create(
             id=1,
             defaults={
                 'validade_orcamento_dias': 15,
                 'taxa_mao_de_obra_hora': 80.00,
-                'razao_social': 'EMC Soldas e Manutenção Industrial LTDA',
+                'razao_social': 'EMC SOLDAS E MANUTENCAO INDUSTRIAL LTDA',
                 'cnpj': '12.345.678/0001-90',
                 'telefone_contato': '(11) 98765-4321',
-                'endereco_oficina': 'Rua Industrial da Solda, 500 - Galpão 2 - São Paulo/SP',
+                'endereco_oficina': 'RUA INDUSTRIAL DA SOLDA, 500 - GALPAO 2 - SAO PAULO/SP',
                 'tempo_ociosidade_minutos': 30,
                 'tempo_expiracao_sessao_dias': 15,
                 'retencao_logs_dias': 30,
                 'smtp_host': 'localhost',
                 'smtp_port': 587,
                 'smtp_use_tls': True,
-                'email_remetente_nome': 'EMC Soldas',
+                'email_remetente_nome': 'EMC SOLDAS',
             }
         )
         self.stdout.write(self.style.SUCCESS("[OK] Configuracoes Globais (id=1) inicializadas."))
@@ -186,7 +186,7 @@ class Command(BaseCommand):
         admin_user, created_user = Usuario.objects.get_or_create(
             email=admin_email,
             defaults={
-                'nome': 'Administrador Geral',
+                'nome': 'ADMINISTRADOR GERAL',
                 'role': 'Admin',
                 'password_hash': make_password('AdminMaster2026!'),
                 'pin_hash': make_password('123456'),
@@ -194,6 +194,7 @@ class Command(BaseCommand):
             }
         )
         if not created_user:
+            admin_user.nome = 'ADMINISTRADOR GERAL'
             admin_user.set_password('AdminMaster2026!')
             admin_user.set_pin('123456')
             admin_user.resetar_falhas_login()

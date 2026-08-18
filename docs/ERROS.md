@@ -54,3 +54,13 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Causa:** O Django 5.x por padrão exige MariaDB 10.5+ e presume suporte nativo à cláusula `RETURNING` em comandos INSERT, que não existe no MariaDB 10.4 padrão do XAMPP.
 - **Solução aplicada:** Configuração de bypass de versão em `backend/config/settings.py` com `DatabaseWrapper.check_database_version_supported = lambda self: None` e desativação das features `can_return_columns_from_insert` e `can_return_rows_from_bulk_insert`. Além disso, ajustado `caminho_arquivo_fisico` no modelo `ControleArquivoLog` para `max_length=255` para compatibilidade estrita com índices únicos no MySQL/MariaDB.
 - **Como evitar no futuro:** Manter as configurações de compatibilidade do driver PyMySQL no `settings.py` para assegurar suporte contínuo ao XAMPP em desenvolvimento local e a provedores Cloud em produção.
+
+---
+
+## 2026-08-18 - Preservação de Pontuação na Sanitização de Textos Livres
+
+- **Sintoma:** Risco de remoção indesejada de símbolos úteis em endereços e descrições técnicas (como `º`, `ª`, `/`, `-`, `(`, `)`, `,`, `.`) ao sanitizar entradas para ASCII puro.
+- **Causa:** Expressões regulares excessivamente restritivas (ex: `re.sub(r'[^A-Z0-9 ]', '', texto)`) eliminam pontuações essenciais de logradouro e especificações técnicas.
+- **Solução aplicada:** Adoção da normalização diacrítica `unicodedata.normalize('NFKD', ...)` com substituição prévia de ordinais (`º` -> `O`, `ª` -> `A`) e filtragem exclusiva de marcas combinadas (`unicodedata.combining(c)`), preservando toda a pontuação e estrutura do texto original enquanto converte com segurança para maiúsculas sem acento.
+- **Como evitar no futuro:** Nunca utilizar regex destrutiva em campos de texto livre (endereços, descrições, observações). Utilizar sempre a função utilitária `sanitizar_texto_maiusculo` no backend e `sanitizarTextoEmTempoReal` no frontend.
+

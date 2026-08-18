@@ -6,9 +6,11 @@ Este documento define o roteiro incremental de desenvolvimento do sistema **EMC 
 
 ## Sumário das Fases
 
+- [Fase 0 - Mapeamento Integral dos Campos do Banco de Dados e Matriz de Máscaras/Sanitização](#fase-0---mapeamento-integral-dos-campos-do-banco-de-dados-e-matriz-de-máscaras-e-sanitização)
 - [Fase 1 - Infraestrutura, Base do Projeto e Governança de Configuração](#fase-1---infraestrutura-base-do-projeto-e-governança-de-configuração)
 - [Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria](#fase-2---banco-de-dados-modelos-orm-29-entidades-migrations-e-auditoria)
 - [Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)](#fase-3---autenticação-sessão-jwt-httponly-soft-lock-e-controle-de-acesso-rbac)
+- [Fase 3.5 - Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras](#fase-35---adequação-de-sanitização-universal-uppercase-sem-acentos-e-utilitários-de-máscaras)
 - [Fase 4 - Cadastros Estruturais e Dicionários Centrais](#fase-4---cadastros-estruturais-e-dicionários-centrais)
 - [Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos](#fase-5---módulo-de-clientes-fornecedores-e-equipamentos)
 - [Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)](#fase-6---catálogo-base-materiais-insumos-e-produtos-motor-bom)
@@ -21,6 +23,133 @@ Este documento define o roteiro incremental de desenvolvimento do sistema **EMC 
 - [Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)](#fase-13---dashboards-relatórios-estratégicos-e-exportações-pdfcsv)
 - [Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)](#fase-14---frontend-pwa-client-side-e-interface-completa-industrial-integrity)
 - [Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy](#fase-15---bateria-de-testes-integrados-hardening-pentest-de-conclusão-e-deploy)
+
+---
+
+## Fase 0 - Mapeamento Integral dos Campos do Banco de Dados e Matriz de Máscaras e Sanitização
+
+### Objetivo da Fase
+Mapear todos os campos de dados das 29 entidades do sistema, definindo suas regras de sanitização (Maiúsculas sem acento, Lowercase para e-mails, Mantido para credenciais) e especificações de máscaras de entrada (Máscara de Valor ATM `R$ 0,00`, CPF/CNPJ Híbrido, Telefone Híbrido, CEP, Placas, etc.) para validação e aprovação antes das fases de construção de telas e cadastros.
+
+### Matriz Mestre de Campos, Sanitização e Máscaras (29 Entidades)
+
+| # | Entidade | Campo | Tipo de Dado | Regra de Sanitização | Máscara / Formatação de Entrada na View |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | `Usuario` | `email` | `CharField(255)` | Lowercase (minúsculas) | Formato de e-mail padrão |
+| | | `role` | `CharField(20)` | Enum (`Admin`, `Operador`) | Dropdown / Select |
+| | | `pin_hash` | `CharField(128)` | Hash de 6 dígitos numéricos | Máscara de PIN: `000000` (senha/numérica) |
+| **2** | `Permissao` | 10 toggles | `BooleanField` | Booleano nativo | Toggle Switch ON/OFF |
+| **3** | `ClienteFornecedor` | `tipo` | `CharField(20)` | Enum (`Cliente`, `Fornecedor`, `Ambos`) | Dropdown / Radio |
+| | | `tipo_pessoa` | `CharField(2)` | Enum (`PF`, `PJ`) | Radio Button (PF / PJ) |
+| | | `nome_razao` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `nome_fantasia` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `cnpj_cpf` | `CharField(20)` | Apenas dígitos numéricos no banco | **Máscara Dinâmica Híbrida:** `000.000.000-00` (até 11 dígitos) ➔ `00.000.000/0000-00` (12 a 14 dígitos) |
+| | | `inscricao_estadual` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Texto/Dígitos uppercase ou "ISENTO" |
+| | | `isento_ie` | `BooleanField` | Booleano | Checkbox |
+| | | `email` | `CharField(255)` | Lowercase | Formato de e-mail |
+| | | `telefone` | `CharField(20)` | Apenas dígitos no banco | **Máscara Dinâmica Híbrida:** `(00) 0000-0000` (10 dígitos) ➔ `(00) 00000-0000` (11 dígitos) |
+| | | `cep` | `CharField(10)` | Apenas dígitos no banco | **Máscara CEP:** `00000-000` |
+| | | `logradouro` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `numero` | `CharField(20)` | **MAIÚSCULAS SEM ACENTO** | Texto/Dígitos uppercase (ex: `120`, `S/N`) |
+| | | `complemento` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `bairro` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `cidade` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `uf` | `CharField(2)` | **MAIÚSCULAS (2 letras)** | Dropdown ou Máscara `AA` |
+| **4** | `Equipamento` | `placa` | `CharField(10)` | **MAIÚSCULAS** | **Máscara Híbrida de Placa:** `AAA-0000` (Antiga) / `AAA0A00` (Mercosul) |
+| | | `identificacao` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real (Frota, Chassi, Código Interno) |
+| | | `descricao` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| **5** | `ClienteEquipamento`| `data_vinculo` | `DateTimeField` | Data/Hora UTC | Data `DD/MM/AAAA` |
+| | | `is_ativo` | `BooleanField` | Booleano | Toggle / Checkbox |
+| **6** | `DicionarioUom` | `sigla` | `CharField(10)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `KG`, `M2`, `L`, `UN`) |
+| | | `descricao` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `METRO QUADRADO`) |
+| **7** | `DicionarioAtributo`| `nome_atributo` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `ESPESSURA`, `DIAMETRO`) |
+| **8** | `Item` | `nome` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `fator_conversao` | `DecimalField(12,4)` | Decimal numérico | Decimal com 4 casas (ex: `1,0000`) |
+| | | `ultimo_custo_compra`| `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` (preenchimento direita ➔ esquerda) |
+| | | `data_ultima_compra` | `DateTimeField` | Data/Hora | Data `DD/MM/AAAA` |
+| | | `tipo_uso` | `CharField(30)` | **Enum Uppercase** | Dropdown (`INSUMO_PRODUTIVO`, `MATERIAL_CONSUMO`, `EPI`, `FERRAMENTAL`) |
+| **9** | `ItemAtributoValor` | `valor` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| **10**| `Produto` | `nome` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `descricao` | `TextField` | **MAIÚSCULAS SEM ACENTO** | Área de texto uppercase em tempo real |
+| | | `tempo_estimado_execucao`| `DecimalField(8,2)` | Decimal numérico | **Máscara de Horas:** `0,00 h` (ex: `1,50 h`) |
+| **11**| `FichaTecnica` | `quantidade_utilizada` | `DecimalField(12,4)` | Decimal numérico | Decimal com até 4 casas (ex: `0,5000`) |
+| **12**| `Orcamento` | `data_geracao` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `data_validade` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `status_operacional` | `CharField(20)` | **Enum Uppercase** | Badge / Dropdown (`GERADO`, `ENVIADO`, `APROVADO`, `EM_EXECUCAO`, `CONCLUIDO`, `CANCELADO`) |
+| | | `status_financeiro` | `CharField(20)` | **Enum Uppercase** | Badge / Dropdown (`A_FATURAR`, `FATURADO`, `PAGO`, `CANCELADO`) |
+| | | `valor_bruto` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` (calculado/editável) |
+| | | `valor_desconto_aplicado`| `DecimalField(12,2)`| Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` ou Porcentagem `0,00 %` |
+| | | `motivo_cancelamento` | `CharField(500)` | **MAIÚSCULAS SEM ACENTO** | Área de texto uppercase (mínimo 10 caracteres - salvo no BD e no Log) |
+| **13**| `OrcamentoItem` | `descricao_livre` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `quantidade` | `DecimalField(12,4)` | Decimal numérico | Decimal com até 4 casas |
+| | | `custo_snapshot` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `valor_venda_snapshot`| `DecimalField(12,2)`| Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| **14**| `Fatura` | `data_emissao` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `data_fechamento` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `status` | `CharField(20)` | **Enum Uppercase** | Badge / Status (`RASCUNHO`, `FATURADA`, `PAGA`, `CANCELADA`) |
+| | | `valor_bruto` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `desconto_global` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `valor_total_faturado` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `numero_nfe_venda` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Dígitos / Texto uppercase |
+| | | `linha_digitavel_boleto`| `CharField(100)` | Apenas dígitos | **Máscara Linha Digitável:** `00000.00000 00000.000000 00000.000000 0 00000000000000` |
+| | | `motivo_cancelamento` | `CharField(500)` | **MAIÚSCULAS SEM ACENTO** | Área de texto uppercase (mínimo 10 caracteres - salvo no BD e no Log) |
+| **15**| `FaturaPropostaPagamento`| `desconto_personalizado`| `DecimalField(5,2)` | Decimal numérico | **Máscara Porcentagem:** `0,00 %` |
+| **16**| `OrcamentoPropostaPagamento`| `desconto_personalizado`| `DecimalField(5,2)` | Decimal numérico | **Máscara Porcentagem:** `0,00 %` |
+| **17**| `LancamentoFinanceiro` | `tipo_lancamento` | `CharField(20)` | **Enum Uppercase** | Dropdown / Badge (`ENTRADA`, `SAIDA`, `TRANSFERENCIA`) |
+| | | `descricao` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto livre uppercase em tempo real |
+| | | `valor` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` (preenchimento direita ➔ esquerda) |
+| | | `data_vencimento` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `data_pagamento` | `DateTimeField` | Data/Hora | Data/Hora `DD/MM/AAAA HH:MM` |
+| | | `status_pagamento` | `CharField(20)` | **Enum Uppercase** | Badge (`A_VENCER`, `VENCIDO`, `PAGO`, `CANCELADO`) |
+| | | `motivo_cancelamento` | `CharField(500)` | **MAIÚSCULAS SEM ACENTO** | Área de texto uppercase (mínimo 10 caracteres - salvo no BD e no Log) |
+| | | `is_conciliado` | `BooleanField` | Booleano | Ícone de conciliação / Checkbox |
+| **18**| `ContaBancaria` | `nome` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `BANCO DO BRASIL - CC PRINCIPAL`) |
+| | | `saldo` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `limite_credito` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| **19**| `CartaoCredito` | `nome` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `ITAU MASTERCARD CORPORATIVO`) |
+| | | `dia_vencimento` | `IntegerField` | Inteiro (1 a 31) | Máscara de dia: `00` |
+| | | `dia_fechamento_padrao` | `IntegerField` | Inteiro (1 a 31) | Máscara de dia: `00` |
+| | | `limite` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| | | `permite_limite_emergencial`| `BooleanField` | Booleano | Toggle Switch |
+| **20**| `FaturaCartao` | `mes_referencia` | `CharField(7)` | Texto `YYYY-MM` | **Máscara Mês/Ano:** `MM/AAAA` (ex: `08/2026`) |
+| | | `data_fechamento_real` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `status` | `CharField(20)` | **Enum Uppercase** | Badge (`ABERTA`, `FECHADA`, `PAGA`) |
+| **21**| `CategoriaFinanceira` | `nome` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase em tempo real |
+| | | `tipo` | `CharField(20)` | **Enum Uppercase** | Dropdown / Radio (`RECEITA`, `DESPESA`, `TRANSFERENCIA`) |
+| **22**| `MeioPagamento` | `nome` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `PIX`, `DINHEIRO`, `BOLETO`) |
+| | | `permite_taxa_maquininha`| `BooleanField` | Booleano | Toggle Switch |
+| | | `ativo` | `BooleanField` | Booleano | Toggle Switch |
+| **23**| `RegraPagamento` | `nome` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `BOLETO 30/60/90 DIAS`) |
+| | | `tipo_cobranca` | `CharField(20)` | **Enum Uppercase** | Dropdown (`A_VISTA`, `A_PRAZO`, `PARCELADO`) |
+| | | `numero_parcelas` | `IntegerField` | Inteiro $\ge 1$ | Dígitos inteiros |
+| | | `prazo_primeira_parcela_dias`| `IntegerField` | Inteiro $\ge 0$ | Dígitos inteiros (Dias) |
+| | | `intervalo_parcelas_dias`| `IntegerField` | Inteiro $\ge 0$ | Dígitos inteiros (Dias) |
+| | | `desconto_concedido_padrao`| `DecimalField(5,2)`| Decimal numérico | **Máscara Porcentagem:** `0,00 %` |
+| | | `ativo` | `BooleanField` | Booleano | Toggle Switch |
+| **24**| `DocumentoFiscalCompra` | `num_nota` | `CharField(50)` | **MAIÚSCULAS SEM ACENTO** | Dígitos / Texto uppercase |
+| | | `chave_acesso` | `CharField(44)` | Apenas 44 dígitos (opcional para recibo/NFS-e) | **Máscara Chave NFe/NFCe (44 dígitos):** `0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000` |
+| | | `data_compra` | `DateField` | Data | Data `DD/MM/AAAA` |
+| | | `valor_total` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| **25**| `NotaCompraItem` | `quantidade_comprada` | `DecimalField(12,4)` | Decimal numérico | Decimal com até 4 casas |
+| | | `valor_unitario` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` |
+| **26**| `AnexoGeralCliente` | `nome_documento` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase em tempo real |
+| **27**| `LogEstorno` | `justificativa` | `TextField` | **MAIÚSCULAS SEM ACENTO** | Área de texto uppercase (mínimo 10 caracteres - salvo no BD e no Log) |
+| | | `data_estorno` | `DateTimeField` | Data/Hora | Data/Hora `DD/MM/AAAA HH:MM` |
+| **28**| `ConfiguracaoGlobal`| `razao_social` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase em tempo real |
+| | | `cnpj` | `CharField(20)` | Apenas 14 dígitos | **Máscara CNPJ:** `00.000.000/0000-00` |
+| | | `telefone_contato` | `CharField(20)` | Apenas dígitos | **Máscara Dinâmica Híbrida:** `(00) 0000-0000` (10 dígitos) ➔ `(00) 00000-0000` (11 dígitos) |
+| | | `endereco_oficina` | `CharField(255)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase em tempo real |
+| | | `taxa_mao_de_obra_hora` | `DecimalField(12,2)` | Decimal numérico | **Máscara ATM Moeda:** `R$ 0,00` (ex: `R$ 120,00`) |
+| | | `validade_orcamento_dias`| `IntegerField` | Inteiro | Dígitos inteiros (Dias) |
+| | | `tempo_ociosidade_minutos`| `IntegerField` | Inteiro | Dígitos inteiros (Minutos) |
+| | | `tempo_expiracao_sessao_dias`| `IntegerField`| Inteiro | Dígitos inteiros (Dias) |
+| | | `retencao_logs_dias` | `IntegerField` | Inteiro | Dígitos inteiros (Dias) |
+| | | `smtp_host` | `CharField(255)` | String técnica mantida | Host/IP do servidor SMTP |
+| | | `smtp_port` | `IntegerField` | Inteiro | Porta (ex: `587`, `465`) |
+| | | `smtp_user` | `CharField(255)` | String mantida | Usuário/E-mail de autenticação SMTP |
+| | | `smtp_password_encrypted` | `CharField(500)` | **Criptografado AES-256** | Campo tipo password (não exposto em tela) |
+| | | `email_remetente_nome` | `CharField(100)` | **MAIÚSCULAS SEM ACENTO** | Texto uppercase (ex: `EMC SOLDAS - OFICINA`) |
+| **29**| `ControleArquivoLog` | `caminho_arquivo_fisico`| `CharField(255)`| Caminho relativo no disco | Gerenciado pelo sistema |
 
 ---
 
@@ -134,6 +263,39 @@ Construir o ecossistema de autenticação segura baseado em JWT armazenado em Co
 
 ### Observações de Dependência
 - Depende da Fase 2.
+
+---
+
+## Fase 3.5 - Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras
+
+### Objetivo da Fase
+Implementar a infraestrutura de sanitização de dados e formatação universal de entrada (Defesa em Duas Camadas), garantindo que todo o banco de dados opere estritamente em letras maiúsculas e sem acentuação (ASCII puro), com exceções seguras para e-mails e credenciais criptografadas. Criar os utilitários de input e máscaras dinâmicas de frontend (incluindo a máscara de valor monetário estilo ATM com preenchimento da direita para a esquerda e retorno de zeros em backspace, além de CPF/CNPJ, Telefone e Placas) e atualizar os seeders iniciais para o padrão sem acentos.
+
+### Checklist de Tarefas
+- [ ] Criar função utilitária de sanitização universal `sanitizar_texto_maiusculo` no backend (`backend/core/utils.py`) com suporte a decomposição NFD (`unicodedata`) e remoção de diacríticos.
+- [ ] Atualizar dados padrão do seeder inicial (`backend/core/management/commands/seed_initial_data.py`) convertendo 100% dos textos estruturais para maiúsculas sem acento (UOMs, Atributos, Categorias, Meios de Pagamento, Regras de Pagamento).
+- [ ] Criar biblioteca de utilitários no frontend (`frontend/assets/js/utils.js`) contemplando:
+  - Interceptação global de digitação e colagem (`input` e `paste`) para conversão instantânea em Maiúsculas sem Acento preservando o cursor.
+  - Máscara de valor monetário estilo **ATM** (`R$ 0,00` inicial, dígitos inseridos da direita para a esquerda e retorno de zeros ao pressionar Backspace).
+  - Máscara dinâmica híbrida de **CPF/CNPJ** (`000.000.000-00` ➔ `00.000.000/0000-00`).
+  - Máscara dinâmica híbrida de **Telefone** (`(00) 0000-0000` ➔ `(00) 00000-0000`).
+  - Máscaras de CEP, Placa Mercosul/Antiga e Horas.
+- [ ] Criar testes automatizados no backend (`backend/core/tests.py`) validando a sanitização universal de strings.
+
+### Critérios de Pronto
+- Utilitário backend removendo diacríticos e convertendo para maiúsculas com precisão.
+- Seeders atualizados e aplicados sem glifos acentuados.
+- Utilitários frontend de máscaras e conversão em tempo real criados e testados.
+- Testes automatizados validando a camada de sanitização com 100% de sucesso.
+
+### Arquivos e Áreas Prováveis
+- `backend/core/utils.py`
+- `backend/core/management/commands/seed_initial_data.py`
+- `backend/core/tests.py`
+- `frontend/assets/js/utils.js`
+
+### Observações de Dependência
+- Depende da Fase 3 e antecede a Fase 4.
 
 ---
 

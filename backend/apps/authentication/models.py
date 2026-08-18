@@ -6,7 +6,21 @@ from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
 from datetime import timedelta
-from core.models import BaseModel
+from core.models import BaseModel, SoftDeleteManager
+
+
+class UsuarioManager(SoftDeleteManager):
+    """Manager com suporte a criação facilitada de usuários e permissões 1:1."""
+
+    def create_user(self, email: str, password: str = None, nome: str = None, role: str = 'Operador', **extra_fields):
+        email = email.lower().strip()
+        nome = nome or email.split('@')[0].upper()
+        user = self.create(email=email, nome=nome, role=role, **extra_fields)
+        if password:
+            user.set_password(password)
+            user.save(update_fields=['password_hash'])
+        Permissao.objects.get_or_create(usuario=user)
+        return user
 
 
 class Usuario(BaseModel):
@@ -75,6 +89,9 @@ class Usuario(BaseModel):
         blank=True,
         verbose_name="Último Login"
     )
+
+    objects = UsuarioManager()
+    all_objects = models.Manager()
 
     class Meta:
         db_table = 'usuarios'
@@ -265,4 +282,3 @@ class TokenSeguranca(models.Model):
     def is_valido(self) -> bool:
         """Verifica se o token ainda não foi utilizado e se está dentro do prazo de validade."""
         return not self.utilizado and self.expira_em > timezone.now()
-

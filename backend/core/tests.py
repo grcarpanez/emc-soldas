@@ -70,7 +70,7 @@ class ModelosFase2TestCase(TestCase):
         self.assertEqual(DicionarioUom.objects.count(), 1)
 
     def test_02_cadastros_cliente_fornecedor_equipamento(self):
-        """Valida criação de clientes, equipamentos e histórico relacional de vínculos."""
+        """Valida criação de clientes, equipamentos (placa e identificação) e histórico relacional de vínculos."""
         cliente = ClienteFornecedor.objects.create(
             tipo="Cliente",
             tipo_pessoa="PJ",
@@ -81,10 +81,12 @@ class ModelosFase2TestCase(TestCase):
         self.assertEqual(cliente.nome_razao, "Oficina Mecânica Alpha LTDA")
 
         equip = Equipamento.objects.create(
-            identificacao_placa="ABC-1234",
+            placa="ABC-1234",
+            identificacao="FROTA-01",
             descricao="Torno Mecânico Industrial 2000W"
         )
-        self.assertEqual(equip.identificacao_placa, "ABC-1234")
+        self.assertEqual(equip.placa, "ABC-1234")
+        self.assertEqual(equip.identificacao, "FROTA-01")
 
         vinculo = ClienteEquipamento.objects.create(
             cliente=cliente,
@@ -100,19 +102,35 @@ class ModelosFase2TestCase(TestCase):
         )
         self.assertEqual(anexo.nome_documento, "Contrato Social")
 
+    def test_02b_sanitizacao_texto_universal(self):
+        """Valida conversão em maiúsculas e remoção de acentos/diacríticos preservando símbolos."""
+        from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
+
+        entrada = "Av. São João, 120 - Apto 3 (Oficina Nº 2) - Peça de Aço & Solda Elétrica!"
+        esperado = "AV. SAO JOAO, 120 - APTO 3 (OFICINA NO 2) - PECA DE ACO & SOLDA ELETRICA!"
+        self.assertEqual(sanitizar_texto_maiusculo(entrada), esperado)
+
+        # Teste com vogais acentuadas e caracteres especiais comuns
+        teste_acentos = "áéíóú àèìòù âêîôû ãõ äëïöü ç"
+        self.assertEqual(sanitizar_texto_maiusculo(teste_acentos), "AEIOU AEIOU AEIOU AO AEIOU C")
+
+        # Teste de extração de dígitos numéricos
+        self.assertEqual(limpar_apenas_digitos("(11) 98765-4321"), "11987654321")
+        self.assertEqual(limpar_apenas_digitos("12.345.678/0001-90"), "12345678000190")
+
     def test_03_catalogo_bom_e_constraints(self):
         """Valida catálogo de materiais, sub-grid de atributos, produtos e Ficha Técnica (BOM)."""
-        uom_un = DicionarioUom.objects.create(sigla="UN", descricao="Unidade")
-        uom_kg = DicionarioUom.objects.create(sigla="kg", descricao="Quilograma")
-        attr_esp = DicionarioAtributo.objects.create(nome_atributo="Espessura")
+        uom_un = DicionarioUom.objects.create(sigla="UN", descricao="UNIDADE")
+        uom_kg = DicionarioUom.objects.create(sigla="KG", descricao="QUILOGRAMA")
+        attr_esp = DicionarioAtributo.objects.create(nome_atributo="ESPESSURA")
 
         item = Item.objects.create(
-            nome="Chapa de Aço Carbono 1020",
+            nome="CHAPA DE ACO CARBONO 1020",
             unidade_compra=uom_un,
             unidade_consumo=uom_kg,
             fator_conversao=Decimal('10.0000'),
             ultimo_custo_compra=Decimal('150.00'),
-            tipo_uso="Insumo Produtivo"
+            tipo_uso="INSUMO_PRODUTIVO"
         )
 
         item_attr = ItemAtributoValor.objects.create(
@@ -211,7 +229,7 @@ class ModelosFase2TestCase(TestCase):
             cartao=cartao,
             mes_referencia="2026-08",
             data_fechamento_real=timezone.now().date(),
-            status="Aberta"
+            status="ABERTA"
         )
         # Constraint de fatura de cartão duplicada no mesmo mês
         with transaction.atomic():
@@ -220,41 +238,41 @@ class ModelosFase2TestCase(TestCase):
                     cartao=cartao,
                     mes_referencia="2026-08",
                     data_fechamento_real=timezone.now().date(),
-                    status="Aberta"
+                    status="ABERTA"
                 )
 
         cat_rec = CategoriaFinanceira.objects.create(
-            nome="Serviços de Solda",
-            tipo="Receita"
+            nome="SERVICOS DE SOLDA",
+            tipo="RECEITA"
         )
         meio_pix = MeioPagamento.objects.create(
             nome="PIX",
             permite_taxa_maquininha=False
         )
         regra_pix = RegraPagamento.objects.create(
-            nome="Pix 5% Desc.",
+            nome="PIX 5% DESC.",
             meio_pagamento=meio_pix,
             tipo_cobranca="A_VISTA",
             desconto_concedido_padrao=Decimal('5.00')
         )
 
-        lanc = LancamentoFinanceiro.objects.create(
+        lanc = LancamentoFinanceira = LancamentoFinanceiro.objects.create(
             conta=conta,
             meio_pagamento=meio_pix,
             categoria=cat_rec,
-            tipo_lancamento="Entrada",
-            descricao="Recebimento Serviço Solda Chassi",
+            tipo_lancamento="ENTRADA",
+            descricao="RECEBIMENTO SERVICO SOLDA CHASSI",
             valor=Decimal('1200.00'),
             data_vencimento=timezone.now().date(),
-            status_pagamento="A Vencer"
+            status_pagamento="A_VENCER"
         )
-        self.assertEqual(lanc.status_pagamento, "A Vencer")
+        self.assertEqual(lanc.status_pagamento, "A_VENCER")
 
         # Estorno
         estorno = LogEstorno.objects.create(
             lancamento=lanc,
             usuario=self.user,
-            justificativa="Estorno por duplicidade de lançamento informada pelo cliente."
+            justificativa="ESTORNO POR DUPLICIDADE DE LANCAMENTO INFORMADA PELO CLIENTE."
         )
         self.assertEqual(estorno.usuario.email, "test@emcsoldas.com.br")
 
@@ -263,12 +281,12 @@ class ModelosFase2TestCase(TestCase):
         cliente = ClienteFornecedor.objects.create(
             tipo="Cliente",
             tipo_pessoa="PF",
-            nome_razao="João da Silva",
+            nome_razao="JOAO DA SILVA",
             telefone="(11) 97777-6666"
         )
         meio_pix = MeioPagamento.objects.create(nome="PIX")
         regra_pix = RegraPagamento.objects.create(
-            nome="Pix à Vista",
+            nome="PIX A VISTA",
             meio_pagamento=meio_pix,
             tipo_cobranca="A_VISTA"
         )
@@ -276,8 +294,8 @@ class ModelosFase2TestCase(TestCase):
         orc = Orcamento.objects.create(
             cliente=cliente,
             data_validade=timezone.now().date() + timezone.timedelta(days=15),
-            status_operacional="Gerado",
-            status_financeiro="A Faturar",
+            status_operacional="GERADO",
+            status_financeiro="A_FATURAR",
             valor_bruto=Decimal('850.00'),
             valor_desconto_aplicado=Decimal('50.00')
         )
@@ -285,7 +303,7 @@ class ModelosFase2TestCase(TestCase):
 
         item_orc = OrcamentoItem.objects.create(
             orcamento=orc,
-            descricao_livre="Soldagem Especial de Estrutura Metálica",
+            descricao_livre="SOLDAGEM ESPECIAL DE ESTRUTURA METALICA",
             quantidade=Decimal('1.0000'),
             custo_snapshot=Decimal('200.00'),
             valor_venda_snapshot=Decimal('850.00')
@@ -310,7 +328,7 @@ class ModelosFase2TestCase(TestCase):
         # Fatura
         fatura = Fatura.objects.create(
             cliente=cliente,
-            status="Rascunho",
+            status="RASCUNHO",
             valor_bruto=Decimal('850.00'),
             desconto_global=Decimal('50.00'),
             valor_total_faturado=Decimal('800.00')

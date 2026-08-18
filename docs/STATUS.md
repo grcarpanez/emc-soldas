@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 3)  
-**Fase Atual:** Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) (Concluída)  
-**Próxima Fase:** Fase 4 - Cadastros Estruturais e Dicionários Centrais  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 4 - Cadastros Estruturais e Dicionários Centrais)  
+**Fase Atual:** Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos (Pronta para início)  
+**Próxima Fase:** Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos  
 
 ---
 
@@ -12,10 +12,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 | Fase | Título | Status | Conclusão |
 | :--- | :--- | :--- | :--- |
+| **Fase 0** | Mapeamento Integral dos Campos do Banco de Dados e Matriz de Máscaras/Sanitização | **Concluída** | 100% |
 | **Fase 1** | Infraestrutura, Base do Projeto e Governança de Configuração | **Concluída** | 100% |
 | **Fase 2** | Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria | **Concluída** | 100% |
 | **Fase 3** | Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) | **Concluída** | 100% |
-| **Fase 4** | Cadastros Estruturais e Dicionários Centrais | Pendente | 0% |
+| **Fase 3.5** | Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras | **Concluída** | 100% |
+| **Fase 4** | Cadastros Estruturais e Dicionários Centrais | **Concluída** | 100% |
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | Pendente | 0% |
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | Pendente | 0% |
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | Pendente | 0% |
@@ -31,6 +33,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 ---
 
 ## Detalhamento do Checklist por Fase
+
+### Fase 0 - Mapeamento Integral dos Campos do Banco de Dados e Matriz de Máscaras/Sanitização
+- [x] Mapear todas as 29 entidades e campos de dados do sistema no `docs/PLANO.md`.
+- [x] Definir regra de sanitização para 100% dos campos de texto (Maiúsculas sem Acento - ASCII Puro).
+- [x] Definir especificações de máscaras: Máscara ATM de Moeda (`R$ 0,00`), CPF/CNPJ Híbrido, Telefone Híbrido, CEP, Placas e Horas.
 
 ### Fase 1 - Infraestrutura, Base do Projeto e Governança de Configuração
 - [x] Estruturar pastas desacopladas do projeto (`backend/`, `frontend/`, `docs/`, `tools/`).
@@ -72,12 +79,21 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Implementar injeção automática de contexto de autoria nos models a partir de `AuditUserMiddleware`.
 - [x] Criar e executar suíte de testes automatizados com 100% de aprovação (21 testes).
 
+### Fase 3.5 - Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras
+- [x] Criar função utilitária de sanitização universal `sanitizar_texto_maiusculo` no backend (`backend/core/utils.py`).
+- [x] Atualizar dados padrão do seeder inicial (`backend/core/management/commands/seed_initial_data.py`) convertendo 100% dos textos para maiúsculas sem acento e enums em UPPERCASE.
+- [x] Criar biblioteca de utilitários no frontend (`frontend/assets/js/utils.js`) com conversão em tempo real (`input`/`paste`), Máscara ATM de Moeda (`R$ 0,00`), CPF/CNPJ, Telefone, CEP, Placas e Linha Digitável.
+- [x] Criar e validar testes automatizados de sanitização de strings no backend com 100% de sucesso.
+
 ### Fase 4 - Cadastros Estruturais e Dicionários Centrais
-- [ ] Implementar CRUD de `DicionarioUom` e `DicionarioAtributo`.
-- [ ] Implementar CRUD hierárquico de `CategoriaFinanceira`.
-- [ ] Implementar CRUD de `ContaBancaria` (com saldo e limite de cheque especial).
-- [ ] Implementar CRUD de `MeioPagamento` (com toggle `permite_taxa_maquininha`).
-- [ ] Implementar CRUD de `RegraPagamento` (à vista, a prazo, parcelado com prazos e descontos padrão).
+- [x] Implementar CRUD de `DicionarioUom` (`/api/dicionario-uom/`) com sanitização e proteção contra deleção de UOMs em uso.
+- [x] Implementar CRUD de `DicionarioAtributo` (`/api/dicionario-atributos/`) com sanitização e proteção contra deleção de atributos em uso.
+- [x] Implementar CRUD hierárquico de `CategoriaFinanceira` (`/api/categorias-financeiras/`) com validação anti-ciclos e bloqueio de exclusão com subcategorias ativas.
+- [x] Implementar CRUD de `ContaBancaria` (`/api/contas-bancarias/`) com validação de limite de cheque especial e bloqueio com lançamentos ativos.
+- [x] Implementar CRUD de `MeioPagamento` (`/api/meios-pagamento/`) com toggle `permite_taxa_maquininha` e validação de regras ativas.
+- [x] Implementar CRUD de `RegraPagamento` (`/api/regras-pagamento/`) com suporte a à vista, a prazo e parcelado, com validações de prazos, intervalos e descontos sugeridos.
+- [x] Proteger todos os endpoints via RBAC dinâmico (`HasDicionarioUomAccess` e `HasCadastrosFinanceirosAccess`).
+- [x] Criar e executar suíte de testes automatizados com 100% de sucesso (33 testes).
 
 ### Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos
 - [ ] Criar endpoint proxy para consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso.
@@ -163,4 +179,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 4 - Cadastros Estruturais e Dicionários Centrais**, implementando os endpoints de CRUD e regras de negócio para Dicionário UOM (`DicionarioUom`), Dicionário de Atributos (`DicionarioAtributo`), Categorias Financeiras (`CategoriaFinanceira`), Contas Bancárias (`ContaBancaria`), Meios de Pagamento (`MeioPagamento`) e Regras de Pagamento (`RegraPagamento`), protegidos pelas permissões RBAC correspondentes.
+Iniciar a **Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos**, implementando o proxy de consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso, validação matemática de CPF (módulo 11), CRUD de `ClienteFornecedor` com suporte a PF/PJ e cadastro rápido ágil (Nome + Telefone), CRUD de `Equipamento` com histórico de proprietários (`ClienteEquipamento`) e gerenciamento seguro de anexos de clientes.

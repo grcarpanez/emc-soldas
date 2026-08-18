@@ -3,10 +3,40 @@ Utilitários de segurança, validação matemática e criptografia simétrica (A
 """
 import base64
 import re
+import unicodedata
 from django.conf import settings
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+
+def sanitizar_texto_maiusculo(texto: str) -> str:
+    """
+    Remove acentos, caracteres diacríticos e converte para MAIÚSCULAS (ASCII puro).
+    Preserva caracteres especiais válidos (como vírgulas, pontos, hífens, barras, números e símbolos).
+    Exemplo: 'Av. São João, 120 - Apto 3 (Oficina Nº 2)' -> 'AV. SAO JOAO, 120 - APTO 3 (OFICINA NO 2)'
+    """
+    if not texto or not isinstance(texto, str):
+        return texto
+
+    # Substitui caracteres específicos antes da decomposição se necessário (ex: º, ª)
+    texto_ajustado = texto.replace('º', 'O').replace('ª', 'A').replace('°', 'O')
+    
+    # Decomposição NFD separa letras de seus diacríticos/acentos
+    texto_nfd = unicodedata.normalize('NFKD', texto_ajustado)
+    
+    # Remove apenas os caracteres de combinação (acentos, til, cedilha combinada)
+    texto_sem_acento = "".join(c for c in texto_nfd if not unicodedata.combining(c))
+    
+    return texto_sem_acento.upper().strip()
+
+
+def limpar_apenas_digitos(valor: str) -> str:
+    """Extrai estritamente os dígitos numéricos de uma string."""
+    if not valor:
+        return ""
+    return re.sub(r'\D', '', str(valor))
+
 
 
 class CryptoManager:

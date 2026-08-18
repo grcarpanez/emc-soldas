@@ -13,10 +13,10 @@ class Fatura(BaseModel):
     Comanda o Faturamento Agregado em Cascata (Rascunho -> Faturada -> Paga).
     """
     STATUS_CHOICES = [
-        ('Rascunho', 'Rascunho (Pré-Fatura)'),
-        ('Faturada', 'Faturada (Fatura Final)'),
-        ('Paga', 'Paga (Quitada)'),
-        ('Cancelada', 'Cancelada'),
+        ('RASCUNHO', 'RASCUNHO (PRÉ-FATURA)'),
+        ('FATURADA', 'FATURADA (FATURA FINAL)'),
+        ('PAGA', 'PAGA (QUITADA)'),
+        ('CANCELADA', 'CANCELADA'),
     ]
 
     cliente = models.ForeignKey(
@@ -39,7 +39,7 @@ class Fatura(BaseModel):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='Rascunho',
+        default='RASCUNHO',
         db_index=True,
         verbose_name="Status da Fatura"
     )

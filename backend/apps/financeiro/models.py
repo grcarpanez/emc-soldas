@@ -91,9 +91,9 @@ class FaturaCartao(BaseModel):
     Acumulam gastos avulsos e suportam rollover de pagamentos parciais.
     """
     STATUS_CHOICES = [
-        ('Aberta', 'Aberta'),
-        ('Fechada', 'Fechada'),
-        ('Paga', 'Paga'),
+        ('ABERTA', 'ABERTA'),
+        ('FECHADA', 'FECHADA'),
+        ('PAGA', 'PAGA'),
     ]
 
     cartao = models.ForeignKey(
@@ -113,7 +113,7 @@ class FaturaCartao(BaseModel):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default='Aberta',
+        default='ABERTA',
         verbose_name="Status da Fatura do Cartão"
     )
 
@@ -138,9 +138,9 @@ class CategoriaFinanceira(BaseModel):
     Árvore Hierárquica de Categorias e Subcategorias para DRE e Classificação Financeira.
     """
     TIPO_CHOICES = [
-        ('Receita', 'Receita'),
-        ('Despesa', 'Despesa'),
-        ('Transferência', 'Transferência (Neutra pro DRE)'),
+        ('RECEITA', 'RECEITA'),
+        ('DESPESA', 'DESPESA'),
+        ('TRANSFERENCIA', 'TRANSFERÊNCIA (NEUTRA PRO DRE)'),
     ]
 
     nome = models.CharField(
@@ -150,7 +150,7 @@ class CategoriaFinanceira(BaseModel):
     tipo = models.CharField(
         max_length=20,
         choices=TIPO_CHOICES,
-        default='Receita',
+        default='RECEITA',
         verbose_name="Tipo de Categoria"
     )
     categoria_pai = models.ForeignKey(
@@ -270,16 +270,16 @@ class LancamentoFinanceiro(BaseModel):
     Separa estritamente previsões ('A Vencer') de liquidações reais ('Pago').
     """
     TIPO_LANCAMENTO_CHOICES = [
-        ('Entrada', 'Entrada (Receita)'),
-        ('Saída', 'Saída (Despesa)'),
-        ('Transferência', 'Transferência Inter-Contas'),
+        ('ENTRADA', 'ENTRADA (RECEITA)'),
+        ('SAIDA', 'SAÍDA (DESPESA)'),
+        ('TRANSFERENCIA', 'TRANSFERÊNCIA INTER-CONTAS'),
     ]
 
     STATUS_PAGAMENTO_CHOICES = [
-        ('A Vencer', 'A Vencer'),
-        ('Vencido', 'Vencido'),
-        ('Pago', 'Pago'),
-        ('Cancelado', 'Cancelado'),
+        ('A_VENCER', 'A VENCER'),
+        ('VENCIDO', 'VENCIDO'),
+        ('PAGO', 'PAGO'),
+        ('CANCELADO', 'CANCELADO'),
     ]
 
     fatura = models.ForeignKey(
@@ -372,7 +372,7 @@ class LancamentoFinanceiro(BaseModel):
     status_pagamento = models.CharField(
         max_length=20,
         choices=STATUS_PAGAMENTO_CHOICES,
-        default='A Vencer',
+        default='A_VENCER',
         db_index=True,
         verbose_name="Status do Pagamento"
     )

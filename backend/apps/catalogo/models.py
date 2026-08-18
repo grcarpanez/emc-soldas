@@ -58,10 +58,10 @@ class Item(BaseModel):
     Controla proporção matemática de compra para consumo e armazena último custo apurado.
     """
     TIPO_USO_CHOICES = [
-        ('Insumo Produtivo', 'Insumo Produtivo'),
-        ('Material de Consumo', 'Material de Consumo'),
+        ('INSUMO_PRODUTIVO', 'INSUMO PRODUTIVO'),
+        ('MATERIAL_CONSUMO', 'MATERIAL DE CONSUMO'),
         ('EPI', 'EPI'),
-        ('Ferramental', 'Ferramental'),
+        ('FERRAMENTAL', 'FERRAMENTAL'),
     ]
 
     nome = models.CharField(
@@ -105,7 +105,7 @@ class Item(BaseModel):
     tipo_uso = models.CharField(
         max_length=30,
         choices=TIPO_USO_CHOICES,
-        default='Insumo Produtivo',
+        default='INSUMO_PRODUTIVO',
         verbose_name="Tipo de Uso"
     )
 

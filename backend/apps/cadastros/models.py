@@ -134,12 +134,22 @@ class ClienteFornecedor(BaseModel):
 class Equipamento(BaseModel):
     """
     Equipamentos e Veículos atendidos na oficina.
+    Possui dois campos de identificação (placa com máscara de placa e identificação livre sem acento).
     Possui histórico relacional de vínculos para que trocas de donos não afetem orçamentos passados.
     """
-    identificacao_placa = models.CharField(
-        max_length=50,
+    placa = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
         db_index=True,
-        verbose_name="Identificação / Placa"
+        verbose_name="Placa do Veículo / Equipamento (Antiga ou Mercosul)"
+    )
+    identificacao = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Identificação Técnica / Frota / Chassi / Código Interno"
     )
     descricao = models.CharField(
         max_length=255,
@@ -150,13 +160,15 @@ class Equipamento(BaseModel):
         db_table = 'equipamentos'
         verbose_name = 'Equipamento / Veículo'
         verbose_name_plural = 'Equipamentos e Veículos'
-        ordering = ['identificacao_placa']
+        ordering = ['placa', 'identificacao']
         indexes = [
-            models.Index(fields=['identificacao_placa'], name='idx_equip_ident_placa'),
+            models.Index(fields=['placa'], name='idx_equip_placa'),
+            models.Index(fields=['identificacao'], name='idx_equip_identificacao'),
         ]
 
     def __str__(self):
-        return f"{self.identificacao_placa} - {self.descricao}"
+        ident = self.placa or self.identificacao or f"ID #{self.id}"
+        return f"{ident} - {self.descricao}"
 
 
 class ClienteEquipamento(models.Model):
@@ -196,7 +208,8 @@ class ClienteEquipamento(models.Model):
 
     def __str__(self):
         status = "Ativo" if self.is_ativo else "Inativo"
-        return f"{self.equipamento.identificacao_placa} -> {self.cliente.nome_razao} ({status})"
+        ident = self.equipamento.placa or self.equipamento.identificacao or f"Equipamento #{self.equipamento_id}"
+        return f"{ident} -> {self.cliente.nome_razao} ({status})"
 
 
 class AnexoGeralCliente(models.Model):

@@ -14,19 +14,19 @@ class Orcamento(BaseModel):
     snapshots de custos, validade com proteção de margem e cancelamento justificado.
     """
     STATUS_OPERACIONAL_CHOICES = [
-        ('Gerado', 'Gerado'),
-        ('Enviado', 'Enviado'),
-        ('Aprovado', 'Aprovado'),
-        ('Em Execução', 'Em Execução'),
-        ('Concluído', 'Concluído'),
-        ('Cancelado', 'Cancelado'),
+        ('GERADO', 'GERADO'),
+        ('ENVIADO', 'ENVIADO'),
+        ('APROVADO', 'APROVADO'),
+        ('EM_EXECUCAO', 'EM EXECUÇÃO'),
+        ('CONCLUIDO', 'CONCLUÍDO'),
+        ('CANCELADO', 'CANCELADO'),
     ]
 
     STATUS_FINANCEIRO_CHOICES = [
-        ('A Faturar', 'A Faturar'),
-        ('Faturado', 'Faturado'),
-        ('Pago', 'Pago'),
-        ('Cancelado', 'Cancelado'),
+        ('A_FATURAR', 'A FATURAR'),
+        ('FATURADO', 'FATURADO'),
+        ('PAGO', 'PAGO'),
+        ('CANCELADO', 'CANCELADO'),
     ]
 
     cliente = models.ForeignKey(
@@ -65,14 +65,14 @@ class Orcamento(BaseModel):
     status_operacional = models.CharField(
         max_length=20,
         choices=STATUS_OPERACIONAL_CHOICES,
-        default='Gerado',
+        default='GERADO',
         db_index=True,
         verbose_name="Status Operacional / Produtivo"
     )
     status_financeiro = models.CharField(
         max_length=20,
         choices=STATUS_FINANCEIRO_CHOICES,
-        default='A Faturar',
+        default='A_FATURAR',
         db_index=True,
         verbose_name="Status Financeiro"
     )
