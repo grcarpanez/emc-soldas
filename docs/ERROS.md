@@ -21,4 +21,10 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ## Histórico de Erros
 
-*(Nenhum erro registrado até o momento. O ambiente base encontra-se preparado e estabilizado.)*
+## 2026-08-18 - Erro de Resolução de Host no Git Push (URL Remota Duplicada)
+
+- **Sintoma:** Falha ao executar `git push -u origin main` com a mensagem `fatal: unable to access 'https://https://github.com/grcarpanez/emc-soldas.git/': Could not resolve host: https`.
+- **Causa:** O comando de adição do repositório remoto foi executado com o protocolo `https://` duplicado no início da URL (`https://https://...`).
+- **Solução aplicada:** Executado o comando `git remote set-url origin https://github.com/grcarpanez/emc-soldas.git` para retificar o endereço e, em seguida, executado o comando `git push -u origin main` com sucesso.
+- **Como evitar no futuro:** Sempre validar a URL antes de colar no terminal e utilizar `git remote -v` para conferir a exatidão dos endereços remotos configurados.
+
