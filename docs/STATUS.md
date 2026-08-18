@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Preparação da Base / Fase 1)  
-**Fase Atual:** Fase 1 - Infraestrutura, Base do Projeto e Governança de Configuração (Concluída)  
-**Próxima Fase:** Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 2)  
+**Fase Atual:** Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria (Concluída)  
+**Próxima Fase:** Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)  
 
 ---
 
@@ -13,7 +13,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | Fase | Título | Status | Conclusão |
 | :--- | :--- | :--- | :--- |
 | **Fase 1** | Infraestrutura, Base do Projeto e Governança de Configuração | **Concluída** | 100% |
-| **Fase 2** | Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria | Pendente | 0% |
+| **Fase 2** | Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria | **Concluída** | 100% |
 | **Fase 3** | Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) | Pendente | 0% |
 | **Fase 4** | Cadastros Estruturais e Dicionários Centrais | Pendente | 0% |
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | Pendente | 0% |
@@ -48,18 +48,19 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Conectar repositório remoto no GitHub (`https://github.com/grcarpanez/emc-soldas.git`) e efetuar primeiro push com sucesso.
 
 ### Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria
-- [ ] Implementar classe base `SoftDeleteModel` e `AuditableModel`.
-- [ ] Modelar entidades de Usuários e Permissões (`Usuario`, `Permissao`).
-- [ ] Modelar entidades de Clientes, Fornecedores e Equipamentos (`ClienteFornecedor`, `Equipamento`, `ClienteEquipamento`, `AnexoGeralCliente`).
-- [ ] Modelar entidades de Dicionário e Catálogo (`DicionarioUom`, `DicionarioAtributo`, `Item`, `ItemAtributoValor`, `Produto`, `FichaTecnica`).
-- [ ] Modelar entidades de Orçamentos e Propostas (`Orcamento`, `OrcamentoItem`, `OrcamentoPropostaPagamento`).
-- [ ] Modelar entidades de Faturas e Propostas (`Fatura`, `FaturaPropostaPagamento`).
-- [ ] Modelar entidades de Tesouraria e Estruturas Financeiras (`LancamentoFinanceiro`, `ContaBancaria`, `CartaoCredito`, `FaturaCartao`, `CategoriaFinanceira`, `MeioPagamento`, `RegraPagamento`, `LogEstorno`).
-- [ ] Modelar entidades de Compras e Entradas (`DocumentoFiscalCompra`, `NotaCompraItem`).
-- [ ] Modelar entidades de Governança (`ConfiguracaoGlobal`, `ControleArquivoLog`).
-- [ ] Configurar as 7 `UniqueConstraints` e matriz estratégica de índices.
-- [ ] Gerar migrations iniciais do Django (`python manage.py makemigrations`).
-- [ ] Criar seeders/fixtures padrão para dados iniciais (`seed_initial_data.py`).
+- [x] Implementar classe base `SoftDeleteModel` e `AuditableModel` (`backend/core/models.py`).
+- [x] Modelar entidades de Usuários e Permissões (`Usuario`, `Permissao` em `apps/authentication`).
+- [x] Modelar entidades de Clientes, Fornecedores e Equipamentos (`ClienteFornecedor`, `Equipamento`, `ClienteEquipamento`, `AnexoGeralCliente` em `apps/cadastros`).
+- [x] Modelar entidades de Dicionário e Catálogo (`DicionarioUom`, `DicionarioAtributo`, `Item`, `ItemAtributoValor`, `Produto`, `FichaTecnica` em `apps/catalogo`).
+- [x] Modelar entidades de Orçamentos e Propostas (`Orcamento`, `OrcamentoItem`, `OrcamentoPropostaPagamento` em `apps/orcamentos`).
+- [x] Modelar entidades de Faturas e Propostas (`Fatura`, `FaturaPropostaPagamento` em `apps/faturamento`).
+- [x] Modelar entidades de Tesouraria e Estruturas Financeiras (`LancamentoFinanceiro`, `ContaBancaria`, `CartaoCredito`, `FaturaCartao`, `CategoriaFinanceira`, `MeioPagamento`, `RegraPagamento`, `LogEstorno` em `apps/financeiro`).
+- [x] Modelar entidades de Compras e Entradas (`DocumentoFiscalCompra`, `NotaCompraItem` em `apps/compras`).
+- [x] Modelar entidades de Governança (`ConfiguracaoGlobal`, `ControleArquivoLog` em `apps/administracao`).
+- [x] Configurar as 7 `UniqueConstraints` mandatórias e matriz estratégica de índices B-Tree.
+- [x] Gerar migrations versionadas do Django para todos os módulos (`python backend/manage.py makemigrations`).
+- [x] Criar comando de seeders para dados estruturais padrão (`python backend/manage.py seed_initial_data`).
+- [x] Criar e executar bateria de testes automatizados (`python backend/manage.py test core`) com 100% de sucesso.
 
 ### Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)
 - [ ] Implementar autenticação customizada com suporte a hash PBKDF2 e PIN de 6 dígitos.
@@ -160,4 +161,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 2 - Banco de Dados, Modelos ORM (29 Entidades), Migrations e Auditoria**, desenvolvendo todas as 29 classes de models do Django ORM, classes base de auditoria e soft delete, constraints de integridade, índices estratégicos e migrations versionadas.
+Iniciar a **Fase 3 - Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC)**, implementando autenticação customizada com suporte a hash PBKDF2 e PIN de 6 dígitos, JWT em Cookie HttpOnly (`SameSite=Strict`), Soft Lock por ociosidade, Onboarding por convite de e-mail, proteção anti-bruteforce e validação de permissões RBAC com os 10 toggles dinâmicos.
