@@ -1,5 +1,6 @@
 """
-Comando de Management do Django para popular a base de dados com sementes essenciais.
+Comando de Management do Django para popular e sincronizar a base de dados com sementes estruturais.
+Garante 100% de sanitização (Maiúsculas sem Acento - ASCII puro) em registros novos e pré-existentes.
 Executado via: python backend/manage.py seed_initial_data
 """
 from django.core.management.base import BaseCommand
@@ -15,13 +16,45 @@ from apps.financeiro.models import (
     ContaBancaria,
 )
 from apps.administracao.models import ConfiguracaoGlobal
+from core.utils import sanitizar_texto_maiusculo
 
 
 class Command(BaseCommand):
-    help = "Popula o banco de dados com dados estruturais iniciais (UOM, Atributos, Meios, Regras, Categorias, Configuração Global e Admin Inicial)."
+    help = "Popula e sanitiza o banco de dados com dados estruturais padrão (100% Maiúsculas sem Acento)."
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE("Iniciando povoamento de dados estruturais (Seeders)..."))
+        self.stdout.write(self.style.NOTICE("Iniciando sincronização e sanitização universal dos dados estruturais..."))
+
+        # 0. Sanitização retroativa de registros existentes no banco
+        self.stdout.write("Higienizando registros pré-existentes no banco...")
+        
+        for u in DicionarioUom.all_objects.all():
+            u.sigla = sanitizar_texto_maiusculo(u.sigla)
+            u.descricao = sanitizar_texto_maiusculo(u.descricao)
+            u.save(update_fields=['sigla', 'descricao'])
+
+        for a in DicionarioAtributo.all_objects.all():
+            a.nome_atributo = sanitizar_texto_maiusculo(a.nome_atributo)
+            a.save(update_fields=['nome_atributo'])
+
+        for m in MeioPagamento.all_objects.all():
+            m.nome = sanitizar_texto_maiusculo(m.nome)
+            m.save(update_fields=['nome'])
+
+        for r in RegraPagamento.all_objects.all():
+            r.nome = sanitizar_texto_maiusculo(r.nome)
+            r.save(update_fields=['nome'])
+
+        for c in CategoriaFinanceira.all_objects.all():
+            c.nome = sanitizar_texto_maiusculo(c.nome)
+            c.tipo = c.tipo.upper()
+            c.save(update_fields=['nome', 'tipo'])
+
+        for b in ContaBancaria.all_objects.all():
+            b.nome = sanitizar_texto_maiusculo(b.nome)
+            b.save(update_fields=['nome'])
+
+        self.stdout.write(self.style.SUCCESS("[OK] Registros existentes higienizados para Maiúsculas sem Acento."))
 
         # 1. Dicionário UOM (100% Maiúsculas sem Acento)
         uoms = [
@@ -41,13 +74,15 @@ class Command(BaseCommand):
         ]
         uom_count = 0
         for sigla, desc in uoms:
-            _, created = DicionarioUom.objects.get_or_create(
-                sigla=sigla,
-                defaults={'descricao': desc}
+            sigla_san = sanitizar_texto_maiusculo(sigla)
+            desc_san = sanitizar_texto_maiusculo(desc)
+            obj, created = DicionarioUom.objects.update_or_create(
+                sigla=sigla_san,
+                defaults={'descricao': desc_san, 'deleted_at': None}
             )
             if created:
                 uom_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario UOM populado ({uom_count} novas unidades)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario UOM sincronizado ({uom_count} novas unidades)."))
 
         # 2. Dicionário de Atributos Técnicos (100% Maiúsculas sem Acento)
         atributos = [
@@ -61,12 +96,14 @@ class Command(BaseCommand):
         ]
         attr_count = 0
         for nome_attr in atributos:
-            _, created = DicionarioAtributo.objects.get_or_create(
-                nome_atributo=nome_attr
+            attr_san = sanitizar_texto_maiusculo(nome_attr)
+            obj, created = DicionarioAtributo.objects.update_or_create(
+                nome_atributo=attr_san,
+                defaults={'deleted_at': None}
             )
             if created:
                 attr_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario de Atributos populado ({attr_count} novos atributos)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Dicionario de Atributos sincronizado ({attr_count} novos atributos)."))
 
         # 3. Meios de Pagamento (100% Maiúsculas sem Acento)
         meios = [
@@ -78,18 +115,20 @@ class Command(BaseCommand):
             ("TRANSFERENCIA TED/DOC", False),
             ("DEPOSITO BANCARIO", False),
             ("CHEQUE", False),
+            ("CORTESIA", False),
         ]
         meios_dict = {}
         meio_count = 0
         for nome_meio, permite_taxa in meios:
-            meio, created = MeioPagamento.objects.get_or_create(
-                nome=nome_meio,
-                defaults={'permite_taxa_maquininha': permite_taxa, 'ativo': True}
+            meio_san = sanitizar_texto_maiusculo(nome_meio)
+            meio, created = MeioPagamento.objects.update_or_create(
+                nome=meio_san,
+                defaults={'permite_taxa_maquininha': permite_taxa, 'ativo': True, 'deleted_at': None}
             )
-            meios_dict[nome_meio] = meio
+            meios_dict[meio_san] = meio
             if created:
                 meio_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Meios de Pagamento populados ({meio_count} novos meios)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Meios de Pagamento sincronizados ({meio_count} novos meios)."))
 
         # 4. Regras de Pagamento / Condições Comerciais (100% Maiúsculas sem Acento)
         regras = [
@@ -98,88 +137,94 @@ class Command(BaseCommand):
             ("BOLETO 28 DIAS", "BOLETO BANCARIO", "A_PRAZO", 1, 28, 0, 0.00),
             ("BOLETO 30/60 DIAS", "BOLETO BANCARIO", "PARCELADO", 2, 30, 30, 0.00),
             ("BOLETO 30/60/90 DIAS", "BOLETO BANCARIO", "PARCELADO", 3, 30, 30, 0.00),
-            ("CARTAO DE DEBITO", "CARTAO DE DEBITO", "A_VISTA", 1, 0, 0, 0.00),
+            ("CARTAO DE DEBITO A VISTA", "CARTAO DE DEBITO", "A_VISTA", 1, 0, 0, 0.00),
             ("CARTAO DE CREDITO A VISTA", "CARTAO DE CREDITO", "A_VISTA", 1, 30, 0, 0.00),
-            ("CARTAO DE CREDITO 3X", "CARTAO DE CREDITO", "PARCELADO", 3, 30, 30, 0.00),
+            ("CARTAO DE CREDITO 3X SEM JUROS", "CARTAO DE CREDITO", "PARCELADO", 3, 30, 30, 0.00),
+            ("CORTESIA (100% DESCONTO)", "CORTESIA", "A_VISTA", 1, 0, 0, 100.00),
         ]
         regra_count = 0
         for nome_regra, meio_nome, tipo_cobr, num_parc, prazo_1, interv, desc_padrao in regras:
-            if meio_nome in meios_dict:
-                _, created = RegraPagamento.objects.get_or_create(
-                    nome=nome_regra,
+            meio_san = sanitizar_texto_maiusculo(meio_nome)
+            regra_san = sanitizar_texto_maiusculo(nome_regra)
+            if meio_san in meios_dict:
+                obj, created = RegraPagamento.objects.update_or_create(
+                    nome=regra_san,
                     defaults={
-                        'meio_pagamento': meios_dict[meio_nome],
+                        'meio_pagamento': meios_dict[meio_san],
                         'tipo_cobranca': tipo_cobr,
                         'numero_parcelas': num_parc,
                         'prazo_primeira_parcela_dias': prazo_1,
                         'intervalo_parcelas_dias': interv,
                         'desconto_concedido_padrao': desc_padrao,
-                        'ativo': True
+                        'ativo': True,
+                        'deleted_at': None
                     }
                 )
                 if created:
                     regra_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Regras de Pagamento populadas ({regra_count} novas regras)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Regras de Pagamento sincronizadas ({regra_count} novas regras)."))
 
         # 5. Categorias Financeiras (100% Maiúsculas sem Acento e Enum UPPERCASE)
         categorias = [
-            ("RECEITA DE VENDA DE PRODUTOS", "RECEITA", None),
-            ("RECEITA DE SERVICOS E REFORMAS", "RECEITA", None),
+            ("RECEITA DE SERVICOS (MAO DE OBRA)", "RECEITA", None),
+            ("RECEITA DE VENDA DE PRODUTOS E MATERIAIS", "RECEITA", None),
             ("OUTRAS RECEITAS OPERACIONAIS", "RECEITA", None),
-            ("INSUMOS E MATERIAS-PRIMAS", "DESPESA", None),
-            ("FOLHA DE PAGAMENTO E PRO-LABORE", "DESPESA", None),
-            ("TARIFAS E MAQUININHAS", "DESPESA", None),
+            ("INSUMOS PRODUTIVOS E MATERIA-PRIMA", "DESPESA", None),
+            ("ENERGIA ELETRICA E AGUA", "DESPESA", None),
+            ("MANUTENCAO DE MAQUINAS", "DESPESA", None),
             ("IMPOSTOS E TRIBUTOS", "DESPESA", None),
-            ("MANUTENCAO E FERRAMENTAL", "DESPESA", None),
-            ("AGUA, LUZ E INTERNET", "DESPESA", None),
+            ("SALARIOS E ENCARGOS", "DESPESA", None),
+            ("TAXAS DE CARTAO E BANCARIAS", "DESPESA", None),
             ("OUTRAS DESPESAS OPERACIONAIS", "DESPESA", None),
             ("TRANSFERENCIA INTER-CONTAS", "TRANSFERENCIA", None),
         ]
         cat_count = 0
         for nome_cat, tipo_cat, _ in categorias:
-            _, created = CategoriaFinanceira.objects.get_or_create(
-                nome=nome_cat,
-                defaults={'tipo': tipo_cat}
+            nome_san = sanitizar_texto_maiusculo(nome_cat)
+            obj, created = CategoriaFinanceira.objects.update_or_create(
+                nome=nome_san,
+                defaults={'tipo': tipo_cat.upper(), 'deleted_at': None}
             )
             if created:
                 cat_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Categorias Financeiras populadas ({cat_count} novas categorias)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Categorias Financeiras sincronizadas ({cat_count} novas categorias)."))
 
         # 6. Contas Bancárias Iniciais (100% Maiúsculas sem Acento)
         contas = [
-            ("CAIXA FISICO OFICINA", 0.00, 0.00),
-            ("CONTA CORRENTE PRINCIPAL", 0.00, 1000.00),
+            ("CAIXA FISICO DA OFICINA", 0.00, 0.00),
+            ("CONTA BANCARIA PRINCIPAL", 0.00, 1000.00),
         ]
         conta_count = 0
         for nome_conta, saldo, limite in contas:
-            _, created = ContaBancaria.objects.get_or_create(
-                nome=nome_conta,
-                defaults={'saldo': saldo, 'limite_credito': limite}
+            nome_san = sanitizar_texto_maiusculo(nome_conta)
+            obj, created = ContaBancaria.objects.update_or_create(
+                nome=nome_san,
+                defaults={'saldo': saldo, 'limite_credito': limite, 'deleted_at': None}
             )
             if created:
                 conta_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Contas Bancarias populadas ({conta_count} novas contas)."))
+        self.stdout.write(self.style.SUCCESS(f"[OK] Contas Bancarias sincronizadas ({conta_count} novas contas)."))
 
         # 7. Configuração Global (Singleton id=1 - 100% Maiúsculas sem Acento)
-        config, created = ConfiguracaoGlobal.objects.get_or_create(
+        config, created = ConfiguracaoGlobal.objects.update_or_create(
             id=1,
             defaults={
                 'validade_orcamento_dias': 15,
                 'taxa_mao_de_obra_hora': 80.00,
-                'razao_social': 'EMC SOLDAS E MANUTENCAO INDUSTRIAL LTDA',
+                'razao_social': sanitizar_texto_maiusculo('EMC SOLDAS E MANUTENCAO INDUSTRIAL LTDA'),
                 'cnpj': '12.345.678/0001-90',
                 'telefone_contato': '(11) 98765-4321',
-                'endereco_oficina': 'RUA INDUSTRIAL DA SOLDA, 500 - GALPAO 2 - SAO PAULO/SP',
+                'endereco_oficina': sanitizar_texto_maiusculo('RUA INDUSTRIAL DA SOLDA, 500 - GALPAO 2 - SAO PAULO/SP'),
                 'tempo_ociosidade_minutos': 30,
                 'tempo_expiracao_sessao_dias': 15,
                 'retencao_logs_dias': 30,
                 'smtp_host': 'localhost',
                 'smtp_port': 587,
                 'smtp_use_tls': True,
-                'email_remetente_nome': 'EMC SOLDAS',
+                'email_remetente_nome': sanitizar_texto_maiusculo('EMC SOLDAS'),
             }
         )
-        self.stdout.write(self.style.SUCCESS("[OK] Configuracoes Globais (id=1) inicializadas."))
+        self.stdout.write(self.style.SUCCESS("[OK] Configuracoes Globais (id=1) sincronizadas."))
 
         # 8. Usuário Administrador Inicial e Permissões Plenas
         admin_email = "admin@emcsoldas.com.br"
@@ -220,4 +265,4 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS(f"[OK] Usuario Administrador Master verificado ({admin_email})."))
 
-        self.stdout.write(self.style.SUCCESS("=== Semeamento de dados iniciais concluido com sucesso! ==="))
+        self.stdout.write(self.style.SUCCESS("=== Semeamento e sincronizacao de dados estruturais concluidos com sucesso! ==="))
