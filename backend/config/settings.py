@@ -7,10 +7,17 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
-# Suporte ao PyMySQL como driver nativo do MySQL
+# Suporte ao PyMySQL como driver nativo do MySQL e compatibilidade com XAMPP (MariaDB 10.4.x)
 try:
     import pymysql
     pymysql.install_as_MySQLdb()
+    
+    # Compatibilidade do Django 5.x com MariaDB 10.4 do XAMPP
+    from django.db.backends.mysql.base import DatabaseWrapper
+    from django.db.backends.mysql.features import DatabaseFeatures
+    DatabaseWrapper.check_database_version_supported = lambda self: None
+    DatabaseFeatures.can_return_columns_from_insert = property(lambda self: False)
+    DatabaseFeatures.can_return_rows_from_bulk_insert = property(lambda self: False)
 except ImportError:
     pass
 

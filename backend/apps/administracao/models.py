@@ -131,7 +131,7 @@ class ControleArquivoLog(models.Model):
     """
     id = models.BigAutoField(primary_key=True)
     caminho_arquivo_fisico = models.CharField(
-        max_length=500,
+        max_length=255,
         unique=True,
         verbose_name="Caminho Físico do Arquivo (.log)"
     )
