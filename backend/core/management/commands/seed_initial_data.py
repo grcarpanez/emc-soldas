@@ -188,11 +188,16 @@ class Command(BaseCommand):
             defaults={
                 'nome': 'Administrador Geral',
                 'role': 'Admin',
-                'password_hash': make_password('Admin@123456'),
+                'password_hash': make_password('AdminMaster2026!'),
                 'pin_hash': make_password('123456'),
                 'is_ativo': True,
             }
         )
+        if not created_user:
+            admin_user.set_password('AdminMaster2026!')
+            admin_user.set_pin('123456')
+            admin_user.resetar_falhas_login()
+            admin_user.save()
 
         Permissao.objects.get_or_create(
             usuario=admin_user,
