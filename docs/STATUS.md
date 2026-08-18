@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos)  
-**Fase Atual:** Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) (Pronta para início)  
-**Próxima Fase:** Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 6 - Catálogo Base, Materiais, Insumos e Produtos - Motor BOM)  
+**Fase Atual:** Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) (Pronta para início)  
+**Próxima Fase:** Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)  
 
 ---
 
@@ -19,7 +19,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 3.5** | Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras | **Concluída** | 100% |
 | **Fase 4** | Cadastros Estruturais e Dicionários Centrais | **Concluída** | 100% |
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | **Concluída** | 100% |
-| **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | Pendente | 0% |
+| **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | **Concluída** | 100% |
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | Pendente | 0% |
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | Pendente | 0% |
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | Pendente | 0% |
@@ -105,10 +105,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (46 testes no total acumulado).
 
 ### Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)
-- [ ] Implementar cadastro de Itens com atributos técnicos dinâmicos e fator de conversão de unidades.
-- [ ] Implementar cadastro de Produtos com tempo de mão de obra e sub-grid de Ficha Técnica BOM.
-- [ ] Implementar cálculo em tempo real do `Preço de Custo Apurado`.
-- [ ] Implementar travas de integridade para impedir soft delete de itens em uso na receita de produtos ativos.
+- [x] Implementar cadastro de Itens com atributos técnicos dinâmicos (`ItemAtributoValor`), fator de conversão de unidades e cálculo de custo fracionado de consumo (`/api/itens/`).
+- [x] Implementar cadastro de Produtos com tempo estimado de mão de obra (`tempo_estimado_execucao`) e sub-grid de Ficha Técnica BOM (`/api/produtos/`).
+- [x] Implementar cálculo em tempo real do `Preço de Custo Apurado` (Custo Total Materiais + Custo Mão de Obra via taxa horária de `ConfiguracaoGlobal`).
+- [x] Implementar travas de integridade referencial para impedir soft delete de itens em uso na Ficha Técnica de produtos ativos.
+- [x] Implementar endpoints auxiliares: `/api/itens/{id}/onde-usado/`, `/api/produtos/{id}/custo-detalhado/` e `/api/produtos/{id}/atualizar-ficha-tecnica/`.
+- [x] Proteger todos os endpoints do Catálogo via RBAC com o toggle `gestao_catalogo` (`HasCatalogoAccess`).
+- [x] Criar e executar suíte de testes automatizados com 100% de sucesso (50 testes no total acumulado do projeto).
 
 ### Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)
 - [ ] Implementar registro de Notas Fiscais de Entrada (`DocumentoFiscalCompra` e `NotaCompraItem`).
@@ -181,4 +184,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)**, implementando os serializers, viewsets e rotas para Itens de Catálogo (com atributos técnicos dinâmicos e fator de conversão de unidades), Produtos (com tempo estimado de execução) e a Ficha Técnica BOM (`FichaTecnica`), calculando o Preço de Custo Apurado em tempo real e aplicando as travas de integridade referencial para soft delete de matérias-primas em uso.
+Iniciar a **Fase 7 - Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos)**, desenvolvendo os serializers, viewsets e rotas para `DocumentoFiscalCompra` (`/api/documentos-fiscais-compra/`) e `NotaCompraItem` (`/api/nota-compra-itens/`), implementando o upload protegido de arquivos físicos (XML/PDF), a rotina de retroalimentação automática que atualiza o `ultimo_custo_compra` e `data_ultima_compra` no Catálogo de Itens, e a consulta de histórico de preços por fornecedor, protegidos pelo toggle `acesso_compras`.
