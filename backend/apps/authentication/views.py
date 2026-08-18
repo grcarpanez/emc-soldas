@@ -42,6 +42,7 @@ class LoginView(APIView):
     Endpoint de Login com proteção Anti-Bruteforce e injeção de Cookie HttpOnly.
     Bloqueio automático de 1 hora após 5 falhas consecutivas.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -233,6 +234,7 @@ class ForgotPasswordView(APIView):
     """
     Solicitação de recuperação de senha: gera código de 8 dígitos e envia por e-mail.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -262,6 +264,7 @@ class ResetPasswordView(APIView):
     """
     Redefinição de senha utilizando o código de 8 dígitos recebido por e-mail.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -315,6 +318,7 @@ class ActivateAccountView(APIView):
     """
     Ativação de conta e cadastro de senha para colaboradores convidados via onboarding.
     """
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
