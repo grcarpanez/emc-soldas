@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 4 - Cadastros Estruturais e Dicionários Centrais)  
-**Fase Atual:** Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos (Pronta para início)  
-**Próxima Fase:** Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos  
+**Última Atualização:** 2026-08-18 (Conclusão da Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos)  
+**Fase Atual:** Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) (Pronta para início)  
+**Próxima Fase:** Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)  
 
 ---
 
@@ -18,7 +18,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 3** | Autenticação, Sessão (JWT HttpOnly), Soft Lock e Controle de Acesso (RBAC) | **Concluída** | 100% |
 | **Fase 3.5** | Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras | **Concluída** | 100% |
 | **Fase 4** | Cadastros Estruturais e Dicionários Centrais | **Concluída** | 100% |
-| **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | Pendente | 0% |
+| **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | **Concluída** | 100% |
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | Pendente | 0% |
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | Pendente | 0% |
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | Pendente | 0% |
@@ -96,11 +96,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte de testes automatizados com 100% de sucesso (33 testes).
 
 ### Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos
-- [ ] Criar endpoint proxy para consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso.
-- [ ] Implementar validação matemática de CPF (módulo 11) e checagem antecipada de unicidade (`onBlur`).
-- [ ] Implementar CRUD de `ClienteFornecedor` com suporte a PF/PJ e cadastro rápido ágil (apenas Nome + Telefone).
-- [ ] Implementar CRUD de `Equipamento` com histórico relacional de proprietários (`ClienteEquipamento`).
-- [ ] Implementar gestão segura de anexos gerais de clientes.
+- [x] Criar endpoint proxy para consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso (`/api/utilitarios/consulta-cnpj/<cnpj>/`).
+- [x] Implementar validação matemática de CPF (módulo 11), CNPJ e checagem antecipada de duplicidade no `onBlur` (`/api/utilitarios/verificar-documento/`).
+- [x] Implementar CRUD de `ClienteFornecedor` com suporte a PF/PJ, cadastro rápido ágil (apenas Nome + Telefone), dossiê comercial e soft delete.
+- [x] Implementar CRUD de `Equipamento` com suporte a placas antigas/Mercosul, identificação técnica e soft delete.
+- [x] Implementar CRUD de `ClienteEquipamento` com transferência segura (desativação do vínculo anterior e ativação do novo) preservando o histórico para não quebrar orçamentos passados.
+- [x] Implementar gestão e download seguro de anexos de clientes (`AnexoGeralCliente`) com validação de extensões permitidas e cabeçalhos forçados.
+- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (46 testes no total acumulado).
 
 ### Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)
 - [ ] Implementar cadastro de Itens com atributos técnicos dinâmicos e fator de conversão de unidades.
@@ -179,4 +181,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos**, implementando o proxy de consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso, validação matemática de CPF (módulo 11), CRUD de `ClienteFornecedor` com suporte a PF/PJ e cadastro rápido ágil (Nome + Telefone), CRUD de `Equipamento` com histórico de proprietários (`ClienteEquipamento`) e gerenciamento seguro de anexos de clientes.
+Iniciar a **Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)**, implementando os serializers, viewsets e rotas para Itens de Catálogo (com atributos técnicos dinâmicos e fator de conversão de unidades), Produtos (com tempo estimado de execução) e a Ficha Técnica BOM (`FichaTecnica`), calculando o Preço de Custo Apurado em tempo real e aplicando as travas de integridade referencial para soft delete de matérias-primas em uso.

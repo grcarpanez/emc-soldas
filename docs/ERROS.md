@@ -64,3 +64,13 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Adoção da normalização diacrítica `unicodedata.normalize('NFKD', ...)` com substituição prévia de ordinais (`º` -> `O`, `ª` -> `A`) e filtragem exclusiva de marcas combinadas (`unicodedata.combining(c)`), preservando toda a pontuação e estrutura do texto original enquanto converte com segurança para maiúsculas sem acento.
 - **Como evitar no futuro:** Nunca utilizar regex destrutiva em campos de texto livre (endereços, descrições, observações). Utilizar sempre a função utilitária `sanitizar_texto_maiusculo` no backend e `sanitizarTextoEmTempoReal` no frontend.
 
+---
+
+## 2026-08-18 - Roteamento com Barras em Parâmetros de CNPJ Formatado (404 Not Found)
+
+- **Sintoma:** Requisições para `/api/utilitarios/consulta-cnpj/33.000.167/0001-01/` retornavam erro `404 Not Found`.
+- **Causa:** O conversor de rota padrão do Django `<str:cnpj>` rejeita caracteres de barra `/` presentes na formatação usual de CNPJs, interpretando-os como separadores de segmentos de rota.
+- **Solução aplicada:** Substituição de `path('.../<str:cnpj>/')` por `re_path(r'^utilitarios/consulta-cnpj/(?P<cnpj>.+?)/?$')` em `backend/apps/cadastros/urls.py`, permitindo que consultas recebam tanto o CNPJ limpo (`33000167000101`) quanto formatado com barras, pontos e traços.
+- **Como evitar no futuro:** Em rotas que recebem parâmetros com possíveis caracteres de separação de caminho (como documentos formatados com barra), utilizar `re_path` ou `<path:param>` com sanitização interna dos dígitos.
+
+

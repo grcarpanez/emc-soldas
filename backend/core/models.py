@@ -123,6 +123,11 @@ class SoftDeleteModel(models.Model):
                 self.deleted_by_id = current_user.id
         self.save(update_fields=['deleted_at', 'deleted_by_id'])
 
+    def soft_delete(self, user=None):
+        """Alias amigável para aplicação de soft delete."""
+        user_id = getattr(user, 'id', user) if user else None
+        self.delete(user_id=user_id)
+
     def restore(self):
         """Restaura o registro da Lixeira para o estado ativo."""
         self.deleted_at = None
