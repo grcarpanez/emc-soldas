@@ -2,6 +2,7 @@
 Modelos do Catálogo Base, Dicionários Centrais, Itens, Insumos e Produtos (Motor BOM).
 Em conformidade com docs/FSD.md - Entidades DicionarioUom, DicionarioAtributo, Item, ItemAtributoValor, Produto e FichaTecnica.
 """
+from decimal import Decimal
 from django.db import models
 from core.models import BaseModel
 
