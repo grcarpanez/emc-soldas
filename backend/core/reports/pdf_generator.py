@@ -2,7 +2,7 @@
 Gerador de relatórios executivos em PDF para a Central Analítica do sistema EMC Soldas.
 Utiliza ReportLab com layout profissional baseado no Design System Industrial Integrity (docs/DESIGN.md).
 Contempla NumberedCanvas (Página X de Y), inserção inteligente da logomarca institucional,
-tabelas técnicas zebradas, cabeçalhos centralizados, sumários executivos e cantos retos (0px).
+tabelas técnicas zebradas, cabeçalhos centralizados vertical e horizontalmente, sumários executivos e cantos retos (0px).
 """
 import io
 import os
@@ -212,7 +212,7 @@ def obter_estilos_base():
     return styles
 
 
-def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
+def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None, config_override=None):
     """
     Monta o cabeçalho executivo padrão do sistema com suporte inteligente à logomarca
     institucional (respeitando aspect ratio e bounding box fit) e dados da oficina.
@@ -220,7 +220,19 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
     if not styles:
         styles = obter_estilos_base()
 
-    config = ConfiguracaoGlobal.get_solo()
+    if config_override is not None:
+        config = config_override
+    else:
+        try:
+            config = ConfiguracaoGlobal.get_solo()
+        except Exception:
+            config = ConfiguracaoGlobal(
+                razao_social='EMC SOLDAS & MANUTENÇÃO INDUSTRIAL',
+                cnpj='12.345.678/0001-90',
+                telefone_contato='(11) 98765-4321',
+                endereco_oficina='RUA INDUSTRIAL DA SOLDA, 500 - GALPÃO 2'
+            )
+
     razao = config.razao_social or "EMC SOLDAS & MANUTENÇÃO INDUSTRIAL"
     cnpj = config.cnpj or ""
     telefone = config.telefone_contato or ""
@@ -235,6 +247,7 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
             os.path.join(getattr(settings, 'BASE_DIR', ''), logo_path.lstrip('/\\')),
             os.path.join(getattr(settings, 'MEDIA_ROOT', ''), logo_path.lstrip('/\\')),
             os.path.join(os.path.dirname(__file__), '..', '..', logo_path.lstrip('/\\')),
+            os.path.join(getattr(settings, 'BASE_DIR', ''), 'media', 'exemplos', 'logo_generica_emc.png'),
         ]
         for cand in candidatos:
             if os.path.isfile(cand):
@@ -242,8 +255,8 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
                     with PILImage.open(cand) as pil_img:
                         img_w, img_h = pil_img.size
                     if img_w > 0 and img_h > 0:
-                        max_w = 42 * mm
-                        max_h = 20 * mm
+                        max_w = 46 * mm
+                        max_h = 22 * mm
                         scale = min(max_w / float(img_w), max_h / float(img_h))
                         final_w = float(img_w) * scale
                         final_h = float(img_h) * scale
@@ -264,7 +277,7 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
     if logo_flowable:
         col_esquerda = Table(
             [[logo_flowable, Paragraph(empresa_dados_html, styles['IndustrialSubtitle'])]],
-            colWidths=[44 * mm, 64 * mm]
+            colWidths=[48 * mm, 60 * mm]
         )
         col_esquerda.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -298,8 +311,8 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
     return elementos
 
 
-def gerar_pdf_inadimplencia(dados):
-    """Gera o PDF do Relatório de Inadimplência com cabeçalhos centralizados."""
+def gerar_pdf_inadimplencia(dados, config_override=None):
+    """Gera o PDF do Relatório de Inadimplência com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -315,7 +328,7 @@ def gerar_pdf_inadimplencia(dados):
 
     # Cabeçalho
     subtitulo = f"Posição em {timezone.localtime(timezone.now()).strftime('%d/%m/%Y')} • Cobrança Preventiva"
-    elementos.extend(criar_cabecalho_institucional("Painel de Inadimplência", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional("Painel de Inadimplência", subtitulo, styles, config_override=config_override))
 
     # Cards de Resumo Executivo
     total_inadimplente = dados.get('valor_total_inadimplente', Decimal('0.00'))
@@ -343,6 +356,7 @@ def gerar_pdf_inadimplencia(dados):
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_STEEL_GRAY),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('BACKGROUND', (0, 1), (-1, 1), COLOR_LIGHT_SURFACE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
@@ -351,7 +365,7 @@ def gerar_pdf_inadimplencia(dados):
     elementos.append(tabela_resumo)
     elementos.append(Spacer(1, 4 * mm))
 
-    # Tabela de Títulos Vencidos com Cabeçalhos Centralizados
+    # Tabela de Títulos Vencidos com Cabeçalhos Centralizados Vertical e Horizontalmente
     elementos.append(Paragraph("<b>Detalhamento de Faturas e Títulos Vencidos</b>", styles['SectionHeader']))
 
     headers = [
@@ -386,6 +400,7 @@ def gerar_pdf_inadimplencia(dados):
     tabela_titulos.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -398,8 +413,8 @@ def gerar_pdf_inadimplencia(dados):
     return buffer.getvalue()
 
 
-def gerar_pdf_dossie_cliente(dados):
-    """Gera o PDF do Dossiê Completo do Cliente com cabeçalhos centralizados."""
+def gerar_pdf_dossie_cliente(dados, config_override=None):
+    """Gera o PDF do Dossiê Completo do Cliente com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -415,7 +430,7 @@ def gerar_pdf_dossie_cliente(dados):
 
     cliente = dados.get('cliente', {})
     subtitulo = f"Dossiê Histórico e Comercial • Cliente #{cliente.get('id', '')}"
-    elementos.extend(criar_cabecalho_institucional(f"Dossiê: {cliente.get('nome_razao', '')}", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional(f"Dossiê: {cliente.get('nome_razao', '')}", subtitulo, styles, config_override=config_override))
 
     # Bloco de Informações Cadastrais
     info_cliente_data = [
@@ -435,6 +450,7 @@ def gerar_pdf_dossie_cliente(dados):
     tabela_info = Table(info_cliente_data, colWidths=[91 * mm, 91 * mm])
     tabela_info.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), COLOR_LIGHT_SURFACE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 3),
@@ -465,6 +481,7 @@ def gerar_pdf_dossie_cliente(dados):
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_STEEL_GRAY),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('BACKGROUND', (0, 1), (-1, 1), COLOR_LIGHT_SURFACE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 3.5),
@@ -473,7 +490,7 @@ def gerar_pdf_dossie_cliente(dados):
     elementos.append(tabela_ind)
     elementos.append(Spacer(1, 4 * mm))
 
-    # Segregação de Vendas: Produtos vs Serviços
+    # Segregação de Vendas: Produtos vs Serviços (Cabeçalhos Centralizados)
     elementos.append(Paragraph("<b>Segregação de Consumo: Produtos (Peças) vs Serviços (Reformas)</b>", styles['SectionHeader']))
     seg = dados.get('segregacao_vendas', {})
     prod = seg.get('produtos', {})
@@ -502,6 +519,8 @@ def gerar_pdf_dossie_cliente(dados):
     tabela_seg = Table(seg_data, colWidths=[72 * mm, 30 * mm, 45 * mm, 35 * mm])
     tabela_seg.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -511,7 +530,7 @@ def gerar_pdf_dossie_cliente(dados):
     elementos.append(tabela_seg)
     elementos.append(Spacer(1, 4 * mm))
 
-    # Histórico Recente de Orçamentos
+    # Histórico Recente de Orçamentos (Cabeçalhos Centralizados)
     elementos.append(Paragraph("<b>Histórico de Orçamentos</b>", styles['SectionHeader']))
     orc_headers = [
         Paragraph("<b>NÚMERO</b>", styles['TableHeaderCenter']),
@@ -537,6 +556,8 @@ def gerar_pdf_dossie_cliente(dados):
     tabela_orc = Table(orc_rows, colWidths=[20 * mm, 24 * mm, 40 * mm, 38 * mm, 30 * mm, 30 * mm], repeatRows=1)
     tabela_orc.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -549,8 +570,8 @@ def gerar_pdf_dossie_cliente(dados):
     return buffer.getvalue()
 
 
-def gerar_pdf_curva_abc_clientes(dados):
-    """Gera o PDF da Curva ABC de Clientes com cabeçalhos centralizados."""
+def gerar_pdf_curva_abc_clientes(dados, config_override=None):
+    """Gera o PDF da Curva ABC de Clientes com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -565,7 +586,7 @@ def gerar_pdf_curva_abc_clientes(dados):
     elementos = []
 
     subtitulo = f"Período: {dados.get('data_inicio', '')} até {dados.get('data_fim', '')} • Matriz 80/15/5%"
-    elementos.extend(criar_cabecalho_institucional("Curva ABC de Clientes", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional("Curva ABC de Clientes", subtitulo, styles, config_override=config_override))
 
     # Resumo das Classes A, B e C
     resumo_abc = [
@@ -587,6 +608,7 @@ def gerar_pdf_curva_abc_clientes(dados):
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_STEEL_GRAY),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('BACKGROUND', (0, 1), (-1, 1), COLOR_LIGHT_SURFACE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
@@ -595,7 +617,7 @@ def gerar_pdf_curva_abc_clientes(dados):
     elementos.append(tabela_resumo)
     elementos.append(Spacer(1, 4 * mm))
 
-    # Listagem Ranqueada com Cabeçalhos Centralizados
+    # Listagem Ranqueada com Cabeçalhos Centralizados Vertical e Horizontalmente
     headers = [
         Paragraph("<b>POS</b>", styles['TableHeaderCenter']),
         Paragraph("<b>CLIENTE</b>", styles['TableHeaderCenter']),
@@ -626,6 +648,8 @@ def gerar_pdf_curva_abc_clientes(dados):
     tabela_dados = Table(linhas, colWidths=[14 * mm, 62 * mm, 32 * mm, 30 * mm, 18 * mm, 18 * mm, 18 * mm], repeatRows=1)
     tabela_dados.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -638,8 +662,8 @@ def gerar_pdf_curva_abc_clientes(dados):
     return buffer.getvalue()
 
 
-def gerar_pdf_curva_abc_itens(dados):
-    """Gera o PDF da Curva ABC de Consumo de Itens com cabeçalhos centralizados."""
+def gerar_pdf_curva_abc_itens(dados, config_override=None):
+    """Gera o PDF da Curva ABC de Consumo de Itens com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -654,7 +678,7 @@ def gerar_pdf_curva_abc_itens(dados):
     elementos = []
 
     subtitulo = f"Período: {dados.get('data_inicio', '')} até {dados.get('data_fim', '')} • Consumo de Insumos"
-    elementos.extend(criar_cabecalho_institucional("Curva ABC de Consumo de Itens", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional("Curva ABC de Consumo de Itens", subtitulo, styles, config_override=config_override))
 
     # Resumo
     resumo_abc = [
@@ -676,6 +700,7 @@ def gerar_pdf_curva_abc_itens(dados):
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_STEEL_GRAY),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('BACKGROUND', (0, 1), (-1, 1), COLOR_LIGHT_SURFACE),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
@@ -716,6 +741,8 @@ def gerar_pdf_curva_abc_itens(dados):
     tabela_dados = Table(linhas, colWidths=[12 * mm, 56 * mm, 14 * mm, 24 * mm, 28 * mm, 16 * mm, 16 * mm, 16 * mm], repeatRows=1)
     tabela_dados.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -728,8 +755,8 @@ def gerar_pdf_curva_abc_itens(dados):
     return buffer.getvalue()
 
 
-def gerar_pdf_dre(dados):
-    """Gera o PDF do DRE Simplificado com cabeçalhos centralizados."""
+def gerar_pdf_dre(dados, config_override=None):
+    """Gera o PDF do DRE Simplificado com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -744,7 +771,7 @@ def gerar_pdf_dre(dados):
     elementos = []
 
     subtitulo = f"Período: {dados.get('data_inicio', '')} até {dados.get('data_fim', '')} • Regime: {dados.get('regime', 'COMPETENCIA').upper()}"
-    elementos.extend(criar_cabecalho_institucional("Demonstrativo de Resultado (DRE)", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional("Demonstrativo de Resultado (DRE)", subtitulo, styles, config_override=config_override))
 
     headers = [
         Paragraph("<b>ESTRUTURA DRE</b>", styles['TableHeaderCenter']),
@@ -779,6 +806,8 @@ def gerar_pdf_dre(dados):
     tabela_dre = Table(linhas, colWidths=[112 * mm, 40 * mm, 30 * mm])
     tabela_dre.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
         ('TOPPADDING', (0, 0), (-1, -1), 3.5),
@@ -798,8 +827,8 @@ def gerar_pdf_dre(dados):
     return buffer.getvalue()
 
 
-def gerar_pdf_divergencias_conciliacao(dados):
-    """Gera o PDF do Relatório de Divergências de Conciliação Bancária com cabeçalhos centralizados."""
+def gerar_pdf_divergencias_conciliacao(dados, config_override=None):
+    """Gera o PDF do Relatório de Divergências de Conciliação Bancária com cabeçalhos centralizados vertical e horizontalmente."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -814,7 +843,7 @@ def gerar_pdf_divergencias_conciliacao(dados):
     elementos = []
 
     subtitulo = f"Conta: {dados.get('conta_nome', 'TODAS')} • Período: {dados.get('data_inicio', '')} até {dados.get('data_fim', '')}"
-    elementos.extend(criar_cabecalho_institucional("Divergências de Conciliação Bancária", subtitulo, styles))
+    elementos.extend(criar_cabecalho_institucional("Divergências de Conciliação Bancária", subtitulo, styles, config_override=config_override))
 
     # Aba 1: Sobras do Extrato
     elementos.append(Paragraph("<b>1. Transações no Extrato Bancário sem Vínculo no ERP</b>", styles['SectionHeader']))
@@ -840,6 +869,8 @@ def gerar_pdf_divergencias_conciliacao(dados):
     tab1 = Table(linhas1, colWidths=[24 * mm, 74 * mm, 20 * mm, 34 * mm, 30 * mm])
     tab1.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
@@ -875,6 +906,8 @@ def gerar_pdf_divergencias_conciliacao(dados):
     tab2 = Table(linhas2, colWidths=[22 * mm, 56 * mm, 36 * mm, 24 * mm, 16 * mm, 28 * mm])
     tab2.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), COLOR_DARK_IRON),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, COLOR_ALT_ROW]),
         ('BOX', (0, 0), (-1, -1), 1, COLOR_BORDER),
         ('INNERGRID', (0, 0), (-1, -1), 0.5, COLOR_BORDER),
