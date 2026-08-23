@@ -705,7 +705,7 @@ def salvar_pdf_exemplo(caminho_arquivo):
 
     hoje = timezone.now().date()
 
-    # 14 Itens Detalhados para ocupação de 2 folhas com paginação técnica
+    # 25 Itens Detalhados para demonstrar a tabela ocupando 2 páginas com repetição de cabeçalho
     itens_mock = [
         OrcamentoItem(id=1, produto=prod_recup_chassi, quantidade=Decimal('1.0000'), custo_snapshot=Decimal('1250.00'), valor_venda_snapshot=Decimal('3400.00')),
         OrcamentoItem(id=2, item=item_viga_w, quantidade=Decimal('6.0000'), custo_snapshot=Decimal('185.00'), valor_venda_snapshot=Decimal('320.00')),
@@ -721,6 +721,17 @@ def salvar_pdf_exemplo(caminho_arquivo):
         OrcamentoItem(id=12, item=item_tinta_epoxi, quantidade=Decimal('3.0000'), custo_snapshot=Decimal('160.00'), valor_venda_snapshot=Decimal('290.00')),
         OrcamentoItem(id=13, descricao_livre='ENSAIO NAO DESTRUTIVO (END) POR LIQUIDO PENETRANTE E ULTRA-SOM', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('200.00'), valor_venda_snapshot=Decimal('600.00')),
         OrcamentoItem(id=14, descricao_livre='EMISSAO DE LAUDO TECNICO COM ART (ANOTACAO DE RESPONSABILIDADE TECNICA)', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('150.00'), valor_venda_snapshot=Decimal('400.00')),
+        OrcamentoItem(id=15, descricao_livre='PARAFUSO SEXTAVADO GRAU 8.8 M16X60 COM PORCA E ARRUELA DE PRESSAO', quantidade=Decimal('32.0000'), custo_snapshot=Decimal('6.50'), valor_venda_snapshot=Decimal('14.00')),
+        OrcamentoItem(id=16, descricao_livre='CHAPA DE DESGASTE HARDOX 450 3/8 POL PARA REVESTIMENTO DE CACAMBA', quantidade=Decimal('45.0000'), custo_snapshot=Decimal('24.00'), valor_venda_snapshot=Decimal('48.00')),
+        OrcamentoItem(id=17, descricao_livre='SOLDA POR ELETRODO REVESTIDO DE REVESTIMENTO DURO (ANTI-ABRASAO)', quantidade=Decimal('6.0000'), custo_snapshot=Decimal('85.00'), valor_venda_snapshot=Decimal('190.00')),
+        OrcamentoItem(id=18, descricao_livre='VALVULA ESFERA TRIPARTIDA INOX 316 CLASSE 300 2 POL', quantidade=Decimal('2.0000'), custo_snapshot=Decimal('340.00'), valor_venda_snapshot=Decimal('680.00')),
+        OrcamentoItem(id=19, descricao_livre='TUBO INDUSTRIAL SCHEDULE 40 ACO CARBONO SEM COSTURA 3 POL', quantidade=Decimal('12.0000'), custo_snapshot=Decimal('78.00'), valor_venda_snapshot=Decimal('155.00')),
+        OrcamentoItem(id=20, descricao_livre='CONEXOES E CURVAS 90 GRAUS RAIO LONGO SCHEDULE 40 PARA TUBULACAO', quantidade=Decimal('8.0000'), custo_snapshot=Decimal('45.00'), valor_venda_snapshot=Decimal('98.00')),
+        OrcamentoItem(id=21, descricao_livre='TESTE DE PRESSAO HIDROSTATICO EM TUBULACOES ATE 150 PSI', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('220.00'), valor_venda_snapshot=Decimal('520.00')),
+        OrcamentoItem(id=22, descricao_livre='TRATAMENTO TERMICO DE ALIVIO DE TENSOES POS-SOLDAGEM (PWHT)', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('480.00'), valor_venda_snapshot=Decimal('1100.00')),
+        OrcamentoItem(id=23, descricao_livre='SERVICO DE GUINDASTE E MOVIMENTACAO DE CARGA PESADA (4 HORAS)', quantidade=Decimal('4.0000'), custo_snapshot=Decimal('180.00'), valor_venda_snapshot=Decimal('350.00')),
+        OrcamentoItem(id=24, descricao_livre='PINTURA DE ACABAMENTO POLIURETANO INDUSTRIAL (PU) COR CINZA MUNSELL', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('280.00'), valor_venda_snapshot=Decimal('720.00')),
+        OrcamentoItem(id=25, descricao_livre='MONTAGEM FINAL, TESTE OPERACIONAL DE CARGA E LIBERACAO TECNICA', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('300.00'), valor_venda_snapshot=Decimal('750.00')),
     ]
 
     valor_bruto_total = sum(i.quantidade * i.valor_venda_snapshot for i in itens_mock)

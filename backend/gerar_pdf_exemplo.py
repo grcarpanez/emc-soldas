@@ -14,6 +14,6 @@ django.setup()
 from apps.orcamentos.pdf_service import salvar_pdf_exemplo
 
 if __name__ == '__main__':
-    caminho_destino = os.path.join(os.path.dirname(__file__), 'media', 'exemplos', 'orcamento_exemplo.pdf')
+    caminho_destino = os.path.join(os.path.dirname(__file__), 'media', 'exemplos', 'orcamento_exemplo_25itens.pdf')
     arquivo_gerado = salvar_pdf_exemplo(caminho_destino)
-    print(f"[OK] PDF de demonstração gerado com sucesso em: {arquivo_gerado}")
+    print(f"[OK] PDF com 25 itens gerado com sucesso em: {arquivo_gerado}")
