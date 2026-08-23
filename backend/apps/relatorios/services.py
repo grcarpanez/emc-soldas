@@ -16,6 +16,7 @@ from apps.financeiro.models import (
 from apps.cadastros.models import ClienteFornecedor, Equipamento, ClienteEquipamento
 from apps.catalogo.models import Item, Produto, FichaTecnica
 from apps.compras.models import DocumentoFiscalCompra, NotaCompraItem
+from core.utils import sanitizar_texto_maiusculo
 
 
 def normalizar_datas(data_inicio=None, data_fim=None):
@@ -837,32 +838,31 @@ class DREService:
 
         linhas_dre = [
             {'descricao': '(+) 1. RECEITA BRUTA OPERACIONAL', 'valor': receita_bruta_total, 'percentual': Decimal('100.00'), 'is_destaque': True, 'is_total': False},
-            {'descricao': '(-) 2. DEDUÇÕES DA RECEITA BRUTA', 'valor': deducoes_totais, 'percentual': calc_perc(deducoes_totais), 'is_destaque': False, 'is_total': False},
-            {'descricao': '     • Descontos Comerciais Concedidos', 'valor': descontos_concedidos, 'percentual': calc_perc(descontos_concedidos), 'is_destaque': False, 'is_total': False},
-            {'descricao': '     • Tarifas Bancárias e Taxas de Maquininha', 'valor': taxas_maquininhas, 'percentual': calc_perc(taxas_maquininhas), 'is_destaque': False, 'is_total': False},
-            {'descricao': '(=) 3. RECEITA OPERACIONAL LÍQUIDA', 'valor': receita_liquida, 'percentual': calc_perc(receita_liquida), 'is_destaque': True, 'is_total': False},
-            {'descricao': '(-) 4. CUSTOS OPERACIONAIS (MATÉRIA-PRIMA E INSUMOS)', 'valor': custos_insumos, 'percentual': calc_perc(custos_insumos), 'is_destaque': False, 'is_total': False},
-            {'descricao': '(=) 5. MARGEM DE CONTRIBUIÇÃO BRUTA', 'valor': margem_contribuicao, 'percentual': calc_perc(margem_contribuicao), 'is_destaque': True, 'is_total': False},
+            {'descricao': '(-) 2. DEDUCOES DA RECEITA BRUTA', 'valor': deducoes_totais, 'percentual': calc_perc(deducoes_totais), 'is_destaque': False, 'is_total': False},
+            {'descricao': '     - DESCONTOS COMERCIAIS CONCEDIDOS', 'valor': descontos_concedidos, 'percentual': calc_perc(descontos_concedidos), 'is_destaque': False, 'is_total': False},
+            {'descricao': '     - TARIFAS BANCARIAS E TAXAS DE MAQUININHA', 'valor': taxas_maquininhas, 'percentual': calc_perc(taxas_maquininhas), 'is_destaque': False, 'is_total': False},
+            {'descricao': '(=) 3. RECEITA OPERACIONAL LIQUIDA', 'valor': receita_liquida, 'percentual': calc_perc(receita_liquida), 'is_destaque': True, 'is_total': False},
+            {'descricao': '(-) 4. CUSTOS OPERACIONAIS (MATERIA-PRIMA E INSUMOS)', 'valor': custos_insumos, 'percentual': calc_perc(custos_insumos), 'is_destaque': False, 'is_total': False},
+            {'descricao': '(=) 5. MARGEM DE CONTRIBUICAO BRUTA', 'valor': margem_contribuicao, 'percentual': calc_perc(margem_contribuicao), 'is_destaque': True, 'is_total': False},
             {'descricao': '(-) 6. DESPESAS OPERACIONAIS E ADMINISTRATIVAS', 'valor': total_despesas_operacionais, 'percentual': calc_perc(total_despesas_operacionais), 'is_destaque': False, 'is_total': False},
         ]
 
         for item in despesas_operacionais_qs:
-            nome_cat = item['categoria__nome'] or 'Despesas Gerais'
-            val_cat = item['total']
+            nome_cat = sanitizar_texto_maiusculo(item['categoria__nome'] or 'DESPESAS GERAIS')
             linhas_dre.append({
-                'descricao': f"     • {nome_cat}",
-                'valor': val_cat,
-                'percentual': calc_perc(val_cat),
+                'descricao': f'     - {nome_cat}',
+                'valor': item['total'],
+                'percentual': calc_perc(item['total']),
                 'is_destaque': False,
-                'is_total': False
+                'is_total': False,
             })
 
         linhas_dre.append({
-            'descricao': '(=) 7. RESULTADO OPERACIONAL LÍQUIDO DO EXERCÍCIO',
+            'descricao': '(=) 7. RESULTADO OPERACIONAL LIQUIDO DO EXERCICIO',
             'valor': resultado_liquido,
             'percentual': calc_perc(resultado_liquido),
             'is_destaque': True,
-            'is_total': True
+            'is_total': True,
         })
 
         return {

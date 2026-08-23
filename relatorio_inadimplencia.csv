@@ -1,0 +1,9 @@
+﻿EMC SOLDAS - RELATORIO DE INADIMPLENCIA
+
+ID FATURA;CLIENTE;CPF/CNPJ;TELEFONE;VALOR ORIGINAL (R$);VALOR ABERTO (R$);DATA VENCIMENTO;DIAS ATRASO;STATUS FATURA
+
+--- RESUMO EXECUTIVO ---
+Total de Clientes Inadimplentes;0
+Total de Títulos em Atraso;0
+Valor Total em Atraso (R$);0,00
+Média de Dias de Atraso;0 dias

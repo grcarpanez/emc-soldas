@@ -1,7 +1,8 @@
 """
 Gerador de relatórios executivos em PDF para a Central Analítica do sistema EMC Soldas.
 Utiliza ReportLab com layout profissional baseado no Design System Industrial Integrity (docs/DESIGN.md).
-Contempla NumberedCanvas (Página X de Y), tabelas técnicas zebradas, sumários executivos e cantos retos (0px).
+Contempla NumberedCanvas (Página X de Y), inserção inteligente da logomarca institucional,
+tabelas técnicas zebradas, cabeçalhos centralizados, sumários executivos e cantos retos (0px).
 """
 import io
 import os
@@ -112,17 +113,17 @@ def obter_estilos_base():
     styles.add(ParagraphStyle(
         name='IndustrialTitle',
         fontName='Helvetica-Bold',
-        fontSize=15,
-        leading=18,
+        fontSize=13,
+        leading=16,
         textColor=COLOR_DARK_IRON,
-        alignment=TA_LEFT
+        alignment=TA_RIGHT
     ))
 
     styles.add(ParagraphStyle(
         name='IndustrialSubtitle',
         fontName='Helvetica',
-        fontSize=9,
-        leading=12,
+        fontSize=8.5,
+        leading=11,
         textColor=COLOR_TEXT_MUTED,
         alignment=TA_LEFT
     ))
@@ -130,11 +131,11 @@ def obter_estilos_base():
     styles.add(ParagraphStyle(
         name='SectionHeader',
         fontName='Helvetica-Bold',
-        fontSize=10.5,
+        fontSize=10,
         leading=13,
         textColor=COLOR_DARK_IRON,
-        spaceBefore=8,
-        spaceAfter=4
+        spaceBefore=7,
+        spaceAfter=3
     ))
 
     styles.add(ParagraphStyle(
@@ -144,6 +145,15 @@ def obter_estilos_base():
         leading=10,
         textColor=colors.white,
         alignment=TA_LEFT
+    ))
+
+    styles.add(ParagraphStyle(
+        name='TableHeaderCenter',
+        fontName='Helvetica-Bold',
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        alignment=TA_CENTER
     ))
 
     styles.add(ParagraphStyle(
@@ -203,7 +213,10 @@ def obter_estilos_base():
 
 
 def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
-    """Monta o cabeçalho padrão com dados da empresa e título do relatório."""
+    """
+    Monta o cabeçalho executivo padrão do sistema com suporte inteligente à logomarca
+    institucional (respeitando aspect ratio e bounding box fit) e dados da oficina.
+    """
     if not styles:
         styles = obter_estilos_base()
 
@@ -213,26 +226,65 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
     telefone = config.telefone_contato or ""
     endereco = config.endereco_oficina or ""
 
-    info_empresa = f"<b>{razao}</b><br/>"
-    if cnpj:
-        info_empresa += f"CNPJ: {cnpj} • "
-    if telefone:
-        info_empresa += f"Tel: {telefone}<br/>"
-    if endereco:
-        info_empresa += f"{endereco}"
-
-    cabecalho_data = [
-        [
-            Paragraph(info_empresa, styles['IndustrialSubtitle']),
-            Paragraph(f"<b>{titulo_relatorio.upper()}</b><br/><font color='#71797E' size='8'>{subtitulo}</font>", styles['IndustrialTitle'])
+    # 1. Carregamento e Bounding Box Fit inteligente da Logomarca
+    logo_flowable = None
+    logo_path = getattr(config, 'logo_empresa_url', None)
+    if logo_path and isinstance(logo_path, str) and logo_path.strip():
+        candidatos = [
+            logo_path,
+            os.path.join(getattr(settings, 'BASE_DIR', ''), logo_path.lstrip('/\\')),
+            os.path.join(getattr(settings, 'MEDIA_ROOT', ''), logo_path.lstrip('/\\')),
+            os.path.join(os.path.dirname(__file__), '..', '..', logo_path.lstrip('/\\')),
         ]
-    ]
+        for cand in candidatos:
+            if os.path.isfile(cand):
+                try:
+                    with PILImage.open(cand) as pil_img:
+                        img_w, img_h = pil_img.size
+                    if img_w > 0 and img_h > 0:
+                        max_w = 42 * mm
+                        max_h = 20 * mm
+                        scale = min(max_w / float(img_w), max_h / float(img_h))
+                        final_w = float(img_w) * scale
+                        final_h = float(img_h) * scale
+                        logo_flowable = Image(cand, width=final_w, height=final_h)
+                        break
+                except Exception:
+                    logo_flowable = None
 
-    tabela_cabecalho = Table(cabecalho_data, colWidths=[90 * mm, 92 * mm])
+    # 2. Dados textuais da empresa
+    empresa_dados_html = f"<b>{razao.upper()}</b><br/>"
+    if cnpj:
+        empresa_dados_html += f"CNPJ: {cnpj}<br/>"
+    if telefone:
+        empresa_dados_html += f"Tel: {telefone}<br/>"
+    if endereco:
+        empresa_dados_html += f"{endereco}"
+
+    if logo_flowable:
+        col_esquerda = Table(
+            [[logo_flowable, Paragraph(empresa_dados_html, styles['IndustrialSubtitle'])]],
+            colWidths=[44 * mm, 64 * mm]
+        )
+        col_esquerda.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('PADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 4),
+        ]))
+    else:
+        col_esquerda = Paragraph(empresa_dados_html, styles['IndustrialSubtitle'])
+
+    # 3. Lado direito com Título do Relatório e Subtítulo
+    titulo_html = f"<b>{titulo_relatorio.upper()}</b><br/><font color='#71797E' size='8'>{subtitulo}</font>"
+    col_direita = Paragraph(titulo_html, styles['IndustrialTitle'])
+
+    cabecalho_data = [[col_esquerda, col_direita]]
+    tabela_cabecalho = Table(cabecalho_data, colWidths=[108 * mm, 74 * mm])
     tabela_cabecalho.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
@@ -241,13 +293,13 @@ def criar_cabecalho_institucional(titulo_relatorio, subtitulo="", styles=None):
     elementos = [
         tabela_cabecalho,
         Spacer(1, 2 * mm),
-        HRFlowable(width="100%", thickness=1.5, color=COLOR_RUST_ORANGE, spaceBefore=1, spaceAfter=6),
+        HRFlowable(width="100%", thickness=1.5, color=COLOR_RUST_ORANGE, spaceBefore=1, spaceAfter=5),
     ]
     return elementos
 
 
 def gerar_pdf_inadimplencia(dados):
-    """Gera o PDF do Relatório de Inadimplência."""
+    """Gera o PDF do Relatório de Inadimplência com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -297,18 +349,18 @@ def gerar_pdf_inadimplencia(dados):
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
     elementos.append(tabela_resumo)
-    elementos.append(Spacer(1, 5 * mm))
+    elementos.append(Spacer(1, 4 * mm))
 
-    # Tabela de Títulos Vencidos
+    # Tabela de Títulos Vencidos com Cabeçalhos Centralizados
     elementos.append(Paragraph("<b>Detalhamento de Faturas e Títulos Vencidos</b>", styles['SectionHeader']))
 
     headers = [
-        Paragraph("<b>FATURA</b>", styles['TableHeader']),
-        Paragraph("<b>CLIENTE / CONTATO</b>", styles['TableHeader']),
-        Paragraph("<b>DOC / TELEFONE</b>", styles['TableHeader']),
-        Paragraph("<b>VENCIMENTO</b>", styles['TableHeader']),
-        Paragraph("<b>ATRASO</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR ABERTO</b>", styles['TableHeader']),
+        Paragraph("<b>FATURA</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CLIENTE / CONTATO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>DOC / TELEFONE</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VENCIMENTO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>ATRASO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR ABERTO</b>", styles['TableHeaderCenter']),
     ]
     tabela_linhas = [headers]
 
@@ -347,7 +399,7 @@ def gerar_pdf_inadimplencia(dados):
 
 
 def gerar_pdf_dossie_cliente(dados):
-    """Gera o PDF do Dossiê Completo do Cliente."""
+    """Gera o PDF do Dossiê Completo do Cliente com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -429,10 +481,10 @@ def gerar_pdf_dossie_cliente(dados):
 
     seg_data = [
         [
-            Paragraph("<b>CATEGORIA</b>", styles['TableHeader']),
-            Paragraph("<b>QUANTIDADE</b>", styles['TableHeader']),
-            Paragraph("<b>VALOR TOTAL (R$)</b>", styles['TableHeader']),
-            Paragraph("<b>PARTICIPAÇÃO (%)</b>", styles['TableHeader']),
+            Paragraph("<b>CATEGORIA</b>", styles['TableHeaderCenter']),
+            Paragraph("<b>QUANTIDADE</b>", styles['TableHeaderCenter']),
+            Paragraph("<b>VALOR TOTAL (R$)</b>", styles['TableHeaderCenter']),
+            Paragraph("<b>PARTICIPAÇÃO (%)</b>", styles['TableHeaderCenter']),
         ],
         [
             Paragraph("<b>Venda Direta de Produtos / Materiais</b>", styles['TableCell']),
@@ -462,12 +514,12 @@ def gerar_pdf_dossie_cliente(dados):
     # Histórico Recente de Orçamentos
     elementos.append(Paragraph("<b>Histórico de Orçamentos</b>", styles['SectionHeader']))
     orc_headers = [
-        Paragraph("<b>NÚMERO</b>", styles['TableHeader']),
-        Paragraph("<b>DATA</b>", styles['TableHeader']),
-        Paragraph("<b>STATUS OPERACIONAL</b>", styles['TableHeader']),
-        Paragraph("<b>STATUS FINANCEIRO</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR BRUTO</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR FINAL</b>", styles['TableHeader']),
+        Paragraph("<b>NÚMERO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>DATA</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>STATUS OPERACIONAL</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>STATUS FINANCEIRO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR BRUTO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR FINAL</b>", styles['TableHeaderCenter']),
     ]
     orc_rows = [orc_headers]
     for orc in dados.get('orcamentos', [])[:20]:
@@ -498,7 +550,7 @@ def gerar_pdf_dossie_cliente(dados):
 
 
 def gerar_pdf_curva_abc_clientes(dados):
-    """Gera o PDF da Curva ABC de Clientes."""
+    """Gera o PDF da Curva ABC de Clientes com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -543,15 +595,15 @@ def gerar_pdf_curva_abc_clientes(dados):
     elementos.append(tabela_resumo)
     elementos.append(Spacer(1, 4 * mm))
 
-    # Listagem Ranqueada
+    # Listagem Ranqueada com Cabeçalhos Centralizados
     headers = [
-        Paragraph("<b>POS</b>", styles['TableHeader']),
-        Paragraph("<b>CLIENTE</b>", styles['TableHeader']),
-        Paragraph("<b>DOC</b>", styles['TableHeader']),
-        Paragraph("<b>FATURAMENTO</b>", styles['TableHeader']),
-        Paragraph("<b>PART. (%)</b>", styles['TableHeader']),
-        Paragraph("<b>ACUM. (%)</b>", styles['TableHeader']),
-        Paragraph("<b>CLASSE</b>", styles['TableHeader']),
+        Paragraph("<b>POS</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CLIENTE</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>DOC</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>FATURAMENTO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>PART. (%)</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>ACUM. (%)</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CLASSE</b>", styles['TableHeaderCenter']),
     ]
     linhas = [headers]
 
@@ -587,7 +639,7 @@ def gerar_pdf_curva_abc_clientes(dados):
 
 
 def gerar_pdf_curva_abc_itens(dados):
-    """Gera o PDF da Curva ABC de Consumo de Itens."""
+    """Gera o PDF da Curva ABC de Consumo de Itens com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -633,14 +685,14 @@ def gerar_pdf_curva_abc_itens(dados):
     elementos.append(Spacer(1, 4 * mm))
 
     headers = [
-        Paragraph("<b>POS</b>", styles['TableHeader']),
-        Paragraph("<b>ITEM / INSUMO</b>", styles['TableHeader']),
-        Paragraph("<b>UOM</b>", styles['TableHeader']),
-        Paragraph("<b>QTD CONSUMIDA</b>", styles['TableHeader']),
-        Paragraph("<b>CUSTO TOTAL</b>", styles['TableHeader']),
-        Paragraph("<b>PART. (%)</b>", styles['TableHeader']),
-        Paragraph("<b>ACUM. (%)</b>", styles['TableHeader']),
-        Paragraph("<b>CLASSE</b>", styles['TableHeader']),
+        Paragraph("<b>POS</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>ITEM / INSUMO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>UOM</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>QTD CONSUMIDA</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CUSTO TOTAL</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>PART. (%)</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>ACUM. (%)</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CLASSE</b>", styles['TableHeaderCenter']),
     ]
     linhas = [headers]
 
@@ -677,7 +729,7 @@ def gerar_pdf_curva_abc_itens(dados):
 
 
 def gerar_pdf_dre(dados):
-    """Gera o PDF do DRE Simplificado."""
+    """Gera o PDF do DRE Simplificado com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -695,9 +747,9 @@ def gerar_pdf_dre(dados):
     elementos.extend(criar_cabecalho_institucional("Demonstrativo de Resultado (DRE)", subtitulo, styles))
 
     headers = [
-        Paragraph("<b>ESTRUTURA DRE</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR (R$)</b>", styles['TableHeader']),
-        Paragraph("<b>% RECEITA BRUTA</b>", styles['TableHeader']),
+        Paragraph("<b>ESTRUTURA DRE</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR (R$)</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>% RECEITA BRUTA</b>", styles['TableHeaderCenter']),
     ]
     linhas = [headers]
 
@@ -747,7 +799,7 @@ def gerar_pdf_dre(dados):
 
 
 def gerar_pdf_divergencias_conciliacao(dados):
-    """Gera o PDF do Relatório de Divergências de Conciliação Bancária."""
+    """Gera o PDF do Relatório de Divergências de Conciliação Bancária com cabeçalhos centralizados."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -767,11 +819,11 @@ def gerar_pdf_divergencias_conciliacao(dados):
     # Aba 1: Sobras do Extrato
     elementos.append(Paragraph("<b>1. Transações no Extrato Bancário sem Vínculo no ERP</b>", styles['SectionHeader']))
     headers1 = [
-        Paragraph("<b>DATA BANCO</b>", styles['TableHeader']),
-        Paragraph("<b>HISTÓRICO BANCÁRIO</b>", styles['TableHeader']),
-        Paragraph("<b>TIPO</b>", styles['TableHeader']),
-        Paragraph("<b>ARQUIVO ORIGEM</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR</b>", styles['TableHeader']),
+        Paragraph("<b>DATA BANCO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>HISTÓRICO BANCÁRIO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>TIPO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>ARQUIVO ORIGEM</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR</b>", styles['TableHeaderCenter']),
     ]
     linhas1 = [headers1]
     for ext in dados.get('sobras_extrato', []):
@@ -800,12 +852,12 @@ def gerar_pdf_divergencias_conciliacao(dados):
     # Aba 2: Sobras do ERP
     elementos.append(Paragraph("<b>2. Lançamentos do ERP com Status Pago sem Conciliação Confirmada</b>", styles['SectionHeader']))
     headers2 = [
-        Paragraph("<b>DATA PGTO</b>", styles['TableHeader']),
-        Paragraph("<b>DESCRIÇÃO ERP</b>", styles['TableHeader']),
-        Paragraph("<b>CATEGORIA</b>", styles['TableHeader']),
-        Paragraph("<b>MEIO PGTO</b>", styles['TableHeader']),
-        Paragraph("<b>TIPO</b>", styles['TableHeader']),
-        Paragraph("<b>VALOR</b>", styles['TableHeader']),
+        Paragraph("<b>DATA PGTO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>DESCRIÇÃO ERP</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>CATEGORIA</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>MEIO PGTO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>TIPO</b>", styles['TableHeaderCenter']),
+        Paragraph("<b>VALOR</b>", styles['TableHeaderCenter']),
     ]
     linhas2 = [headers2]
     for erp in dados.get('sobras_erp', []):
