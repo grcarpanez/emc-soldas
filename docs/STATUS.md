@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira)  
-**Fase Atual:** Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (Pronta para início)  
-**Próxima Fase:** Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 13 - Dashboards, Relatórios Estratégicos e Exportações PDF/CSV)  
+**Fase Atual:** Fase 14 - Frontend PWA Client-Side e Interface Completa (Pronta para início)  
+**Próxima Fase:** Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)  
 
 ---
 
@@ -26,7 +26,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | **Concluída** | 100% |
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | **Concluída** | 100% |
 | **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | **Concluída** | 100% |
-| **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | Pendente | 0% |
+| **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | **Concluída** | 100% |
 | **Fase 14** | Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*) | Pendente | 0% |
 | **Fase 15** | Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy | Pendente | 0% |
 
@@ -175,10 +175,17 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (133 testes no total acumulado do projeto).
 
 ### Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)
-- [ ] Implementar agregação do Dashboard de Flip Cards (Operação, Faturamento, Receita, Caixa e Alertas).
-- [ ] Implementar Relatório de Inadimplência, Dossiê do Cliente, Curvas ABC e DRE Simplificado.
-- [ ] Implementar Relatório de Divergências de Conciliação (Sobras de Extrato vs Sobras de ERP).
-- [ ] Implementar exportações consolidadas em PDF e CSV com throttling protetivo (5 req/min).
+- [x] Implementar agregador do Dashboard Principal com os 5 Flip Cards interativos (Operação, Faturamento, Receita, Caixa e Alertas) e filtros temporais (`/api/dashboard/flip-cards/`).
+- [x] Implementar evolução mensal de Receitas vs Despesas (`/api/dashboard/graficos/`) e Feed de Atividades Recentes (`/api/dashboard/feed/`).
+- [x] Implementar Relatório de Inadimplência com auditoria de faturas vencidas, cálculo de dias de atraso e contato de clientes (`/api/relatorios/inadimplencia/`).
+- [x] Implementar Dossiê do Cliente com segregação de produtos (materiais) vs serviços (reformas), funil de orçamentos e índice de pontualidade (`/api/relatorios/dossie-cliente/<id>/`).
+- [x] Implementar Curva ABC de Clientes (`/api/relatorios/curva-abc-clientes/`) e Curva ABC de Consumo de Itens (`/api/relatorios/curva-abc-itens/`) com matriz 80/15/5%.
+- [x] Implementar DRE Simplificado nos regimes de competência e caixa com apuração de receitas, deduções, custos variáveis e despesas operacionais (`/api/relatorios/dre/`).
+- [x] Implementar Relatório de Divergências de Conciliação Bancária em duas abas analíticas (`/api/relatorios/divergencias-conciliacao/`).
+- [x] Implementar geradores de PDF via ReportLab no padrão *Industrial Integrity* e geradores de CSV com encoding UTF-8 com BOM para todos os relatórios estratégicos.
+- [x] Aplicar Rate Limiting restritivo de 5 requisições/minuto (`throttle_scope = 'heavy_reports'`) nos endpoints de exportação de relatórios pesados.
+- [x] Proteger todos os endpoints via RBAC dinâmico com o toggle `visao_relatorios` (`HasRelatoriosAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (146 testes no total acumulado do projeto).
 
 ### Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)
 - [ ] Implementar roteador client-side SPA, Service Worker e cache offline.
@@ -199,5 +206,5 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)**, implementando os endpoints de agregação analítica para o Dashboard de Flip Cards (Operação, Faturamento, Receita, Caixa e Alertas), Gráficos de Receitas x Despesas, Feed de Atividades Recentes, e a Central de Relatórios Estratégicos (Painel de Inadimplência, Dossiê do Cliente, Curva ABC de Clientes, Curva ABC de Consumo de Itens, DRE Simplificado e Relatório de Divergências de Conciliação), com exportações consolidadas em PDF e CSV protegidas por rate limiting (5 req/min).
+Iniciar a **Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)**, desenvolvendo a aplicação client-side SPA/PWA completa em HTML5 semântico, CSS3 puro (sem Tailwind/Bootstrap) rigorosamente alinhada ao `docs/DESIGN.md` (paleta Dark Iron, Steel Gray, Rust Orange, tipografia técnica IBM Plex Sans, Inter e JetBrains Mono, cantos retos 0px border-radius), roteador client-side em Vanilla JS, Service Worker (`sw.js`) para resiliência offline e consumo desacoplado de todas as APIs REST construídas nas fases 1 a 13.
 

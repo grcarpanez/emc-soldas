@@ -120,12 +120,12 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-23 - Serialização Direta de Model Django em Dicionários de Resposta (TypeError: Object of type Model is not JSON serializable)
+## 2026-08-23 - Acúmulo de Requisições em Testes de Endpoints com ScopedRateThrottle (429 Too Many Requests)
 
-- **Sintoma:** Ao chamar endpoints de ações customizadas (`fechar` e `liquidar` de `FaturaCartaoViewSet`), a API retornava erro 500 com a mensagem `TypeError: Object of type FaturaCartao is not JSON serializable`.
-- **Causa:** A camada de serviço retornava dicionários contendo instâncias cruas de models ORM (`'fatura': fatura`). Ao passar esses dicionários diretamente para `Response({'dados': resultado})`, o renderer padrão do DRF tentava serializar via `json.dumps` e falhava por falta de método de serialização nativo no model.
-- **Solução aplicada:** Conversão explícita da instância do model usando seu serializer correspondente (`resultado['fatura'] = FaturaCartaoSerializer(resultado['fatura']).data`) antes de encapsular no objeto `Response`.
-- **Como evitar no futuro:** Sempre que uma camada de serviço retornar instâncias ORM dentro de dicionários estruturados, serializar explicitamente essas instâncias com os ModelSerializers antes de retornar na resposta da API REST.
+- **Sintoma:** Durante a execução sequencial da suíte de testes de relatórios, requisições válidas de exportação em PDF e CSV retornavam `429 Too Many Requests` (`AssertionError: 429 != 200`).
+- **Causa:** O DRF aplica o `ScopedRateThrottle` (`heavy_reports = 5/minute`) utilizando a camada de cache do Django. Ao rodar múltiplos testes automatizados em sequência no mesmo segundo, o limite de 5 requisições por minuto por IP/usuário era atingido naturalmente antes do término da suíte.
+- **Solução aplicada:** Inclusão de `django.core.cache.cache.clear()` no `setUp()` e antes das chamadas de exportação na classe de testes, além de adicionar um teste específico que valida propositalmente o bloqueio com `429 Too Many Requests` na 6ª requisição.
+- **Como evitar no futuro:** Sempre que testar endpoints protegidos por classes de Rate Limiting (`AnonRateThrottle`, `UserRateThrottle` ou `ScopedRateThrottle`), limpar o cache do Django (`cache.clear()`) entre cenários de teste isolados para evitar falso-positivos por concorrência de execução.
 
 
 

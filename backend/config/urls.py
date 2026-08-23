@@ -22,7 +22,7 @@ urlpatterns = [
     path('api/', include('apps.faturamento.urls')),
     path('api/conciliacao/', include('apps.conciliacao.urls')),
     path('api/', include('apps.administracao.urls')),
-    path('api/relatorios/', include('apps.relatorios.urls')),
+    path('api/', include('apps.relatorios.urls')),
 
     # Frontend PWA (Single Page Application Shell)
     path('', TemplateView.as_view(template_name='index.html'), name='pwa-shell'),
