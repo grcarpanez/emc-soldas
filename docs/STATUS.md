@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Refinamentos da Fase 14: Segregação de Dicionários na Administração, Validações do Catálogo com Vírgula/Ponto e Ficha Técnica BOM em Tempo Real)  
+**Última Atualização:** 2026-08-23 (Refinamento UX: Remoção de Combobox Redundante CPF/CNPJ, Automação de Busca CNPJ no Exit/Blur e Validação Módulo 11)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 

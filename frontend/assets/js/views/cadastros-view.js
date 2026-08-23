@@ -206,27 +206,18 @@ window.CadastrosView = {
       confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
       content: `
         <form id="form-cliente-completo">
-          <!-- Topo Absoluto: Tipo de Pessoa e CPF/CNPJ com Auto-Consulta -->
+          <!-- Topo: Campo Único de Documento com Máscara Adaptável e Auto-Consulta na Saída -->
           <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
-            <div style="display: grid; grid-template-columns: 140px 1fr auto; gap: 12px; align-items: flex-end;">
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Tipo Pessoa</label>
-                <select id="comp-tipo-pessoa" class="form-control">
-                  <option value="PJ" ${cliente?.tipo_pessoa === 'PJ' ? 'selected' : ''}>PJ (CNPJ)</option>
-                  <option value="PF" ${cliente?.tipo_pessoa === 'PF' ? 'selected' : ''}>PF (CPF)</option>
-                </select>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="comp-documento">CPF / CNPJ (Identificação Fiscal)</label>
+              <div style="position: relative;">
+                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite CPF (11 dígitos) ou CNPJ (14 dígitos)..." value="${cliente?.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(cliente.cnpj_cpf) : ''}" autofocus>
+                <div id="doc-spinner" class="loader-spinner" style="position: absolute; right: 12px; top: 12px; display: none; width: 18px; height: 18px;"></div>
               </div>
-
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label" for="comp-documento">CPF / CNPJ (Primeiro Campo)</label>
-                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite o documento..." value="${cliente?.cnpj_cpf || ''}">
-              </div>
-
-              <button type="button" class="btn btn-secondary" id="btn-consultar-cnpj" style="height: 42px;">
-                BUSCAR DADOS ➔
-              </button>
+              <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px; display: block;">
+                Ao digitar um CNPJ (14 dígitos) e sair do campo, os dados cadastrais e endereço são preenchidos automaticamente via Receita Federal.
+              </small>
             </div>
-            <div id="doc-validation-feedback" class="mono-text mt-16" style="font-size: 12px; display: none;"></div>
           </div>
 
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
@@ -251,7 +242,7 @@ window.CadastrosView = {
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-telefone">Telefone Principal *</label>
-              <input type="text" id="comp-telefone" class="form-control mono-text" data-mask="telefone" value="${cliente?.telefone || ''}" required>
+              <input type="text" id="comp-telefone" class="form-control mono-text" data-mask="telefone" value="${cliente?.telefone ? window.EMCUtils.formatarTelefoneDinamico(cliente.telefone) : ''}" required>
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-email">E-mail</label>
@@ -262,7 +253,7 @@ window.CadastrosView = {
           <div style="display: grid; grid-template-columns: 140px 1fr 100px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-cep">CEP</label>
-              <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" value="${cliente?.cep || ''}">
+              <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" value="${cliente?.cep ? window.EMCUtils.formatarCep(cliente.cep) : ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-logradouro">Logradouro / Endereço</label>
@@ -291,12 +282,15 @@ window.CadastrosView = {
         </form>
       `,
       onConfirm: async () => {
+        const docLimpo = window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-documento').value);
+        const tipoPessoa = docLimpo.length === 14 ? 'PJ' : 'PF';
+
         const payload = {
           nome_razao: document.getElementById('comp-nome').value.trim(),
           nome_fantasia: document.getElementById('comp-fantasia').value.trim(),
           tipo: document.getElementById('comp-tipo').value,
-          tipo_pessoa: document.getElementById('comp-tipo-pessoa').value,
-          cnpj_cpf: window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-documento').value),
+          tipo_pessoa: tipoPessoa,
+          cnpj_cpf: docLimpo,
           telefone: window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-telefone').value),
           email: document.getElementById('comp-email').value.trim().toLowerCase(),
           cep: window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-cep').value),
@@ -329,48 +323,74 @@ window.CadastrosView = {
       }
     });
 
-    // Listener para busca de CNPJ automática
-    const btnConsultar = document.getElementById('btn-consultar-cnpj');
+    // Auto-consulta da Receita Federal e validação ao sair do campo (blur / exit)
     const docInput = document.getElementById('comp-documento');
-    const feedback = document.getElementById('doc-validation-feedback');
+    const docSpinner = document.getElementById('doc-spinner');
+    let ultimoDocConsultado = '';
 
-    const handleConsultaCnpj = async () => {
+    const handleAutoConsultaDocumento = async () => {
       const doc = window.EMCUtils.extrairApenasDigitos(docInput.value);
-      if (doc.length !== 14) {
-        window.EMCUtils.showToast('Digite um CNPJ válido de 14 dígitos para buscar.', 'warning');
-        return;
-      }
+      if (!doc) return;
 
-      btnConsultar.disabled = true;
-      btnConsultar.textContent = 'CONSULTANDO...';
+      // Se for CNPJ (14 dígitos)
+      if (doc.length === 14) {
+        if (doc === ultimoDocConsultado) return;
+        ultimoDocConsultado = doc;
 
-      try {
-        const endpoint = window.CONFIG.ENDPOINTS.CADASTROS.CONSULTA_CNPJ.replace('{cnpj}', doc);
-        const res = await window.api.get(endpoint);
+        if (docSpinner) docSpinner.style.display = 'block';
 
-        if (res.razao_social) {
-          document.getElementById('comp-nome').value = res.razao_social;
-          if (res.nome_fantasia) document.getElementById('comp-fantasia').value = res.nome_fantasia;
-          if (res.logradouro) document.getElementById('comp-logradouro').value = res.logradouro;
-          if (res.numero) document.getElementById('comp-numero').value = res.numero;
-          if (res.bairro) document.getElementById('comp-bairro').value = res.bairro;
-          if (res.cidade) document.getElementById('comp-cidade').value = res.cidade;
-          if (res.uf) document.getElementById('comp-uf').value = res.uf;
-          if (res.cep) document.getElementById('comp-cep').value = window.EMCUtils.formatarCep(res.cep);
-          if (res.telefone) document.getElementById('comp-telefone').value = window.EMCUtils.formatarTelefoneDinamico(res.telefone);
-          if (res.email) document.getElementById('comp-email').value = res.email;
+        try {
+          const endpoint = window.CONFIG.ENDPOINTS.CADASTROS.CONSULTA_CNPJ.replace('{cnpj}', doc);
+          const res = await window.api.get(endpoint);
 
-          window.EMCUtils.showToast('Dados do CNPJ preenchidos automaticamente!', 'success');
+          if (res && res.razao_social) {
+            const nomeInput = document.getElementById('comp-nome');
+            const fantasiaInput = document.getElementById('comp-fantasia');
+            const logradouroInput = document.getElementById('comp-logradouro');
+            const numeroInput = document.getElementById('comp-numero');
+            const bairroInput = document.getElementById('comp-bairro');
+            const cidadeInput = document.getElementById('comp-cidade');
+            const ufInput = document.getElementById('comp-uf');
+            const cepInput = document.getElementById('comp-cep');
+            const telInput = document.getElementById('comp-telefone');
+            const emailInput = document.getElementById('comp-email');
+
+            if (nomeInput && (!nomeInput.value.trim() || nomeInput.value === res.razao_social)) {
+              nomeInput.value = res.razao_social;
+            }
+            if (fantasiaInput && res.nome_fantasia && !fantasiaInput.value.trim()) {
+              fantasiaInput.value = res.nome_fantasia;
+            }
+            if (logradouroInput && res.logradouro) logradouroInput.value = res.logradouro;
+            if (numeroInput && res.numero) numeroInput.value = res.numero;
+            if (bairroInput && res.bairro) bairroInput.value = res.bairro;
+            if (cidadeInput && res.cidade) cidadeInput.value = res.cidade;
+            if (ufInput && res.uf) ufInput.value = res.uf;
+            if (cepInput && res.cep) cepInput.value = window.EMCUtils.formatarCep(res.cep);
+            if (telInput && res.telefone && !telInput.value.trim()) {
+              telInput.value = window.EMCUtils.formatarTelefoneDinamico(res.telefone);
+            }
+            if (emailInput && res.email && !emailInput.value.trim()) {
+              emailInput.value = res.email;
+            }
+
+            window.EMCUtils.showToast('Dados do CNPJ preenchidos automaticamente via Receita Federal!', 'success');
+          }
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'CNPJ não localizado na Receita Federal.', 'warning');
+        } finally {
+          if (docSpinner) docSpinner.style.display = 'none';
         }
-      } catch (err) {
-        window.EMCUtils.showToast(err.message || 'CNPJ não localizado ou serviço indisponível.', 'warning');
-      } finally {
-        btnConsultar.disabled = false;
-        btnConsultar.textContent = 'BUSCAR DADOS ➔';
+      } else if (doc.length === 11) {
+        // Validação de CPF Módulo 11
+        if (!window.EMCUtils.validarCpf(doc)) {
+          window.EMCUtils.showToast('Atenção: O CPF digitado é matematicamente inválido.', 'warning');
+        }
       }
     };
 
-    btnConsultar?.addEventListener('click', handleConsultaCnpj);
+    docInput?.addEventListener('blur', handleAutoConsultaDocumento);
+    docInput?.addEventListener('change', handleAutoConsultaDocumento);
   },
 
   async editarCliente(id) {

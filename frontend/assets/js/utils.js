@@ -188,6 +188,62 @@ function formatarLinhaDigitavelBoleto(valor) {
     .replace(/^(\d{5})(\d{5})(\d{5})(\d{6})(\d{5})(\d{6})(\d{1})(\d{14})$/, '$1.$2 $3.$4 $5.$6 $7 $8');
 }
 
+/**
+ * Valida CPF utilizando o algoritmo oficial Módulo 11.
+ * @param {string} cpf 
+ * @returns {boolean}
+ */
+function validarCpf(cpf) {
+  const digitos = extrairApenasDigitos(cpf);
+  if (digitos.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(digitos)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(digitos[i], 10) * (10 - i);
+  }
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(digitos[9], 10)) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(digitos[i], 10) * (11 - i);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  return resto === parseInt(digitos[10], 10);
+}
+
+/**
+ * Valida CNPJ utilizando o algoritmo oficial Módulo 11.
+ * @param {string} cnpj 
+ * @returns {boolean}
+ */
+function validarCnpj(cnpj) {
+  const digitos = extrairApenasDigitos(cnpj);
+  if (digitos.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(digitos)) return false;
+
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  let soma = 0;
+  for (let i = 0; i < 12; i++) {
+    soma += parseInt(digitos[i], 10) * pesos1[i];
+  }
+  let resto = soma % 11;
+  const dig1 = resto < 2 ? 0 : 11 - resto;
+  if (dig1 !== parseInt(digitos[12], 10)) return false;
+
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  soma = 0;
+  for (let i = 0; i < 13; i++) {
+    soma += parseInt(digitos[i], 10) * pesos2[i];
+  }
+  resto = soma % 11;
+  const dig2 = resto < 2 ? 0 : 11 - resto;
+  return dig2 === parseInt(digitos[13], 10);
+}
+
 // ============================================================================
 // 4. FORMATADORES DE EXIBIÇÃO E CONVERSÃO
 // ============================================================================
@@ -523,6 +579,8 @@ document.addEventListener('paste', (event) => {
 window.EMCUtils = {
   sanitizarTextoEmTempoReal,
   extrairApenasDigitos,
+  validarCpf,
+  validarCnpj,
   formatarCentavosParaMoedaATM,
   converterMoedaATMParaFloat,
   aplicarMascaraMoedaATM,
