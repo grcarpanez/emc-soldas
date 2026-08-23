@@ -118,5 +118,15 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Definição explícita de `fatura = serializers.PrimaryKeyRelatedField(read_only=True)` no `FaturaPropostaPagamentoSerializer`.
 - **Como evitar no futuro:** Em serializers aninhados onde o vínculo com o objeto pai é estabelecido no método `create()` ou na camada de serviço, declarar a chave estrangeira do pai como `read_only=True`.
 
+---
+
+## 2026-08-23 - Serialização Direta de Model Django em Dicionários de Resposta (TypeError: Object of type Model is not JSON serializable)
+
+- **Sintoma:** Ao chamar endpoints de ações customizadas (`fechar` e `liquidar` de `FaturaCartaoViewSet`), a API retornava erro 500 com a mensagem `TypeError: Object of type FaturaCartao is not JSON serializable`.
+- **Causa:** A camada de serviço retornava dicionários contendo instâncias cruas de models ORM (`'fatura': fatura`). Ao passar esses dicionários diretamente para `Response({'dados': resultado})`, o renderer padrão do DRF tentava serializar via `json.dumps` e falhava por falta de método de serialização nativo no model.
+- **Solução aplicada:** Conversão explícita da instância do model usando seu serializer correspondente (`resultado['fatura'] = FaturaCartaoSerializer(resultado['fatura']).data`) antes de encapsular no objeto `Response`.
+- **Como evitar no futuro:** Sempre que uma camada de serviço retornar instâncias ORM dentro de dicionários estruturados, serializar explicitamente essas instâncias com os ModelSerializers antes de retornar na resposta da API REST.
+
+
 
 

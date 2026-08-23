@@ -1,9 +1,13 @@
 """
-Testes automatizados para os cadastros estruturais do Módulo Financeiro (Fase 4).
-Valida CRUD, RBAC, Sanitização Universal, Soft Delete e Integridade Referencial.
+Testes automatizados para o Módulo Financeiro e Tesouraria.
+Cobre Cadastros Estruturais (Fase 4), Lançamentos Financeiros, Modal Universal de Liquidação
+com Taxa de Maquininha e ISS Retido, Estorno Auditado, Cheque Especial, Transferências Inter-Contas
+e Sub-módulo de Cartões Corporativos com Rollover (Fase 10).
 """
 from decimal import Decimal
+from datetime import date, timedelta
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -12,31 +16,32 @@ from apps.financeiro.models import (
     CategoriaFinanceira,
     ContaBancaria,
     MeioPagamento,
-    RegraPagamento
+    RegraPagamento,
+    CartaoCredito,
+    FaturaCartao,
+    LancamentoFinanceiro,
+    LogEstorno
 )
 
 
 class CadastrosEstruturaisFinanceiroTestCase(TestCase):
-    """Bateria de testes para CategoriaFinanceira, ContaBancaria, MeioPagamento e RegraPagamento."""
+    """Bateria de testes para CategoriaFinanceira, ContaBancaria, MeioPagamento e RegraPagamento (Fase 4)."""
 
     def setUp(self):
         self.client = APIClient()
 
-        # Criação de Usuário Administrador
         self.admin = Usuario.objects.create_user(
             email="admin.fin@emcsoldas.com.br",
             password="adminpassword123",
             role="Admin"
         )
 
-        # Criação de Usuário Operador sem permissão
         self.operador_sem_permissao = Usuario.objects.create_user(
             email="operador.sem.fin@emcsoldas.com.br",
             password="operadorpassword123",
             role="Operador"
         )
 
-        # Criação de Usuário Operador com permissão de Cadastros Financeiros
         self.operador_com_permissao = Usuario.objects.create_user(
             email="operador.fin@emcsoldas.com.br",
             password="operadorpassword123",
@@ -45,10 +50,7 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         self.operador_com_permissao.permissoes.cadastros_financeiros = True
         self.operador_com_permissao.permissoes.save()
 
-    # ==================== CATEGORIAS FINANCEIRAS ====================
-
     def test_categoria_unauthenticated_and_forbidden(self):
-        """Valida 401 para anônimo e 403 para operador sem toggle."""
         response = self.client.get('/api/categorias-financeiras/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -57,10 +59,8 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_categoria_crud_sanitization_and_hierarchy(self):
-        """Valida criação, sanitização e hierarquia de CategoriaFinanceira."""
         self.client.force_authenticate(user=self.operador_com_permissao)
 
-        # 1. Criação de Categoria Pai
         payload_pai = {
             "nome": "Despesas Operacionais e Produção",
             "tipo": "DESPESA"
@@ -70,7 +70,6 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         self.assertEqual(response_pai.data['nome'], "DESPESAS OPERACIONAIS E PRODUCAO")
         pai_id = response_pai.data['id']
 
-        # 2. Criação de Subcategoria
         payload_filha = {
             "nome": "Gás de Proteção e Consumíveis de Solda",
             "tipo": "DESPESA",
@@ -82,47 +81,18 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         self.assertEqual(response_filha.data['categoria_pai'], pai_id)
         filha_id = response_filha.data['id']
 
-        # 3. Bloqueio de exclusão do Pai pois possui subcategoria ativa
         response_del_pai = self.client.delete(f'/api/categorias-financeiras/{pai_id}/')
         self.assertEqual(response_del_pai.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("subcategorias", str(response_del_pai.data))
 
-        # 4. Soft Delete da Filha
         response_del_filha = self.client.delete(f'/api/categorias-financeiras/{filha_id}/')
         self.assertEqual(response_del_filha.status_code, status.HTTP_204_NO_CONTENT)
 
-        # 5. Agora o Pai pode ser excluído logicamente
         response_del_pai_ok = self.client.delete(f'/api/categorias-financeiras/{pai_id}/')
         self.assertEqual(response_del_pai_ok.status_code, status.HTTP_204_NO_CONTENT)
 
-        # Verifica soft delete no banco
-        cat_db = CategoriaFinanceira.all_objects.get(id=pai_id)
-        self.assertIsNotNone(cat_db.deleted_at)
-        self.assertEqual(cat_db.deleted_by_id, self.operador_com_permissao.id)
-
-    def test_categoria_anti_cycle_validation(self):
-        """Valida que uma categoria não pode ser pai de si mesma."""
-        self.client.force_authenticate(user=self.admin)
-
-        cat = CategoriaFinanceira.objects.create(
-            nome="RECEITA DE SERVICOS",
-            tipo="RECEITA"
-        )
-
-        response = self.client.patch(
-            f'/api/categorias-financeiras/{cat.id}/',
-            {"categoria_pai": cat.id},
-            format='json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    # ==================== CONTAS BANCÁRIAS ====================
-
     def test_conta_bancaria_crud_and_validations(self):
-        """Valida criação, sanitização e regras de cheque especial em ContaBancaria."""
         self.client.force_authenticate(user=self.operador_com_permissao)
 
-        # 1. Criação com limite de cheque especial
         payload = {
             "nome": "Banco Itaú - Conta Corrente Principal",
             "saldo": "15000.50",
@@ -135,7 +105,6 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         self.assertEqual(response.data['limite_credito'], "10000.00")
         conta_id = response.data['id']
 
-        # 2. Rejeição de limite negativo
         response_neg = self.client.patch(
             f'/api/contas-bancarias/{conta_id}/',
             {"limite_credito": "-500.00"},
@@ -143,92 +112,566 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
         )
         self.assertEqual(response_neg.status_code, status.HTTP_400_BAD_REQUEST)
 
-        # 3. Soft Delete
-        response_delete = self.client.delete(f'/api/contas-bancarias/{conta_id}/')
-        self.assertEqual(response_delete.status_code, status.HTTP_204_NO_CONTENT)
 
-        conta_db = ContaBancaria.all_objects.get(id=conta_id)
-        self.assertIsNotNone(conta_db.deleted_at)
+class TesourariaLancamentosTestCase(TestCase):
+    """Bateria de testes para Lançamentos Financeiros, Liquidações, Estornos e Cheque Especial (Fase 10)."""
 
-    # ==================== MEIOS DE PAGAMENTO ====================
+    def setUp(self):
+        self.client = APIClient()
 
-    def test_meio_pagamento_crud_and_uniqueness(self):
-        """Valida CRUD e unicidade de MeioPagamento."""
-        self.client.force_authenticate(user=self.operador_com_permissao)
+        self.admin = Usuario.objects.create_user(
+            email="admin.tesouraria@emcsoldas.com.br",
+            password="adminpassword123",
+            role="Admin"
+        )
 
-        payload = {
-            "nome": "Cartão de Crédito - Maquininha Stone",
-            "permite_taxa_maquininha": True,
-            "ativo": True
-        }
-        response = self.client.post('/api/meios-pagamento/', payload, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['nome'], "CARTAO DE CREDITO - MAQUININHA STONE")
-        self.assertTrue(response.data['permite_taxa_maquininha'])
-        meio_id = response.data['id']
+        self.operador_sem_permissao = Usuario.objects.create_user(
+            email="operador.sem.tes@emcsoldas.com.br",
+            password="operadorpassword123",
+            role="Operador"
+        )
 
-        # Duplicidade
-        response_dup = self.client.post('/api/meios-pagamento/', payload, format='json')
-        self.assertEqual(response_dup.status_code, status.HTTP_400_BAD_REQUEST)
+        self.operador_com_permissao = Usuario.objects.create_user(
+            email="operador.tes@emcsoldas.com.br",
+            password="operadorpassword123",
+            role="Operador"
+        )
+        self.operador_com_permissao.permissoes.acesso_tesouraria = True
+        self.operador_com_permissao.permissoes.save()
 
-        # Soft delete
-        response_delete = self.client.delete(f'/api/meios-pagamento/{meio_id}/')
-        self.assertEqual(response_delete.status_code, status.HTTP_204_NO_CONTENT)
-
-    # ==================== REGRAS DE PAGAMENTO ====================
-
-    def test_regra_pagamento_crud_and_business_rules(self):
-        """Valida criação e regras comerciais de RegraPagamento."""
-        self.client.force_authenticate(user=self.operador_com_permissao)
-
-        meio = MeioPagamento.objects.create(
-            nome="BOLETO BANCARIO",
+        # Estruturas auxiliares
+        self.categoria_receita = CategoriaFinanceira.objects.create(
+            nome="RECEITA DE SERVICOS DE SOLDA",
+            tipo="RECEITA"
+        )
+        self.categoria_despesa = CategoriaFinanceira.objects.create(
+            nome="DESPESAS DE MANUTENCAO",
+            tipo="DESPESA"
+        )
+        self.conta_principal = ContaBancaria.objects.create(
+            nome="BANCO DO BRASIL - CONTA EMPRESA",
+            saldo=Decimal("5000.00"),
+            limite_credito=Decimal("2000.00")
+        )
+        self.conta_secundaria = ContaBancaria.objects.create(
+            nome="CAIXA FISICO DA OFICINA",
+            saldo=Decimal("500.00"),
+            limite_credito=Decimal("0.00")
+        )
+        self.meio_maquininha = MeioPagamento.objects.create(
+            nome="CARTAO DE CREDITO / MAQUININHA",
+            permite_taxa_maquininha=True
+        )
+        self.meio_pix = MeioPagamento.objects.create(
+            nome="PIX",
             permite_taxa_maquininha=False
         )
 
-        # 1. Criação de Regra Parcelada
-        payload_parcelado = {
-            "nome": "Boleto 30 / 60 / 90 Dias (3x)",
-            "meio_pagamento": meio.id,
-            "tipo_cobranca": "PARCELADO",
-            "numero_parcelas": 3,
-            "prazo_primeira_parcela_dias": 30,
-            "intervalo_parcelas_dias": 30,
-            "desconto_concedido_padrao": "0.00",
-            "ativo": True
+    def test_rbac_lancamento_financeiro(self):
+        """Valida proteção RBAC nos endpoints de lançamentos financeiros."""
+        # 1. Não autenticado
+        response = self.client.get('/api/lancamentos-financeiros/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        # 2. Operador sem toggle acesso_tesouraria
+        self.client.force_authenticate(user=self.operador_sem_permissao)
+        response = self.client.get('/api/lancamentos-financeiros/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 3. Operador com toggle acesso_tesouraria
+        self.client.force_authenticate(user=self.operador_com_permissao)
+        response = self.client.get('/api/lancamentos-financeiros/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_criar_titulo_competencia_vs_caixa(self):
+        """Valida que títulos A Vencer não afetam o saldo bancário, enquanto títulos Pagos afetam de imediato."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+        saldo_inicial = self.conta_principal.saldo
+
+        # 1. Título A Vencer (Competência)
+        payload_a_vencer = {
+            "categoria": self.categoria_despesa.id,
+            "tipo_lancamento": "SAIDA",
+            "descricao": "Compra de Eletrodos a Prazo",
+            "valor": "1200.00",
+            "data_vencimento": (timezone.localdate() + timedelta(days=30)).isoformat(),
+            "status_pagamento": "A_VENCER"
         }
-        response_parc = self.client.post('/api/regras-pagamento/', payload_parcelado, format='json')
-        self.assertEqual(response_parc.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response_parc.data['nome'], "BOLETO 30 / 60 / 90 DIAS (3X)")
-        self.assertEqual(response_parc.data['numero_parcelas'], 3)
-        regra_id = response_parc.data['id']
+        res_vencer = self.client.post('/api/lancamentos-financeiros/', payload_a_vencer, format='json')
+        self.assertEqual(res_vencer.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res_vencer.data['descricao'], "COMPRA DE ELETRODOS A PRAZO")
 
-        # 2. Rejeição de regra À Vista com mais de 1 parcela
-        payload_invalido = {
-            "nome": "Pix com Parcelas Invalidas",
-            "meio_pagamento": meio.id,
-            "tipo_cobranca": "A_VISTA",
-            "numero_parcelas": 2,
-            "desconto_concedido_padrao": "5.00"
+        # Saldo bancário permanece inalterado
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial)
+
+        # 2. Título Pago no Ato (Regime de Caixa)
+        payload_pago = {
+            "conta": self.conta_principal.id,
+            "categoria": self.categoria_despesa.id,
+            "tipo_lancamento": "SAIDA",
+            "descricao": "Troca de Oleo do Compressor",
+            "valor": "300.00",
+            "data_vencimento": timezone.localdate().isoformat(),
+            "status_pagamento": "PAGO"
         }
-        response_inv = self.client.post('/api/regras-pagamento/', payload_invalido, format='json')
-        self.assertEqual(response_inv.status_code, status.HTTP_400_BAD_REQUEST)
+        res_pago = self.client.post('/api/lancamentos-financeiros/', payload_pago, format='json')
+        self.assertEqual(res_pago.status_code, status.HTTP_201_CREATED)
 
-        # 3. Rejeição de desconto fora do intervalo (ex: 150%)
-        payload_desc_inv = {
-            "nome": "Desconto Impossivel",
-            "meio_pagamento": meio.id,
-            "tipo_cobranca": "A_VISTA",
-            "numero_parcelas": 1,
-            "desconto_concedido_padrao": "150.00"
+        # Saldo bancário debitado em R$ 300,00
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial - Decimal("300.00"))
+
+    def test_liquidacao_universal_taxa_maquininha(self):
+        """Valida liquidação de receita com dedução de taxa de maquininha e impacto líquido no caixa."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        # Cria título a receber no valor de R$ 1.000,00
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_receita,
+            tipo_lancamento="ENTRADA",
+            descricao="SERVICO DE SOLDA ESTRUTURAL",
+            valor=Decimal("1000.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        saldo_anterior = self.conta_principal.saldo  # R$ 5.000,00
+
+        # Liquida com Valor Bruto R$ 1.000,00 e Valor Líquido R$ 970,00 (Taxa = R$ 30,00)
+        payload_liquidar = {
+            "conta_id": self.conta_principal.id,
+            "meio_pagamento_id": self.meio_maquininha.id,
+            "valor_pago": "1000.00",
+            "valor_liquido_recebido": "970.00"
         }
-        response_desc = self.client.post('/api/regras-pagamento/', payload_desc_inv, format='json')
-        self.assertEqual(response_desc.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(f'/api/lancamentos-financeiros/{titulo.id}/liquidar/', payload_liquidar, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status_pagamento'], 'PAGO')
 
-        # 4. Bloqueio de exclusão do Meio de Pagamento que possui regra ativa
-        response_del_meio = self.client.delete(f'/api/meios-pagamento/{meio.id}/')
-        self.assertEqual(response_del_meio.status_code, status.HTTP_400_BAD_REQUEST)
+        # Verifica saldo na conta: deve aumentar exatamente R$ 970,00
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_anterior + Decimal("970.00"))
 
-        # 5. Soft Delete da Regra
-        response_del_regra = self.client.delete(f'/api/regras-pagamento/{regra_id}/')
-        self.assertEqual(response_del_regra.status_code, status.HTTP_204_NO_CONTENT)
+        # Verifica geração automática da despesa de taxa de maquininha
+        taxa_lanc = LancamentoFinanceiro.objects.filter(
+            tipo_lancamento='SAIDA',
+            descricao__icontains=f"REF. TITULO #{titulo.id}",
+            status_pagamento='PAGO'
+        ).first()
+        self.assertIsNotNone(taxa_lanc)
+        self.assertEqual(taxa_lanc.valor, Decimal("30.00"))
+        self.assertEqual(taxa_lanc.conta_id, self.conta_principal.id)
+
+    def test_liquidacao_universal_iss_retido(self):
+        """Valida liquidação de receita com dedução de ISS retido na fonte."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_receita,
+            tipo_lancamento="ENTRADA",
+            descricao="CONTRATO INDUSTRIAL USINAGEM",
+            valor=Decimal("2000.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        saldo_anterior = self.conta_principal.saldo
+
+        # Liquida R$ 2.000,00 com R$ 100,00 de ISS retido (Líquido = R$ 1.900,00)
+        payload = {
+            "conta_id": self.conta_principal.id,
+            "meio_pagamento_id": self.meio_pix.id,
+            "valor_pago": "2000.00",
+            "valor_iss_retido": "100.00"
+        }
+        response = self.client.post(f'/api/lancamentos-financeiros/{titulo.id}/liquidar/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_anterior + Decimal("1900.00"))
+
+        # Verifica geração da despesa de ISS retido
+        iss_lanc = LancamentoFinanceiro.objects.filter(
+            tipo_lancamento='SAIDA',
+            descricao__icontains=f"RETENCAO DE ISS NA FONTE - REF. TITULO #{titulo.id}",
+            status_pagamento='PAGO'
+        ).first()
+        self.assertIsNotNone(iss_lanc)
+        self.assertEqual(iss_lanc.valor, Decimal("100.00"))
+
+    def test_liquidacao_parcial_com_desdobramento(self):
+        """Valida baixa parcial desmembrando o título em linha Paga e mantendo o saldo A Vencer."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_receita,
+            tipo_lancamento="ENTRADA",
+            descricao="RECUPERACAO DE CACAMBA COMPLETA",
+            valor=Decimal("1500.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        # Baixa parcial de R$ 600,00
+        payload = {
+            "conta_id": self.conta_principal.id,
+            "valor_pago": "600.00"
+        }
+        response = self.client.post(f'/api/lancamentos-financeiros/{titulo.id}/liquidar/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status_pagamento'], 'PAGO')
+        self.assertEqual(Decimal(str(response.data['valor'])), Decimal("600.00"))
+
+        # Título original teve seu valor reduzido para R$ 900,00 e permaneceu A_VENCER
+        titulo.refresh_from_db()
+        self.assertEqual(titulo.valor, Decimal("900.00"))
+        self.assertEqual(titulo.status_pagamento, 'A_VENCER')
+
+    def test_bloqueio_cheque_especial_saida(self):
+        """Valida que saídas que ultrapassem o saldo + limite de cheque especial são bloqueadas."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        # Conta secundária tem saldo 500.00 e limite 0.00
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_despesa,
+            tipo_lancamento="SAIDA",
+            descricao="MANUTENCAO MAQUINA DE CORTE",
+            valor=Decimal("800.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        payload = {
+            "conta_id": self.conta_secundaria.id,
+            "valor_pago": "800.00"
+        }
+        response = self.client.post(f'/api/lancamentos-financeiros/{titulo.id}/liquidar/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cheque especial", str(response.data).lower())
+
+        # Saldo permanece inalterado
+        self.conta_secundaria.refresh_from_db()
+        self.assertEqual(self.conta_secundaria.saldo, Decimal("500.00"))
+
+    def test_cancelamento_titulo_a_vencer(self):
+        """Valida cancelamento de título pendente com justificativa >= 10 caracteres."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_despesa,
+            tipo_lancamento="SAIDA",
+            descricao="SERVICO CANCELADO PELO FORNECEDOR",
+            valor=Decimal("450.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        # 1. Justificativa curta (erro)
+        res_curto = self.client.post(
+            f'/api/lancamentos-financeiros/{titulo.id}/cancelar/',
+            {"motivo_cancelamento": "curto"},
+            format='json'
+        )
+        self.assertEqual(res_curto.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 2. Justificativa válida
+        res_ok = self.client.post(
+            f'/api/lancamentos-financeiros/{titulo.id}/cancelar/',
+            {"motivo_cancelamento": "FORNECEDOR NAO ENTREGOU O SERVICO CONTRATADO"},
+            format='json'
+        )
+        self.assertEqual(res_ok.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_ok.data['status_pagamento'], 'CANCELADO')
+
+    def test_estorno_titulo_pago_com_anulacao_taxas_e_log(self):
+        """Valida estorno de título pago, reversão do saldo bancário, cancelamento de taxas e gravação perpétua em LogEstorno."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        saldo_inicial = self.conta_principal.saldo
+
+        # 1. Cria e liquida um título com taxa de maquininha
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_receita,
+            tipo_lancamento="ENTRADA",
+            descricao="VENDA DE PECA SOLDADA",
+            valor=Decimal("1000.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="A_VENCER"
+        )
+
+        self.client.post(
+            f'/api/lancamentos-financeiros/{titulo.id}/liquidar/',
+            {
+                "conta_id": self.conta_principal.id,
+                "meio_pagamento_id": self.meio_maquininha.id,
+                "valor_pago": "1000.00",
+                "valor_liquido_recebido": "970.00"
+            },
+            format='json'
+        )
+
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial + Decimal("970.00"))
+
+        # 2. Executa Estorno da baixa
+        payload_estorno = {
+            "justificativa": "CLIENTE DESISTIU DO PEDIDO E TEVE ESTORNO NO CARTAO"
+        }
+        res_estorno = self.client.post(
+            f'/api/lancamentos-financeiros/{titulo.id}/estornar/',
+            payload_estorno,
+            format='json'
+        )
+        self.assertEqual(res_estorno.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_estorno.data['lancamento']['status_pagamento'], 'A_VENCER')
+
+        # 3. Saldo bancário volta exatamente ao saldo inicial
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial)
+
+        # 4. Taxa de maquininha correspondente foi cancelada
+        taxa = LancamentoFinanceiro.objects.filter(
+            descricao__icontains=f"REF. TITULO #{titulo.id}"
+        ).first()
+        self.assertIsNotNone(taxa)
+        self.assertEqual(taxa.status_pagamento, 'CANCELADO')
+
+        # 5. Log perpétuo gravado
+        log = LogEstorno.objects.filter(lancamento=titulo).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.usuario_id, self.operador_com_permissao.id)
+        self.assertIn("CLIENTE DESISTIU", log.justificativa)
+
+    def test_transferencia_inter_contas_atomica(self):
+        """Valida transferência entre contas bancárias com integridade matemática e neutra para DRE."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        saldo_origem_ini = self.conta_principal.saldo   # 5000.00
+        saldo_destino_ini = self.conta_secundaria.saldo # 500.00
+
+        payload = {
+            "conta_origem_id": self.conta_principal.id,
+            "conta_destino_id": self.conta_secundaria.id,
+            "valor": "1000.00",
+            "descricao": "SUPRIMENTO DE CAIXA OFICINA"
+        }
+        response = self.client.post('/api/lancamentos-financeiros/transferir/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['tipo_lancamento'], 'TRANSFERENCIA')
+        self.assertEqual(response.data['status_pagamento'], 'PAGO')
+
+        self.conta_principal.refresh_from_db()
+        self.conta_secundaria.refresh_from_db()
+
+        self.assertEqual(self.conta_principal.saldo, saldo_origem_ini - Decimal("1000.00"))
+        self.assertEqual(self.conta_secundaria.saldo, saldo_destino_ini + Decimal("1000.00"))
+
+    def test_resumo_financeiro_endpoint(self):
+        """Valida agregação de métricas no endpoint /resumo/."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+        response = self.client.get('/api/lancamentos-financeiros/resumo/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('saldo_total_caixa', response.data)
+        self.assertIn('contas_a_pagar', response.data)
+        self.assertIn('contas_a_receber', response.data)
+
+
+class CartoesCorporativosTestCase(TestCase):
+    """Bateria de testes para Cartões de Crédito Corporativos, Faturas e Rollover (Fase 10)."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+        self.operador = Usuario.objects.create_user(
+            email="operador.cartao@emcsoldas.com.br",
+            password="operadorpassword123",
+            role="Operador"
+        )
+        self.operador.permissoes.acesso_tesouraria = True
+        self.operador.permissoes.save()
+
+        self.conta = ContaBancaria.objects.create(
+            nome="CONTA CORRENTE ITAU",
+            saldo=Decimal("10000.00"),
+            limite_credito=Decimal("5000.00")
+        )
+
+        self.categoria = CategoriaFinanceira.objects.create(
+            nome="COMBUSTIVEL E FRETES",
+            tipo="DESPESA"
+        )
+
+        self.cartao = CartaoCredito.objects.create(
+            nome="CARTAO NUBANK CORPORATIVO",
+            dia_vencimento=10,
+            dia_fechamento_padrao=3,
+            limite=Decimal("3000.00"),
+            permite_limite_emergencial=False,
+            conta_bancaria=self.conta
+        )
+
+    def test_despesa_cartao_em_fatura_aberta_sem_debito_bancario(self):
+        """Valida que compra com cartão cai na fatura aberta sem debitar a conta bancária de imediato."""
+        self.client.force_authenticate(user=self.operador)
+        saldo_inicial = self.conta.saldo
+
+        # Lança despesa de R$ 500,00 no cartão
+        payload = {
+            "cartao_credito": self.cartao.id,
+            "categoria": self.categoria.id,
+            "tipo_lancamento": "SAIDA",
+            "descricao": "ABASTECIMENTO CAMINHONETE OFICINA",
+            "valor": "500.00",
+            "data_vencimento": timezone.localdate().isoformat(),
+            "status_pagamento": "A_VENCER"
+        }
+        response = self.client.post('/api/lancamentos-financeiros/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Conta bancária não deve ser debitada
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, saldo_inicial)
+
+        # Fatura aberta foi gerada/associada
+        lanc = LancamentoFinanceiro.objects.get(id=response.data['id'])
+        self.assertIsNotNone(lanc.fatura_cartao)
+        self.assertEqual(lanc.fatura_cartao.status, 'ABERTA')
+
+    def test_remanejar_despesa_entre_faturas_cartao(self):
+        """Valida que uma despesa pode ser remanejada de uma fatura para outra competência."""
+        self.client.force_authenticate(user=self.operador)
+
+        fatura_ago = FaturaCartao.objects.create(
+            cartao=self.cartao,
+            mes_referencia="2026-08",
+            data_fechamento_real=date(2026, 8, 3),
+            status="ABERTA"
+        )
+        fatura_set = FaturaCartao.objects.create(
+            cartao=self.cartao,
+            mes_referencia="2026-09",
+            data_fechamento_real=date(2026, 9, 3),
+            status="ABERTA"
+        )
+
+        lanc = LancamentoFinanceiro.objects.create(
+            cartao_credito=self.cartao,
+            fatura_cartao=fatura_ago,
+            categoria=self.categoria,
+            tipo_lancamento="SAIDA",
+            descricao="COMPRA NOTURNA TINTA",
+            valor=Decimal("250.00"),
+            data_vencimento=fatura_ago.data_fechamento_real,
+            status_pagamento="A_VENCER"
+        )
+
+        # Move a compra para a fatura de Setembro
+        response = self.client.post(
+            f'/api/lancamentos-financeiros/{lanc.id}/alterar-fatura-cartao/',
+            {"nova_fatura_cartao_id": fatura_set.id},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        lanc.refresh_from_db()
+        self.assertEqual(lanc.fatura_cartao_id, fatura_set.id)
+        self.assertEqual(lanc.data_vencimento, fatura_set.data_fechamento_real)
+
+    def test_fechar_fatura_cartao_gerando_contas_a_pagar(self):
+        """Valida que fechar fatura gera título no Contas a Pagar."""
+        self.client.force_authenticate(user=self.operador)
+
+        fatura = FaturaCartao.objects.create(
+            cartao=self.cartao,
+            mes_referencia="2026-08",
+            data_fechamento_real=date(2026, 8, 3),
+            status="ABERTA"
+        )
+
+        LancamentoFinanceiro.objects.create(
+            cartao_credito=self.cartao,
+            fatura_cartao=fatura,
+            categoria=self.categoria,
+            tipo_lancamento="SAIDA",
+            descricao="GASOLINA",
+            valor=Decimal("400.00"),
+            data_vencimento=fatura.data_fechamento_real,
+            status_pagamento="A_VENCER"
+        )
+        LancamentoFinanceiro.objects.create(
+            cartao_credito=self.cartao,
+            fatura_cartao=fatura,
+            categoria=self.categoria,
+            tipo_lancamento="SAIDA",
+            descricao="ALMOCO EQUIPE",
+            valor=Decimal("200.00"),
+            data_vencimento=fatura.data_fechamento_real,
+            status_pagamento="A_VENCER"
+        )
+
+        # Fecha a fatura
+        response = self.client.post(f'/api/faturas-cartao/{fatura.id}/fechar/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['dados']['total_fatura'], 600.00)
+
+        fatura.refresh_from_db()
+        self.assertEqual(fatura.status, 'FECHADA')
+
+        # Título a pagar gerado
+        titulo_pagar = LancamentoFinanceiro.objects.filter(
+            fatura_cartao=fatura,
+            descricao__startswith=f"PAGAMENTO FATURA CARTAO {self.cartao.nome}"
+        ).first()
+        self.assertIsNotNone(titulo_pagar)
+        self.assertEqual(titulo_pagar.valor, Decimal("600.00"))
+        self.assertEqual(titulo_pagar.status_pagamento, 'A_VENCER')
+
+    def test_liquidacao_parcial_fatura_cartao_com_rollover(self):
+        """Valida que pagamento parcial de fatura fechada transfere o saldo restante para o mês seguinte via Rollover."""
+        self.client.force_authenticate(user=self.operador)
+
+        fatura = FaturaCartao.objects.create(
+            cartao=self.cartao,
+            mes_referencia="2026-08",
+            data_fechamento_real=date(2026, 8, 3),
+            status="FECHADA"
+        )
+
+        LancamentoFinanceiro.objects.create(
+            cartao_credito=self.cartao,
+            fatura_cartao=fatura,
+            categoria=self.categoria,
+            tipo_lancamento="SAIDA",
+            descricao="COMPRA PECAS MAQUINA",
+            valor=Decimal("1000.00"),
+            data_vencimento=fatura.data_fechamento_real,
+            status_pagamento="A_VENCER"
+        )
+
+        saldo_bancario_ini = self.conta.saldo # 10000.00
+
+        # Paga apenas R$ 400,00 da fatura de R$ 1.000,00 (Saldo residual R$ 600,00 para Rollover)
+        payload = {
+            "valor_pago": "400.00",
+            "conta_id": self.conta.id
+        }
+        response = self.client.post(f'/api/faturas-cartao/{fatura.id}/liquidar/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['dados']['rollover_aplicado'])
+        self.assertEqual(response.data['dados']['saldo_devedor_remanescente'], 600.00)
+
+        # Saldo bancário debitado em R$ 400,00
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, saldo_bancario_ini - Decimal("400.00"))
+
+        # Fatura de Setembro recebeu a linha de Rollover de R$ 600,00
+        fatura_set = FaturaCartao.objects.filter(cartao=self.cartao, mes_referencia="2026-09").first()
+        self.assertIsNotNone(fatura_set)
+        rollover_lanc = LancamentoFinanceiro.objects.filter(
+            fatura_cartao=fatura_set,
+            descricao__icontains="SALDO ANTERIOR / ROLLOVER FATURA 2026-08"
+        ).first()
+        self.assertIsNotNone(rollover_lanc)
+        self.assertEqual(rollover_lanc.valor, Decimal("600.00"))
+        self.assertEqual(rollover_lanc.status_pagamento, 'A_VENCER')

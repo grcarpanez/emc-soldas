@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 9 - Faturamento Agregado, Conta Corrente, Pré-Fatura, Fatura Final e Quitação)  
-**Fase Atual:** Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos (Pronta para início)  
-**Próxima Fase:** Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real, Cartões Corporativos e Estornos)  
+**Fase Atual:** Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV) (Pronta para início)  
+**Próxima Fase:** Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)  
 
 ---
 
@@ -23,7 +23,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | **Concluída** | 100% |
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | **Concluída** | 100% |
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | **Concluída** | 100% |
-| **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | Pendente | 0% |
+| **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | **Concluída** | 100% |
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | Pendente | 0% |
 | **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | Pendente | 0% |
 | **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | Pendente | 0% |
@@ -145,13 +145,15 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (88 testes no total acumulado do projeto).
 
 ### Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos
-- [ ] Implementar Contas a Pagar e Contas a Receber (Regime de Competência) sem impactar saldo imediato.
-- [ ] Implementar Extrato de Caixa Real (Regime de Caixa) com impacto imediato no saldo da conta bancária.
-- [ ] Implementar Modal Universal de Liquidação com cálculo automático de Taxa de Maquininha (Receita Bruta + Despesa de Taxa = Saldo Líquido).
-- [ ] Implementar Bloqueio por Limite de Cheque Especial.
-- [ ] Implementar Transferências Inter-Contas.
-- [ ] Implementar gestão de Cartões Corporativos com acumulação de despesas e rollover de saldo devedor.
-- [ ] Implementar fluxo de Estorno de títulos pagos com justificativa obrigatória e gravação perpétua em `LogEstorno`.
+- [x] Implementar Contas a Pagar e Contas a Receber (Regime de Competência) sem impactar saldo imediato.
+- [x] Implementar Extrato de Caixa Real (Regime de Caixa) com impacto imediato no saldo da conta bancária.
+- [x] Implementar Modal Universal de Liquidação com cálculo automático de Taxa de Maquininha e Retenção de ISS na fonte (Receita Bruta - Deduções = Saldo Líquido Real).
+- [x] Implementar Bloqueio por Limite de Cheque Especial em saídas bancárias.
+- [x] Implementar Transferências Inter-Contas atômicas e neutras para o DRE.
+- [x] Implementar gestão de Cartões Corporativos com acumulação de despesas em fatura aberta, alteração de fechamento, remanejamento entre faturas e rollover de saldo devedor.
+- [x] Implementar fluxo de Estorno de títulos pagos com reversão de saldo bancário, cancelamento de taxas atreladas e gravação perpétua em `LogEstorno`.
+- [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_tesouraria` (`HasTesourariaAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (108 testes no total acumulado do projeto).
 
 ### Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)
 - [ ] Implementar serviço de upload e parsing seguro de extratos OFX e CSV.
@@ -193,4 +195,5 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos**, desenvolvendo a camada de serviços, serializers, viewsets e rotas para `LancamentoFinanceiro` (`/api/lancamentos-financeiros/`), Cobrindo Contas a Pagar e Contas a Receber (Regime de Competência), Extrato de Caixa Real (Regime de Caixa), Modal Universal de Liquidação com taxa de maquininha, Bloqueio por Limite de Cheque Especial, Transferências Inter-Contas, Cartões Corporativos com acumulação de despesas e rollover de saldo devedor, e fluxo de Estorno de títulos pagos com gravação perpétua em `LogEstorno`, protegidos pelo toggle `acesso_tesouraria`.
+Iniciar a **Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)**, desenvolvendo a camada de parsing de extratos bancários em formato OFX e CSV (`/api/conciliacao/upload-extrato/`), o algoritmo de correspondência (Match Automático 1:1 e Match Múltiplo 1:N), endpoint de `Lançamento Rápido no Ato` para tarifas/rendimentos com conciliação imediata, e gravação mandatória de auditoria (`is_conciliado = True`, `data_conciliacao` e `conciliado_por_id`), protegido pelo toggle `acesso_tesouraria`.
+

@@ -1,8 +1,9 @@
 """
 Serializers do Módulo Financeiro e Tesouraria.
-Em conformidade com docs/FSD.md e docs/PLANO.md (Fase 4).
+Em conformidade com docs/FSD.md e docs/PLANO.md (Fase 4 e Fase 10).
 """
 from decimal import Decimal
+from datetime import date
 from rest_framework import serializers
 from apps.financeiro.models import (
     CategoriaFinanceira,
@@ -193,3 +194,256 @@ class RegraPagamentoSerializer(serializers.ModelSerializer):
             })
 
         return attrs
+
+
+class CartaoCreditoSerializer(serializers.ModelSerializer):
+    """Serializer para Cartões de Crédito Corporativos."""
+    conta_bancaria_nome = serializers.CharField(
+        source='conta_bancaria.nome',
+        read_only=True,
+        allow_null=True
+    )
+    total_faturas_abertas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartaoCredito
+        fields = [
+            'id',
+            'nome',
+            'dia_vencimento',
+            'dia_fechamento_padrao',
+            'limite',
+            'permite_limite_emergencial',
+            'conta_bancaria',
+            'conta_bancaria_nome',
+            'total_faturas_abertas',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_total_faturas_abertas(self, obj):
+        return obj.faturas.filter(status='ABERTA', deleted_at__isnull=True).count()
+
+    def validate_nome(self, value):
+        nome_sanitizado = sanitizar_texto_maiusculo(value)
+        if not nome_sanitizado:
+            raise serializers.ValidationError("O nome do cartão é obrigatório.")
+        return nome_sanitizado
+
+    def validate_dia_vencimento(self, value):
+        if value < 1 or value > 31:
+            raise serializers.ValidationError("O dia de vencimento deve ser entre 1 e 31.")
+        return value
+
+    def validate_dia_fechamento_padrao(self, value):
+        if value < 1 or value > 31:
+            raise serializers.ValidationError("O dia de fechamento deve ser entre 1 e 31.")
+        return value
+
+    def validate_limite(self, value):
+        if value < Decimal('0.00'):
+            raise serializers.ValidationError("O limite do cartão não pode ser negativo.")
+        return value
+
+
+class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
+    """
+    Serializer completo para Lançamentos Financeiros (Competência e Caixa Real).
+    Suporta Contas a Pagar, Contas a Receber, Extrato e Despesas de Cartão.
+    """
+    conta_nome = serializers.CharField(source='conta.nome', read_only=True, allow_null=True)
+    conta_destino_nome = serializers.CharField(source='conta_destino.nome', read_only=True, allow_null=True)
+    meio_pagamento_nome = serializers.CharField(source='meio_pagamento.nome', read_only=True, allow_null=True)
+    cartao_credito_nome = serializers.CharField(source='cartao_credito.nome', read_only=True, allow_null=True)
+    categoria_nome = serializers.CharField(source='categoria.nome', read_only=True)
+    categoria_tipo = serializers.CharField(source='categoria.tipo', read_only=True)
+    conciliado_por_nome = serializers.CharField(source='conciliado_por.nome', read_only=True, allow_null=True)
+
+    class Meta:
+        model = LancamentoFinanceiro
+        fields = [
+            'id',
+            'fatura',
+            'conta',
+            'conta_nome',
+            'conta_destino',
+            'conta_destino_nome',
+            'meio_pagamento',
+            'meio_pagamento_nome',
+            'cartao_credito',
+            'cartao_credito_nome',
+            'fatura_cartao',
+            'categoria',
+            'categoria_nome',
+            'categoria_tipo',
+            'tipo_lancamento',
+            'descricao',
+            'valor',
+            'data_vencimento',
+            'data_pagamento',
+            'status_pagamento',
+            'motivo_cancelamento',
+            'is_conciliado',
+            'data_conciliacao',
+            'conciliado_por',
+            'conciliado_por_nome',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'id',
+            'is_conciliado',
+            'data_conciliacao',
+            'conciliado_por',
+            'created_at',
+            'updated_at'
+        ]
+
+    def validate_descricao(self, value):
+        if value:
+            return sanitizar_texto_maiusculo(value)
+        return value
+
+    def validate_valor(self, value):
+        if value <= Decimal('0.00'):
+            raise serializers.ValidationError("O valor do lançamento deve ser maior que zero.")
+        return value
+
+    def validate(self, attrs):
+        tipo = attrs.get('tipo_lancamento', getattr(self.instance, 'tipo_lancamento', None))
+        status_pagto = attrs.get('status_pagamento', getattr(self.instance, 'status_pagamento', 'A_VENCER'))
+        conta = attrs.get('conta', getattr(self.instance, 'conta', None))
+        cartao = attrs.get('cartao_credito', getattr(self.instance, 'cartao_credito', None))
+
+        # Se já criado como PAGO, conta bancária é obrigatória (a menos que seja fatura de cartão em aberto)
+        if status_pagto == 'PAGO' and not conta and not cartao:
+            raise serializers.ValidationError({
+                "conta": "A conta bancária é obrigatória para lançamentos com status PAGO."
+            })
+
+        return attrs
+
+
+class FaturaCartaoSerializer(serializers.ModelSerializer):
+    """Serializer para Faturas de Cartões de Crédito Corporativos."""
+    cartao_nome = serializers.CharField(source='cartao.nome', read_only=True)
+    total_despesas = serializers.SerializerMethodField()
+    quantidade_itens = serializers.SerializerMethodField()
+    despesas_detalhadas = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FaturaCartao
+        fields = [
+            'id',
+            'cartao',
+            'cartao_nome',
+            'mes_referencia',
+            'data_fechamento_real',
+            'status',
+            'total_despesas',
+            'quantidade_itens',
+            'despesas_detalhadas',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_total_despesas(self, obj):
+        from django.db.models import Sum
+        total = obj.despesas_fatura.filter(
+            tipo_lancamento='SAIDA',
+            deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+        return float(total)
+
+    def get_quantidade_itens(self, obj):
+        return obj.despesas_fatura.filter(
+            tipo_lancamento='SAIDA',
+            deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).count()
+
+    def get_despesas_detalhadas(self, obj):
+        despesas = obj.despesas_fatura.filter(
+            tipo_lancamento='SAIDA',
+            deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).order_by('-data_vencimento', '-id')
+        return LancamentoFinanceiroSerializer(despesas, many=True).data
+
+
+# --- Serializers de Ações / Payloads Específicos ---
+
+class LancamentoFinanceiroLiquidarSerializer(serializers.Serializer):
+    """Payload para Liquidação / Baixa de Títulos Financeiros."""
+    conta_id = serializers.IntegerField(required=True)
+    meio_pagamento_id = serializers.IntegerField(required=False, allow_null=True)
+    data_pagamento = serializers.DateTimeField(required=False, allow_null=True)
+    valor_pago = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    valor_liquido_recebido = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    valor_iss_retido = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+
+
+class LancamentoFinanceiroCancelarSerializer(serializers.Serializer):
+    """Payload para Cancelamento de Título a Vencer."""
+    motivo_cancelamento = serializers.CharField(min_length=10, max_length=500, required=True)
+
+
+class LancamentoFinanceiroEstornarSerializer(serializers.Serializer):
+    """Payload para Estorno Auditado de Título Pago."""
+    justificativa = serializers.CharField(min_length=10, max_length=1000, required=True)
+
+
+class TransferenciaInterContasSerializer(serializers.Serializer):
+    """Payload para Transferência Inter-Contas Atômica."""
+    conta_origem_id = serializers.IntegerField(required=True)
+    conta_destino_id = serializers.IntegerField(required=True)
+    valor = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
+    descricao = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    data_transferencia = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class RemanejarDespesaCartaoSerializer(serializers.Serializer):
+    """Payload para Remanejamento de Despesa entre Faturas de Cartão."""
+    nova_fatura_cartao_id = serializers.IntegerField(required=False, allow_null=True)
+    novo_mes_referencia = serializers.CharField(max_length=7, required=False, allow_blank=True)
+
+
+class FaturaCartaoAjustarFechamentoSerializer(serializers.Serializer):
+    """Payload para Ajuste de Data de Fechamento Real de Fatura."""
+    data_fechamento_real = serializers.DateField(required=True)
+
+
+class FaturaCartaoLiquidarSerializer(serializers.Serializer):
+    """Payload para Pagamento / Liquidação de Fatura de Cartão."""
+    valor_pago = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
+    conta_id = serializers.IntegerField(required=False, allow_null=True)
+    data_pagamento = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class LogEstornoSerializer(serializers.ModelSerializer):
+    """Serializer para Consulta e Auditoria Perpétua de Estornos."""
+    usuario_nome = serializers.CharField(source='usuario.nome', read_only=True)
+    lancamento_descricao = serializers.CharField(source='lancamento.descricao', read_only=True)
+    lancamento_valor = serializers.DecimalField(source='lancamento.valor', max_digits=12, decimal_places=2, read_only=True)
+    lancamento_tipo = serializers.CharField(source='lancamento.tipo_lancamento', read_only=True)
+
+    class Meta:
+        model = LogEstorno
+        fields = [
+            'id',
+            'lancamento',
+            'lancamento_descricao',
+            'lancamento_valor',
+            'lancamento_tipo',
+            'usuario',
+            'usuario_nome',
+            'justificativa',
+            'data_estorno'
+        ]
+        read_only_fields = fields
