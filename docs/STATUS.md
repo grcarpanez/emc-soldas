@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Evolução Cadastros: Entidade Relacional ClienteContato 1:N com Múltiplos Telefones, Identificação de Responsáveis e Flag WhatsApp)  
+**Última Atualização:** 2026-08-23 (Evolução Cadastros: Vinculação Dinâmica de Equipamentos/Veículos a Clientes com Histórico de Titularidade e Modal de Frota)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 

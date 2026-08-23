@@ -131,6 +131,8 @@ window.CadastrosView = {
           telDisplay = window.EMCUtils.formatarTelefoneDinamico(item.telefone);
         }
 
+        const qtdEquip = item.quantidade_equipamentos_ativos || 0;
+
         html += `
           <tr>
             <td class="mono-text">#${item.id}</td>
@@ -139,7 +141,8 @@ window.CadastrosView = {
             <td class="mono-text">${window.EMCUtils.escapeHtml(item.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(item.cnpj_cpf) : '-')}</td>
             <td>${telDisplay}</td>
             <td>${window.EMCUtils.escapeHtml(item.cidade || '-')}${item.uf ? ' / ' + item.uf : ''}</td>
-            <td style="text-align: right;">
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalFrotaCliente(${item.id})">FROTA (${qtdEquip})</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarCliente(${item.id})">EDITAR</button>
             </td>
           </tr>
@@ -148,6 +151,85 @@ window.CadastrosView = {
       tbody.innerHTML = html;
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  async abrirModalFrotaCliente(clienteId) {
+    try {
+      const cliente = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}${clienteId}/`);
+      const vinculosRes = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTE_EQUIPAMENTOS}?cliente=${clienteId}&is_ativo=true`);
+      const vinculos = vinculosRes.results || vinculosRes || [];
+
+      let linhasHtml = '';
+      if (!vinculos.length) {
+        linhasHtml = '<tr><td colspan="4" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 18px;">Nenhum equipamento ou veículo vinculado a este cliente.</td></tr>';
+      } else {
+        vinculos.forEach((v) => {
+          const eq = v.equipamento_detalhes || {};
+          linhasHtml += `
+            <tr>
+              <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(eq.placa ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : '-')}</strong></td>
+              <td class="mono-text">${window.EMCUtils.escapeHtml(eq.identificacao || '-')}</td>
+              <td>${window.EMCUtils.escapeHtml(eq.descricao || '-')}</td>
+              <td style="text-align: right;">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="window.CadastrosView.desvincularEquipamento(${v.id}, ${clienteId})">DESVINCULAR</button>
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      window.EMCUtils.openModal({
+        title: `FROTA DE VEÍCULOS / EQUIPAMENTOS - ${cliente.nome_razao}`,
+        size: 'lg',
+        showCancel: false,
+        confirmText: 'FECHAR',
+        content: `
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant);">
+                Total de equipamentos ativos vinculados: <strong>${vinculos.length}</strong>
+              </p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-novo-equip-cliente">+ NOVO EQUIPAMENTO PARA ESTE CLIENTE</button>
+          </div>
+
+          <div class="table-container" style="margin-bottom: 0;">
+            <table class="table" style="font-size: 13px;">
+              <thead>
+                <tr>
+                  <th>PLACA</th>
+                  <th>IDENTIFICAÇÃO</th>
+                  <th>DESCRIÇÃO DO EQUIPAMENTO</th>
+                  <th style="text-align: right;">AÇÃO</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${linhasHtml}
+              </tbody>
+            </table>
+          </div>
+        `
+      });
+
+      document.getElementById('btn-novo-equip-cliente')?.addEventListener('click', () => {
+        this.abrirModalEquipamento(null, clienteId);
+      });
+    } catch (err) {
+      window.EMCUtils.showToast('Erro ao carregar frota do cliente.', 'error');
+    }
+  },
+
+  async desvincularEquipamento(vinculoId, clienteId) {
+    if (!confirm('Deseja realmente desvincular este equipamento do cliente?')) return;
+
+    try {
+      await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTE_EQUIPAMENTOS}${vinculoId}/`);
+      window.EMCUtils.showToast('Equipamento desvinculado com sucesso!', 'success');
+      this.abrirModalFrotaCliente(clienteId);
+      this.carregarListaClientes();
+    } catch (err) {
+      window.EMCUtils.showToast(err.message || 'Erro ao desvincular equipamento.', 'error');
     }
   },
 
@@ -595,8 +677,25 @@ window.CadastrosView = {
     }
   },
 
-  abrirModalEquipamento(equip = null) {
+  async abrirModalEquipamento(equip = null, preSelectClienteId = null) {
     const isEdit = !!equip;
+
+    let clientes = [];
+    try {
+      const resCli = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=500`);
+      clientes = resCli.results || resCli || [];
+    } catch (e) {
+      console.warn('Erro ao carregar lista de clientes para vinculo:', e);
+    }
+
+    const donoAtualId = equip?.cliente_atual?.id || preSelectClienteId || null;
+
+    let clientesOptions = '<option value="">NÃO VINCULADO (OFICINA GERAL / EM TRÂNSITO)</option>';
+    clientes.forEach((c) => {
+      const isSel = donoAtualId && Number(donoAtualId) === Number(c.id) ? 'selected' : '';
+      const doc = c.cnpj_cpf ? ` (${window.EMCUtils.formatarCpfCnpjDinamico(c.cnpj_cpf)})` : '';
+      clientesOptions += `<option value="${c.id}" ${isSel}>${window.EMCUtils.escapeHtml(c.nome_razao)}${doc}</option>`;
+    });
 
     window.EMCUtils.openModal({
       title: isEdit ? `EDITAR EQUIPAMENTO #${equip.id}` : 'NOVO EQUIPAMENTO / VEÍCULO',
@@ -619,12 +718,24 @@ window.CadastrosView = {
             <label class="form-label" for="equip-descricao">Descrição Completa *</label>
             <input type="text" id="equip-descricao" class="form-control" placeholder="EX: ESCAVADEIRA HIDRÁULICA CAT 320D" value="${equip?.descricao || ''}" required>
           </div>
+
+          <div class="form-group mt-12">
+            <label class="form-label" for="equip-cliente">Cliente Proprietário / Empresa Responsável</label>
+            <select id="equip-cliente" class="form-control">
+              ${clientesOptions}
+            </select>
+            <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">
+              ${isEdit ? 'Alterar o cliente proprietário registrará a transferência de titularidade no histórico do equipamento.' : 'Selecione a qual cliente este equipamento ou máquina pertence.'}
+            </small>
+          </div>
         </form>
       `,
       onConfirm: async () => {
         const descricao = document.getElementById('equip-descricao').value.trim();
         const placa = document.getElementById('equip-placa').value.trim();
         const identificacao = document.getElementById('equip-identificacao').value.trim();
+        const clienteVal = document.getElementById('equip-cliente').value;
+        const cliente_id = clienteVal ? parseInt(clienteVal) : null;
 
         if (!descricao) {
           window.EMCUtils.showToast('A descrição é obrigatória.', 'error');
@@ -635,7 +746,8 @@ window.CadastrosView = {
           const payload = {
             descricao,
             placa: window.EMCUtils.sanitizarTextoEmTempoReal(placa),
-            identificacao: window.EMCUtils.sanitizarTextoEmTempoReal(identificacao)
+            identificacao: window.EMCUtils.sanitizarTextoEmTempoReal(identificacao),
+            cliente_id
           };
 
           if (isEdit) {
@@ -646,6 +758,7 @@ window.CadastrosView = {
             window.EMCUtils.showToast('Equipamento criado com sucesso!', 'success');
           }
           this.carregarListaEquipamentos();
+          this.carregarListaClientes();
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar equipamento.', 'error');

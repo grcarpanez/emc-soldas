@@ -246,9 +246,11 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
 
 class EquipamentoSerializer(serializers.ModelSerializer):
     """
-    Serializer para Equipamentos e Veículos atendidos na oficina.
+    Serializer para Equipamentos e Veículos atendidos na oficina com vínculo de proprietário.
     """
     cliente_atual = serializers.SerializerMethodField()
+    cliente_atual_nome = serializers.SerializerMethodField()
+    cliente_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = Equipamento
@@ -258,6 +260,8 @@ class EquipamentoSerializer(serializers.ModelSerializer):
             'identificacao',
             'descricao',
             'cliente_atual',
+            'cliente_atual_nome',
+            'cliente_id',
             'created_at',
             'updated_at',
             'created_by_id',
@@ -275,6 +279,10 @@ class EquipamentoSerializer(serializers.ModelSerializer):
                 "data_vinculo": vinculo_ativo.data_vinculo,
             }
         return None
+
+    def get_cliente_atual_nome(self, obj):
+        vinculo_ativo = obj.historico_clientes.filter(is_ativo=True).select_related('cliente').first()
+        return vinculo_ativo.cliente.nome_razao if vinculo_ativo else None
 
     def validate_placa(self, value):
         if value:
@@ -303,6 +311,37 @@ class EquipamentoSerializer(serializers.ModelSerializer):
                 "identificacao": "Informe ao menos a Placa ou a Identificação Técnica (Frota/Chassi/Código Interno)."
             })
         return attrs
+
+    def create(self, validated_data):
+        cliente_id = validated_data.pop('cliente_id', None)
+        equipamento = super().create(validated_data)
+        if cliente_id:
+            ClienteEquipamento.objects.create(
+                cliente_id=cliente_id,
+                equipamento=equipamento,
+                is_ativo=True
+            )
+        return equipamento
+
+    def update(self, instance, validated_data):
+        cliente_id = validated_data.pop('cliente_id', None)
+        equipamento = super().update(instance, validated_data)
+        
+        if cliente_id is not None:
+            vinculo_atual = instance.historico_clientes.filter(is_ativo=True).first()
+            id_atual = vinculo_atual.cliente_id if vinculo_atual else None
+            
+            if id_atual != cliente_id:
+                if vinculo_atual:
+                    vinculo_atual.is_ativo = False
+                    vinculo_atual.save()
+                if cliente_id:
+                    ClienteEquipamento.objects.create(
+                        cliente_id=cliente_id,
+                        equipamento=instance,
+                        is_ativo=True
+                    )
+        return equipamento
 
 
 class ClienteEquipamentoSerializer(serializers.ModelSerializer):
