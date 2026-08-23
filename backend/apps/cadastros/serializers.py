@@ -11,17 +11,48 @@ from core.utils import (
 )
 from apps.cadastros.models import (
     ClienteFornecedor,
+    ClienteContato,
     Equipamento,
     ClienteEquipamento,
     AnexoGeralCliente
 )
 
 
+class ClienteContatoSerializer(serializers.ModelSerializer):
+    """
+    Serializer para contatos e telefones vinculados ao Cliente/Fornecedor.
+    """
+    class Meta:
+        model = ClienteContato
+        fields = [
+            'id',
+            'nome_contato',
+            'telefone',
+            'is_whatsapp',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate_nome_contato(self, value):
+        if not value or not str(value).strip():
+            raise serializers.ValidationError("O Nome do Contato é obrigatório.")
+        return sanitizar_texto_maiusculo(value)
+
+    def validate_telefone(self, value):
+        if not value:
+            raise serializers.ValidationError("O Telefone é obrigatório.")
+        tel_limpo = limpar_apenas_digitos(value)
+        if len(tel_limpo) < 8 or len(tel_limpo) > 12:
+            raise serializers.ValidationError("Telefone inválido. Informe o DDD e os dígitos (10 ou 11 dígitos).")
+        return tel_limpo
+
+
 class ClienteFornecedorSerializer(serializers.ModelSerializer):
     """
-    Serializer completo para Clientes e Fornecedores com validações matemáticas e sanitização universal.
+    Serializer completo para Clientes e Fornecedores com contatos aninhados, validações e sanitização universal.
     """
     quantidade_equipamentos_ativos = serializers.SerializerMethodField()
+    contatos = ClienteContatoSerializer(many=True, required=False)
 
     class Meta:
         model = ClienteFornecedor
@@ -43,6 +74,7 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
             'bairro',
             'cidade',
             'uf',
+            'contatos',
             'quantidade_equipamentos_ativos',
             'created_at',
             'updated_at',
@@ -108,12 +140,12 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
         return value
 
     def validate_telefone(self, value):
-        if not value:
-            raise serializers.ValidationError("O Telefone de contato é obrigatório.")
-        tel_limpo = limpar_apenas_digitos(value)
-        if len(tel_limpo) < 8 or len(tel_limpo) > 12:
-            raise serializers.ValidationError("Telefone inválido. Informe o DDD e os dígitos (10 ou 11 dígitos).")
-        return tel_limpo
+        if value:
+            tel_limpo = limpar_apenas_digitos(value)
+            if len(tel_limpo) < 8 or len(tel_limpo) > 12:
+                raise serializers.ValidationError("Telefone inválido. Informe o DDD e os dígitos (10 ou 11 dígitos).")
+            return tel_limpo
+        return value
 
     def validate_cep(self, value):
         if value:
@@ -156,6 +188,37 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
             attrs['cnpj_cpf'] = doc_limpo
 
         return attrs
+
+    def create(self, validated_data):
+        contatos_data = validated_data.pop('contatos', [])
+        
+        # Se telefone principal não informado mas houver contatos, usa o 1º telefone
+        if not validated_data.get('telefone') and contatos_data:
+            validated_data['telefone'] = contatos_data[0].get('telefone')
+            
+        cliente = ClienteFornecedor.objects.create(**validated_data)
+        
+        for c_data in contatos_data:
+            ClienteContato.objects.create(cliente=cliente, **c_data)
+            
+        return cliente
+
+    def update(self, instance, validated_data):
+        contatos_data = validated_data.pop('contatos', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        if contatos_data is not None:
+            instance.contatos.all().delete()
+            for c_data in contatos_data:
+                ClienteContato.objects.create(cliente=instance, **c_data)
+                
+            if not instance.telefone and contatos_data:
+                instance.telefone = contatos_data[0].get('telefone')
+                
+        instance.save()
+        return instance
 
 
 class EquipamentoSerializer(serializers.ModelSerializer):

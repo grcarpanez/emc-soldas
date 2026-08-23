@@ -72,7 +72,9 @@ class ClienteFornecedor(BaseModel):
     )
     telefone = models.CharField(
         max_length=20,
-        verbose_name="Telefone de Contato"
+        null=True,
+        blank=True,
+        verbose_name="Telefone Principal"
     )
     cep = models.CharField(
         max_length=10,
@@ -129,6 +131,47 @@ class ClienteFornecedor(BaseModel):
 
     def __str__(self):
         return f"{self.nome_razao} ({self.tipo})"
+
+
+class ClienteContato(models.Model):
+    """
+    Contatos telefônicos e responsáveis vinculados a Clientes e Fornecedores (1:N).
+    Suporta múltiplos telefones, identificação de quem procurar e flag de WhatsApp.
+    """
+    id = models.BigAutoField(primary_key=True)
+    cliente = models.ForeignKey(
+        ClienteFornecedor,
+        on_delete=models.CASCADE,
+        related_name='contatos',
+        db_column='cliente_id',
+        verbose_name="Cliente / Fornecedor"
+    )
+    nome_contato = models.CharField(
+        max_length=150,
+        verbose_name="Nome do Contato / Responsável"
+    )
+    telefone = models.CharField(
+        max_length=20,
+        verbose_name="Telefone de Contato"
+    )
+    is_whatsapp = models.BooleanField(
+        default=False,
+        verbose_name="Possui WhatsApp"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Data de Cadastro"
+    )
+
+    class Meta:
+        db_table = 'clientes_contatos'
+        verbose_name = 'Contato do Cliente'
+        verbose_name_plural = 'Contatos dos Clientes'
+        ordering = ['id']
+
+    def __str__(self):
+        whats = " [WhatsApp]" if self.is_whatsapp else ""
+        return f"{self.nome_contato} - {self.telefone}{whats}"
 
 
 class Equipamento(BaseModel):

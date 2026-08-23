@@ -120,13 +120,24 @@ window.CadastrosView = {
       let html = '';
       lista.forEach((item) => {
         const badgeTipo = item.tipo === 'CLIENTE' ? 'info' : (item.tipo === 'FORNECEDOR' ? 'warning' : 'success');
+        
+        let telDisplay = '-';
+        if (item.contatos && item.contatos.length > 0) {
+          const c1 = item.contatos[0];
+          const wa = c1.is_whatsapp ? ' <span class="status-chip success" style="font-size: 10px; padding: 2px 4px; font-weight: 700;">WHATSAPP</span>' : '';
+          const extra = item.contatos.length > 1 ? ` <span class="mono-text" style="font-size: 11px; color: var(--color-rust-orange); font-weight: 700;">(+${item.contatos.length - 1})</span>` : '';
+          telDisplay = `<div class="mono-text" style="font-size: 12px;"><span>${window.EMCUtils.escapeHtml(c1.nome_contato)}:</span> <strong>${window.EMCUtils.formatarTelefoneDinamico(c1.telefone)}</strong>${wa}${extra}</div>`;
+        } else if (item.telefone) {
+          telDisplay = window.EMCUtils.formatarTelefoneDinamico(item.telefone);
+        }
+
         html += `
           <tr>
             <td class="mono-text">#${item.id}</td>
             <td><span class="status-chip ${badgeTipo}">${item.tipo}</span></td>
             <td><strong>${window.EMCUtils.escapeHtml(item.nome_razao)}</strong></td>
             <td class="mono-text">${window.EMCUtils.escapeHtml(item.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(item.cnpj_cpf) : '-')}</td>
-            <td class="mono-text">${window.EMCUtils.escapeHtml(item.telefone ? window.EMCUtils.formatarTelefoneDinamico(item.telefone) : '-')}</td>
+            <td>${telDisplay}</td>
             <td>${window.EMCUtils.escapeHtml(item.cidade || '-')}${item.uf ? ' / ' + item.uf : ''}</td>
             <td style="text-align: right;">
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarCliente(${item.id})">EDITAR</button>
@@ -231,7 +242,7 @@ window.CadastrosView = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-tipo">Tipo de Cadastro</label>
               <select id="comp-tipo" class="form-control">
@@ -241,12 +252,8 @@ window.CadastrosView = {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" for="comp-telefone">Telefone Principal *</label>
-              <input type="text" id="comp-telefone" class="form-control mono-text" data-mask="telefone" value="${cliente?.telefone ? window.EMCUtils.formatarTelefoneDinamico(cliente.telefone) : ''}" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="comp-email">E-mail</label>
-              <input type="email" id="comp-email" class="form-control" data-no-transform="true" value="${cliente?.email || ''}">
+              <label class="form-label" for="comp-email">E-mail Corporativo / Cobrança</label>
+              <input type="email" id="comp-email" class="form-control" data-no-transform="true" placeholder="exemplo@empresa.com.br" value="${cliente?.email || ''}">
             </div>
           </div>
 
@@ -279,11 +286,67 @@ window.CadastrosView = {
               <input type="text" id="comp-uf" class="form-control text-center" maxlength="2" value="${cliente?.uf || ''}">
             </div>
           </div>
+
+          <!-- Seção de Contatos e Telefones (1:N com Nome, Telefone e Flag WhatsApp) -->
+          <div class="card mt-16" style="background-color: var(--color-surface-container-high);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--color-rust-orange);">CONTATOS & TELEFONES</h4>
+                <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Informe quem procurar e os telefones de contato</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-contato-linha">+ ADICIONAR CONTATO</button>
+            </div>
+
+            <div class="table-container" style="margin-bottom: 0;">
+              <table class="table" style="font-size: 13px;">
+                <thead>
+                  <tr>
+                    <th style="width: 45%;">NOME DO CONTATO / QUEM PROCURAR *</th>
+                    <th style="width: 35%;">TELEFONE / CELULAR *</th>
+                    <th style="width: 10%; text-align: center;">WHATSAPP</th>
+                    <th style="width: 10%; text-align: right;">AÇÃO</th>
+                  </tr>
+                </thead>
+                <tbody id="lista-contatos-modal-tbody">
+                  <!-- Inserido dinamicamente via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </form>
       `,
       onConfirm: async () => {
         const docLimpo = window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-documento').value);
         const tipoPessoa = docLimpo.length === 14 ? 'PJ' : 'PF';
+
+        // Coleta os contatos da tabela dinâmica
+        const rows = document.querySelectorAll('#lista-contatos-modal-tbody tr');
+        const contatosPayload = [];
+
+        rows.forEach((row) => {
+          const nome_contato = row.querySelector('.contato-nome')?.value.trim();
+          const telRaw = row.querySelector('.contato-telefone')?.value.trim();
+          const telefone = window.EMCUtils.extrairApenasDigitos(telRaw);
+          const is_whatsapp = !!row.querySelector('.contato-whatsapp')?.checked;
+
+          if (nome_contato && telefone) {
+            contatosPayload.push({
+              nome_contato,
+              telefone,
+              is_whatsapp
+            });
+          }
+        });
+
+        if (!document.getElementById('comp-nome').value.trim()) {
+          window.EMCUtils.showToast('O Nome / Razão Social é obrigatório.', 'error');
+          return false;
+        }
+
+        if (contatosPayload.length === 0) {
+          window.EMCUtils.showToast('Preencha ao menos um contato telefônico com o nome do responsável.', 'error');
+          return false;
+        }
 
         const payload = {
           nome_razao: document.getElementById('comp-nome').value.trim(),
@@ -291,20 +354,16 @@ window.CadastrosView = {
           tipo: document.getElementById('comp-tipo').value,
           tipo_pessoa: tipoPessoa,
           cnpj_cpf: docLimpo,
-          telefone: window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-telefone').value),
+          telefone: contatosPayload[0]?.telefone || '',
           email: document.getElementById('comp-email').value.trim().toLowerCase(),
           cep: window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-cep').value),
           logradouro: document.getElementById('comp-logradouro').value.trim(),
           numero: document.getElementById('comp-numero').value.trim(),
           bairro: document.getElementById('comp-bairro').value.trim(),
           cidade: document.getElementById('comp-cidade').value.trim(),
-          uf: document.getElementById('comp-uf').value.trim().toUpperCase()
+          uf: document.getElementById('comp-uf').value.trim().toUpperCase(),
+          contatos: contatosPayload
         };
-
-        if (!payload.nome_razao || !payload.telefone) {
-          window.EMCUtils.showToast('Nome e Telefone são obrigatórios.', 'error');
-          return false;
-        }
 
         try {
           if (isEdit) {
@@ -322,6 +381,48 @@ window.CadastrosView = {
         }
       }
     });
+
+    // Função para adicionar linha de contato dinamicamente
+    const adicionarLinhaContato = (nome = '', telefone = '', isWhatsapp = false) => {
+      const tbody = document.getElementById('lista-contatos-modal-tbody');
+      if (!tbody) return;
+
+      const rowId = 'contato-row-' + Math.random().toString(36).substr(2, 9);
+      const tr = document.createElement('tr');
+      tr.id = rowId;
+      tr.innerHTML = `
+        <td>
+          <input type="text" class="form-control contato-nome" placeholder="Ex: JOÃO (COMPRAS)" value="${window.EMCUtils.escapeHtml(nome)}" required>
+        </td>
+        <td>
+          <input type="text" class="form-control mono-text contato-telefone" data-mask="telefone" placeholder="(00) 00000-0000" value="${window.EMCUtils.formatarTelefoneDinamico(telefone)}" required>
+        </td>
+        <td style="text-align: center; vertical-align: middle;">
+          <label style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 100%;">
+            <input type="checkbox" class="contato-whatsapp" ${isWhatsapp ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--color-success);">
+          </label>
+        </td>
+        <td style="text-align: right; vertical-align: middle;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('${rowId}')?.remove()">✕</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    };
+
+    document.getElementById('btn-add-contato-linha')?.addEventListener('click', () => {
+      adicionarLinhaContato('', '', false);
+    });
+
+    // Popula contatos iniciais
+    if (cliente?.contatos && cliente.contatos.length > 0) {
+      cliente.contatos.forEach((c) => {
+        adicionarLinhaContato(c.nome_contato, c.telefone, c.is_whatsapp);
+      });
+    } else if (cliente?.telefone) {
+      adicionarLinhaContato('CONTATO PRINCIPAL', cliente.telefone, false);
+    } else {
+      adicionarLinhaContato('', '', false);
+    }
 
     // Auto-consulta da Receita Federal e validação ao sair do campo (blur / exit)
     const docInput = document.getElementById('comp-documento');
@@ -364,7 +465,6 @@ window.CadastrosView = {
             const cidadeInput = document.getElementById('comp-cidade');
             const ufInput = document.getElementById('comp-uf');
             const cepInput = document.getElementById('comp-cep');
-            const telInput = document.getElementById('comp-telefone');
             const emailInput = document.getElementById('comp-email');
 
             if (nomeInput) nomeInput.value = razaoSocial;
@@ -375,8 +475,21 @@ window.CadastrosView = {
             if (cidadeInput && cidade) cidadeInput.value = cidade;
             if (ufInput && uf) ufInput.value = uf;
             if (cepInput && cep) cepInput.value = window.EMCUtils.formatarCep(cep);
-            if (telInput && telefone) telInput.value = window.EMCUtils.formatarTelefoneDinamico(telefone);
-            if (emailInput && email) emailInput.value = email;
+            if (emailInput && email && !emailInput.value.trim()) emailInput.value = email;
+
+            // Se veio telefone e a tabela está vazia ou com campos em branco, preenche
+            if (telefone) {
+              const tbody = document.getElementById('lista-contatos-modal-tbody');
+              const primeiroNome = tbody?.querySelector('.contato-nome');
+              const primeiroTel = tbody?.querySelector('.contato-telefone');
+
+              if (primeiroTel && !primeiroTel.value.trim()) {
+                primeiroTel.value = window.EMCUtils.formatarTelefoneDinamico(telefone);
+                if (primeiroNome && !primeiroNome.value.trim()) {
+                  primeiroNome.value = 'COMERCIAL / EMPRESA';
+                }
+              }
+            }
 
             window.EMCUtils.showToast('Dados do CNPJ preenchidos automaticamente via Receita Federal!', 'success');
           } else {

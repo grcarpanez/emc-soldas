@@ -237,6 +237,63 @@ class ClienteFornecedorAPITestCase(CadastrosBaseTestCase):
         res_list = self.client.get('/api/clientes-fornecedores/')
         self.assertEqual(res_list.data['count'], 0)
 
+    def test_criar_e_atualizar_cliente_com_multiplos_contatos_e_whatsapp(self):
+        """Valida cadastro e sincronização de múltiplos contatos telefônicos com flag de WhatsApp."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        payload = {
+            "tipo": "Cliente",
+            "tipo_pessoa": "PJ",
+            "nome_razao": "Construtora Horizonte Norte",
+            "cnpj_cpf": "33.000.167/0001-01",
+            "contatos": [
+                {
+                    "nome_contato": "Carlos Eduardo (Engenharia)",
+                    "telefone": "(11) 98765-4321",
+                    "is_whatsapp": True
+                },
+                {
+                    "nome_contato": "Mariana Souza (Financeiro)",
+                    "telefone": "(11) 3322-1100",
+                    "is_whatsapp": False
+                }
+            ]
+        }
+
+        response = self.client.post('/api/clientes-fornecedores/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['nome_razao'], 'CONSTRUTORA HORIZONTE NORTE')
+        self.assertEqual(response.data['telefone'], '11987654321')
+        
+        contatos = response.data['contatos']
+        self.assertEqual(len(contatos), 2)
+        self.assertEqual(contatos[0]['nome_contato'], 'CARLOS EDUARDO (ENGENHARIA)')
+        self.assertEqual(contatos[0]['telefone'], '11987654321')
+        self.assertTrue(contatos[0]['is_whatsapp'])
+        self.assertEqual(contatos[1]['nome_contato'], 'MARIANA SOUZA (FINANCEIRO)')
+        self.assertFalse(contatos[1]['is_whatsapp'])
+
+        # Atualização (PUT) alterando a lista de contatos
+        cliente_id = response.data['id']
+        payload_update = {
+            "nome_razao": "Construtora Horizonte Norte Atualizada",
+            "tipo": "Cliente",
+            "tipo_pessoa": "PJ",
+            "cnpj_cpf": "33.000.167/0001-01",
+            "contatos": [
+                {
+                    "nome_contato": "Roberto Diretor",
+                    "telefone": "(11) 99999-8888",
+                    "is_whatsapp": True
+                }
+            ]
+        }
+        res_put = self.client.put(f'/api/clientes-fornecedores/{cliente_id}/', payload_update, format='json')
+        self.assertEqual(res_put.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_put.data['contatos']), 1)
+        self.assertEqual(res_put.data['contatos'][0]['nome_contato'], 'ROBERTO DIRETOR')
+        self.assertEqual(res_put.data['contatos'][0]['telefone'], '11999998888')
+
     def test_rbac_permissoes_comercial_e_compras(self):
         """Testa o controle de acesso dinâmico RBAC para clientes e fornecedores."""
         # 1. Usuário sem permissão recebe 403
