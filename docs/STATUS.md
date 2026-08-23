@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real, Cartões Corporativos e Estornos)  
-**Fase Atual:** Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV) (Pronta para início)  
-**Próxima Fase:** Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 11 - Conciliação Bancária Inteligente Split-Screen OFX/CSV)  
+**Fase Atual:** Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Pronta para início)  
+**Próxima Fase:** Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)  
 
 ---
 
@@ -24,7 +24,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | **Concluída** | 100% |
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | **Concluída** | 100% |
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | **Concluída** | 100% |
-| **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | Pendente | 0% |
+| **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | **Concluída** | 100% |
 | **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | Pendente | 0% |
 | **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | Pendente | 0% |
 | **Fase 14** | Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*) | Pendente | 0% |
@@ -156,11 +156,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (108 testes no total acumulado do projeto).
 
 ### Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)
-- [ ] Implementar serviço de upload e parsing seguro de extratos OFX e CSV.
-- [ ] Implementar algoritmo de Match Automático 1:1 e Match Múltiplo (1:N).
-- [ ] Implementar endpoint de `Lançamento Rápido no Ato` para tarifas bancárias/rendimentos.
-- [ ] Implementar confirmação de conciliação com gravação de `is_conciliado = True`, data e operador.
-- [ ] Implementar dados analíticos para Relatório de Divergências de Conciliação.
+- [x] Implementar serviço de upload e parsing seguro de extratos OFX e CSV.
+- [x] Implementar algoritmo de Match Automático 1:1 e Match Múltiplo (1:N).
+- [x] Implementar endpoint de `Lançamento Rápido no Ato` para tarifas bancárias/rendimentos.
+- [x] Implementar confirmação de conciliação com gravação de `is_conciliado = True`, data e operador.
+- [x] Implementar dados analíticos para Relatório de Divergências de Conciliação.
+- [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_tesouraria` (`HasTesourariaAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (118 testes no total acumulado do projeto).
 
 ### Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)
 - [ ] Implementar Parâmetros Globais com criptografia simétrica AES-256 da senha SMTP e teste de disparo em tempo real.
@@ -195,5 +197,5 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 11 - Conciliação Bancária Inteligente Split-Screen (OFX/CSV)**, desenvolvendo a camada de parsing de extratos bancários em formato OFX e CSV (`/api/conciliacao/upload-extrato/`), o algoritmo de correspondência (Match Automático 1:1 e Match Múltiplo 1:N), endpoint de `Lançamento Rápido no Ato` para tarifas/rendimentos com conciliação imediata, e gravação mandatória de auditoria (`is_conciliado = True`, `data_conciliacao` e `conciliado_por_id`), protegido pelo toggle `acesso_tesouraria`.
+Iniciar a **Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)**, implementando a parametrização de Parâmetros Globais com criptografia simétrica AES-256 para senhas SMTP e teste de envio em tempo real, blindagem de não-retroatividade para taxa horária e validade de orçamentos, rotina de expurgo de logs via manifesto TTL (`ControleArquivoLog`), Log Viewer do servidor para o Administrador, Gestão de Equipe com os 10 toggles dinâmicos por usuário, e Painel de Lixeira e Restauração segregado (Lixeira Global para Administrador e Minha Lixeira para Operador).
 
