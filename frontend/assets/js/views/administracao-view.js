@@ -21,6 +21,9 @@ window.AdministracaoView = {
         <button class="tab-btn ${this.currentTab === 'smtp' ? 'active' : ''}" id="tab-btn-adm-smtp">
           SERVIÇO SMTP (E-MAILS)
         </button>
+        <button class="tab-btn ${this.currentTab === 'dicionarios' ? 'active' : ''}" id="tab-btn-adm-dicionarios">
+          DICIONÁRIOS MESTRES (UOM & ATRIBUTOS)
+        </button>
         <button class="tab-btn ${this.currentTab === 'equipe' ? 'active' : ''}" id="tab-btn-adm-equipe">
           GESTÃO DE EQUIPE (RBAC)
         </button>
@@ -43,6 +46,10 @@ window.AdministracaoView = {
       this.currentTab = 'smtp';
       this.render(container);
     });
+    document.getElementById('tab-btn-adm-dicionarios')?.addEventListener('click', () => {
+      this.currentTab = 'dicionarios';
+      this.render(container);
+    });
     document.getElementById('tab-btn-adm-equipe')?.addEventListener('click', () => {
       this.currentTab = 'equipe';
       this.render(container);
@@ -61,6 +68,8 @@ window.AdministracaoView = {
       this.renderParametros(content);
     } else if (this.currentTab === 'smtp') {
       this.renderSmtp(content);
+    } else if (this.currentTab === 'dicionarios') {
+      this.renderDicionariosMestres(content);
     } else if (this.currentTab === 'equipe') {
       this.renderEquipe(content);
     } else if (this.currentTab === 'logs') {
@@ -610,6 +619,186 @@ ${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
       this.carregarLixeira(entidade);
     } catch (err) {
       window.EMCUtils.showToast(err.message || 'Erro ao restaurar registro.', 'error');
+    }
+  },
+
+  // ==========================================================================
+  // 6. DICIONÁRIOS MESTRES (UOM & ATRIBUTOS TÉCNICOS)
+  // ==========================================================================
+  async renderDicionariosMestres(container) {
+    container.innerHTML = `
+      <div class="grid grid-cols-12 mb-24">
+        <!-- Card 1: Dicionário UOM -->
+        <div class="card col-span-6">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h3>UNIDADES DE MEDIDA (UOM)</h3>
+              <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PADRÕES DE COMPRA, CONSUMO E VENDA</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-novo-uom-adm">+ NOVA UOM</button>
+          </div>
+          <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>SIGLA</th>
+                  <th>DESCRIÇÃO OFICIAL</th>
+                </tr>
+              </thead>
+              <tbody id="lista-uom-adm-tbody">
+                <tr><td colspan="3" class="text-center"><div class="loader-spinner"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Card 2: Catálogo de Atributos Técnicos -->
+        <div class="card col-span-6">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h3>ATRIBUTOS TÉCNICOS</h3>
+              <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PROPRIEDADES DINÂMICAS DE INSUMOS</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-novo-attr-adm">+ NOVO ATRIBUTO</button>
+          </div>
+          <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>NOME DO ATRIBUTO</th>
+                  <th style="text-align: right;">STATUS</th>
+                </tr>
+              </thead>
+              <tbody id="lista-attr-adm-tbody">
+                <tr><td colspan="3" class="text-center"><div class="loader-spinner"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-novo-uom-adm')?.addEventListener('click', () => {
+      window.EMCUtils.openModal({
+        title: 'NOVA UNIDADE DE MEDIDA (UOM)',
+        size: 'sm',
+        confirmText: 'SALVAR',
+        content: `
+          <div class="form-group">
+            <label class="form-label">Sigla (Ex: KG, M2, L, UN, CX) *</label>
+            <input type="text" id="uom-sigla" class="form-control mono-text" maxlength="10" required autofocus>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição Oficial *</label>
+            <input type="text" id="uom-desc" class="form-control" required>
+          </div>
+        `,
+        onConfirm: async () => {
+          const sigla = document.getElementById('uom-sigla').value.trim();
+          const descricao = document.getElementById('uom-desc').value.trim();
+          if (!sigla || !descricao) return false;
+
+          try {
+            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM, { sigla, descricao });
+            window.EMCUtils.showToast('UOM cadastrada com sucesso!', 'success');
+            this.carregarUomsAdm();
+            return true;
+          } catch (e) {
+            window.EMCUtils.showToast(e.message || 'Erro ao salvar UOM.', 'error');
+            return false;
+          }
+        }
+      });
+    });
+
+    document.getElementById('btn-novo-attr-adm')?.addEventListener('click', () => {
+      window.EMCUtils.openModal({
+        title: 'NOVO ATRIBUTO TÉCNICO',
+        size: 'sm',
+        confirmText: 'SALVAR',
+        content: `
+          <div class="form-group">
+            <label class="form-label">Nome do Atributo (Ex: ESPESSURA, LIGA, ROSCA) *</label>
+            <input type="text" id="attr-nome" class="form-control" required autofocus>
+          </div>
+        `,
+        onConfirm: async () => {
+          const nome_atributo = document.getElementById('attr-nome').value.trim();
+          if (!nome_atributo) return false;
+
+          try {
+            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS, { nome_atributo });
+            window.EMCUtils.showToast('Atributo técnico cadastrado!', 'success');
+            this.carregarAtributosAdm();
+            return true;
+          } catch (e) {
+            window.EMCUtils.showToast(e.message || 'Erro ao salvar atributo.', 'error');
+            return false;
+          }
+        }
+      });
+    });
+
+    await Promise.all([this.carregarUomsAdm(), this.carregarAtributosAdm()]);
+  },
+
+  async carregarUomsAdm() {
+    const tbody = document.getElementById('lista-uom-adm-tbody');
+    if (!tbody) return;
+
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM);
+      const lista = res.results || res || [];
+
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center mono-text">Nenhuma UOM cadastrada.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      lista.forEach((u) => {
+        html += `
+          <tr>
+            <td class="mono-text">#${u.id}</td>
+            <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(u.sigla)}</strong></td>
+            <td>${window.EMCUtils.escapeHtml(u.descricao)}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  async carregarAtributosAdm() {
+    const tbody = document.getElementById('lista-attr-adm-tbody');
+    if (!tbody) return;
+
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS);
+      const lista = res.results || res || [];
+
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center mono-text">Nenhum atributo cadastrado.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      lista.forEach((a) => {
+        html += `
+          <tr>
+            <td class="mono-text">#${a.id}</td>
+            <td><strong>${window.EMCUtils.escapeHtml(a.nome_atributo)}</strong></td>
+            <td style="text-align: right;"><span class="status-chip success">ATIVO</span></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   }
 };

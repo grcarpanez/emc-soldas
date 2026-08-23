@@ -9,8 +9,8 @@ window.CadastrosView = {
     container.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
         <div>
-          <h1 style="font-size: 24px; font-weight: 700;">CADASTROS &STRUTURAIS</h1>
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">GESTÃO DE CLIENTES, FORNECEDORES, MÁQUINAS E DICIONÁRIOS</p>
+          <h1 style="font-size: 24px; font-weight: 700;">CLIENTES & EQUIPAMENTOS</h1>
+          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">GESTÃO OPERACIONAL DE CLIENTES, FORNECEDORES, VEÍCULOS E FROTAS</p>
         </div>
       </div>
 
@@ -21,12 +21,6 @@ window.CadastrosView = {
         </button>
         <button class="tab-btn ${this.currentTab === 'equipamentos' ? 'active' : ''}" id="tab-btn-equipamentos">
           EQUIPAMENTOS & VEÍCULOS
-        </button>
-        <button class="tab-btn ${this.currentTab === 'dicionario-uom' ? 'active' : ''}" id="tab-btn-uom">
-          DICIONÁRIO UOM
-        </button>
-        <button class="tab-btn ${this.currentTab === 'dicionario-atributos' ? 'active' : ''}" id="tab-btn-atributos">
-          DICIONÁRIO ATRIBUTOS
         </button>
       </div>
 
@@ -42,24 +36,12 @@ window.CadastrosView = {
       this.currentTab = 'equipamentos';
       this.render(container);
     });
-    document.getElementById('tab-btn-uom')?.addEventListener('click', () => {
-      this.currentTab = 'dicionario-uom';
-      this.render(container);
-    });
-    document.getElementById('tab-btn-atributos')?.addEventListener('click', () => {
-      this.currentTab = 'dicionario-atributos';
-      this.render(container);
-    });
 
     const content = document.getElementById('cadastros-tab-content');
     if (this.currentTab === 'clientes') {
       this.renderClientes(content);
     } else if (this.currentTab === 'equipamentos') {
       this.renderEquipamentos(content);
-    } else if (this.currentTab === 'dicionario-uom') {
-      this.renderDicionarioUom(content);
-    } else if (this.currentTab === 'dicionario-atributos') {
-      this.renderDicionarioAtributos(content);
     }
   },
 
@@ -540,181 +522,6 @@ window.CadastrosView = {
       this.abrirModalEquipamento(equip);
     } catch (err) {
       window.EMCUtils.showToast('Erro ao carregar dados do equipamento.', 'error');
-    }
-  },
-
-  // ==========================================================================
-  // 3. DICIONÁRIO UOM
-  // ==========================================================================
-  async renderDicionarioUom(container) {
-    container.innerHTML = `
-      <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">UNIDADES DE MEDIDA PADRONIZADAS (COMPRA, CONSUMO E VENDA)</p>
-          <button class="btn btn-primary" id="btn-novo-uom">+ NOVA UNIDADE DE MEDIDA</button>
-        </div>
-      </div>
-
-      <div class="table-container">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>SIGLA</th>
-              <th>DESCRIÇÃO OFICIAL</th>
-              <th style="text-align: right;">AÇÕES</th>
-            </tr>
-          </thead>
-          <tbody id="lista-uom-tbody">
-            <tr><td colspan="4" class="text-center"><div class="loader-spinner"></div></td></tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-
-    document.getElementById('btn-novo-uom')?.addEventListener('click', () => {
-      window.EMCUtils.openModal({
-        title: 'NOVA UNIDADE DE MEDIDA (UOM)',
-        size: 'sm',
-        confirmText: 'SALVAR',
-        content: `
-          <div class="form-group">
-            <label class="form-label">Sigla (Ex: KG, M2, L, UN, CX) *</label>
-            <input type="text" id="uom-sigla" class="form-control mono-text" maxlength="10" required autofocus>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Descrição Oficial *</label>
-            <input type="text" id="uom-desc" class="form-control" required>
-          </div>
-        `,
-        onConfirm: async () => {
-          const sigla = document.getElementById('uom-sigla').value.trim();
-          const descricao = document.getElementById('uom-desc').value.trim();
-          if (!sigla || !descricao) return false;
-
-          try {
-            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM, { sigla, descricao });
-            window.EMCUtils.showToast('UOM cadastrada com sucesso!', 'success');
-            this.renderDicionarioUom(container);
-            return true;
-          } catch (e) {
-            window.EMCUtils.showToast(e.message || 'Erro ao salvar UOM.', 'error');
-            return false;
-          }
-        }
-      });
-    });
-
-    try {
-      const res = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM);
-      const lista = res.results || res || [];
-      const tbody = document.getElementById('lista-uom-tbody');
-
-      if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center mono-text">Nenhuma UOM cadastrada.</td></tr>';
-        return;
-      }
-
-      let html = '';
-      lista.forEach((u) => {
-        html += `
-          <tr>
-            <td class="mono-text">#${u.id}</td>
-            <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(u.sigla)}</strong></td>
-            <td>${window.EMCUtils.escapeHtml(u.descricao)}</td>
-            <td style="text-align: right;">
-              <span class="mono-text" style="color: var(--color-on-surface-variant); font-size: 11px;">PADRÃO</span>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-    } catch (err) {
-      document.getElementById('lista-uom-tbody').innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
-    }
-  },
-
-  // ==========================================================================
-  // 4. DICIONÁRIO ATRIBUTOS
-  // ==========================================================================
-  async renderDicionarioAtributos(container) {
-    container.innerHTML = `
-      <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">CATÁLOGO CENTRAL DE CARACTERÍSTICAS TÉCNICAS (ESPESSURA, DIÂMETRO, LIGA)</p>
-          <button class="btn btn-primary" id="btn-novo-atributo">+ NOVO ATRIBUTO</button>
-        </div>
-      </div>
-
-      <div class="table-container">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>NOME DO ATRIBUTO</th>
-              <th style="text-align: right;">AÇÕES</th>
-            </tr>
-          </thead>
-          <tbody id="lista-atributos-tbody">
-            <tr><td colspan="3" class="text-center"><div class="loader-spinner"></div></td></tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-
-    document.getElementById('btn-novo-atributo')?.addEventListener('click', () => {
-      window.EMCUtils.openModal({
-        title: 'NOVO ATRIBUTO TÉCNICO',
-        size: 'sm',
-        confirmText: 'SALVAR',
-        content: `
-          <div class="form-group">
-            <label class="form-label">Nome do Atributo (Ex: ESPESSURA, LIGA, ROSCA) *</label>
-            <input type="text" id="attr-nome" class="form-control" required autofocus>
-          </div>
-        `,
-        onConfirm: async () => {
-          const nome_atributo = document.getElementById('attr-nome').value.trim();
-          if (!nome_atributo) return false;
-
-          try {
-            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS, { nome_atributo });
-            window.EMCUtils.showToast('Atributo cadastrado com sucesso!', 'success');
-            this.renderDicionarioAtributos(container);
-            return true;
-          } catch (e) {
-            window.EMCUtils.showToast(e.message || 'Erro ao salvar atributo.', 'error');
-            return false;
-          }
-        }
-      });
-    });
-
-    try {
-      const res = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS);
-      const lista = res.results || res || [];
-      const tbody = document.getElementById('lista-atributos-tbody');
-
-      if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center mono-text">Nenhum atributo cadastrado.</td></tr>';
-        return;
-      }
-
-      let html = '';
-      lista.forEach((a) => {
-        html += `
-          <tr>
-            <td class="mono-text">#${a.id}</td>
-            <td><strong>${window.EMCUtils.escapeHtml(a.nome_atributo)}</strong></td>
-            <td style="text-align: right;">
-              <span class="mono-text" style="color: var(--color-on-surface-variant); font-size: 11px;">ATIVO</span>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-    } catch (err) {
-      document.getElementById('lista-atributos-tbody').innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   }
 };
