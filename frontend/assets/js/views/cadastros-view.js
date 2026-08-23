@@ -211,7 +211,7 @@ window.CadastrosView = {
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="comp-documento">CPF / CNPJ (Identificação Fiscal)</label>
               <div style="position: relative;">
-                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite CPF (11 dígitos) ou CNPJ (14 dígitos)..." value="${cliente?.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(cliente.cnpj_cpf) : ''}" autofocus>
+                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite CPF ou CNPJ..." value="${cliente?.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(cliente.cnpj_cpf) : ''}" autofocus>
                 <div id="doc-spinner" class="loader-spinner" style="position: absolute; right: 12px; top: 12px; display: none; width: 18px; height: 18px;"></div>
               </div>
               <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px; display: block;">
@@ -342,8 +342,20 @@ window.CadastrosView = {
         try {
           const endpoint = window.CONFIG.ENDPOINTS.CADASTROS.CONSULTA_CNPJ.replace('{cnpj}', doc);
           const res = await window.api.get(endpoint);
+          const data = res?.data || res;
 
-          if (res && res.razao_social) {
+          if (data && (data.nome_razao || data.razao_social || data.nome)) {
+            const razaoSocial = data.nome_razao || data.razao_social || data.nome || '';
+            const nomeFantasia = data.nome_fantasia || data.fantasia || '';
+            const logradouro = data.logradouro || '';
+            const numero = data.numero || '';
+            const bairro = data.bairro || '';
+            const cidade = data.cidade || data.municipio || '';
+            const uf = data.uf || '';
+            const cep = data.cep || '';
+            const telefone = data.telefone || data.ddd_telefone_1 || '';
+            const email = data.email || '';
+
             const nomeInput = document.getElementById('comp-nome');
             const fantasiaInput = document.getElementById('comp-fantasia');
             const logradouroInput = document.getElementById('comp-logradouro');
@@ -355,26 +367,20 @@ window.CadastrosView = {
             const telInput = document.getElementById('comp-telefone');
             const emailInput = document.getElementById('comp-email');
 
-            if (nomeInput && (!nomeInput.value.trim() || nomeInput.value === res.razao_social)) {
-              nomeInput.value = res.razao_social;
-            }
-            if (fantasiaInput && res.nome_fantasia && !fantasiaInput.value.trim()) {
-              fantasiaInput.value = res.nome_fantasia;
-            }
-            if (logradouroInput && res.logradouro) logradouroInput.value = res.logradouro;
-            if (numeroInput && res.numero) numeroInput.value = res.numero;
-            if (bairroInput && res.bairro) bairroInput.value = res.bairro;
-            if (cidadeInput && res.cidade) cidadeInput.value = res.cidade;
-            if (ufInput && res.uf) ufInput.value = res.uf;
-            if (cepInput && res.cep) cepInput.value = window.EMCUtils.formatarCep(res.cep);
-            if (telInput && res.telefone && !telInput.value.trim()) {
-              telInput.value = window.EMCUtils.formatarTelefoneDinamico(res.telefone);
-            }
-            if (emailInput && res.email && !emailInput.value.trim()) {
-              emailInput.value = res.email;
-            }
+            if (nomeInput) nomeInput.value = razaoSocial;
+            if (fantasiaInput && nomeFantasia) fantasiaInput.value = nomeFantasia;
+            if (logradouroInput && logradouro) logradouroInput.value = logradouro;
+            if (numeroInput && numero) numeroInput.value = numero;
+            if (bairroInput && bairro) bairroInput.value = bairro;
+            if (cidadeInput && cidade) cidadeInput.value = cidade;
+            if (ufInput && uf) ufInput.value = uf;
+            if (cepInput && cep) cepInput.value = window.EMCUtils.formatarCep(cep);
+            if (telInput && telefone) telInput.value = window.EMCUtils.formatarTelefoneDinamico(telefone);
+            if (emailInput && email) emailInput.value = email;
 
             window.EMCUtils.showToast('Dados do CNPJ preenchidos automaticamente via Receita Federal!', 'success');
+          } else {
+            window.EMCUtils.showToast('Nenhum dado retornado para este CNPJ.', 'warning');
           }
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'CNPJ não localizado na Receita Federal.', 'warning');

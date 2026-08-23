@@ -154,9 +154,19 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
+## 2026-08-23 - Falha de Preenchimento Automático na Consulta de CNPJ por Divergência de Estrutura de Resposta
+
+- **Sintoma:** Ao sair do campo de documento com 14 dígitos de CNPJ, a consulta externa ocorria com sucesso no backend, mas os campos do formulário (Razão Social, Endereço, etc.) não eram preenchidos automaticamente.
+- **Causa:** O backend retorna o objeto padronizado envolvido na chave `data` (`{ status: "success", data: { nome_razao: "...", ... } }`), enquanto o frontend tentava acessar diretamente na raiz do objeto (`res.razao_social`). Como `res.razao_social` era `undefined`, a condição `if (res && res.razao_social)` não executava a atribuição aos inputs.
+- **Solução aplicada:** Refatoração de `handleAutoConsultaDocumento` em `cadastros-view.js` para extrair os dados via `const data = res?.data || res;` e mapear com fallbacks flexíveis (`data.nome_razao || data.razao_social || data.nome`), atribuindo diretamente aos elementos do DOM e acionando formatadores de CEP e Telefone.
+- **Como evitar no futuro:** Sempre inspecionar a estrutura exata do contrato de dados retornado pelos endpoints proxy utilitários ao integrar o consumo no frontend.
+
+---
+
 ## 2026-08-23 - Segregação de Dados Mestres: Dicionários UOM e Atributos Técnicos em Administração
 
 - **Sintoma:** A tela de "Clientes & Equipamentos" concentrava abas operacionais (Clientes e Veículos) misturadas com abas estruturais/administrativas (Dicionário UOM e Dicionário de Atributos).
 - **Causa:** Estruturação inicial agrupou todos os cadastros em uma mesma visão, sobrecarregando a interface operacional.
 - **Solução aplicada:** Segregação arquitetural: a tela de *Clientes & Equipamentos* passou a conter exclusivamente dados operacionais (*Clientes & Fornecedores* e *Equipamentos & Veículos*), enquanto os *Dicionários Mestres (UOM & Atributos)* foram movidos para a *Central do Administrador*, protegidos por controle de acesso RBAC.
 - **Como evitar no futuro:** Separar dados mestres estruturais e de governança das telas de operação diária de chão de oficina e atendimento.
+
