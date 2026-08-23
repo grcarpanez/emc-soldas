@@ -12,6 +12,7 @@ from django.utils import timezone
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm, inch
+from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, HRFlowable
 )
@@ -31,6 +32,48 @@ COLOR_ALT_ROW = colors.HexColor('#F1F3F5')
 COLOR_BORDER = colors.HexColor('#D1D5DB')
 COLOR_TEXT_MAIN = colors.HexColor('#131313')
 COLOR_TEXT_MUTED = colors.HexColor('#555555')
+
+
+class NumberedCanvas(canvas.Canvas):
+    """
+    Canvas em dois passos para computar o total exato de páginas (Página X de Y)
+    e renderizar o rodapé institucional em todas as páginas do orçamento.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            super().showPage()
+        super().save()
+
+    def draw_page_number(self, page_count):
+        self.saveState()
+        self.setFont("Helvetica", 7.5)
+        self.setFillColor(COLOR_TEXT_MUTED)
+
+        # Linha técnica de rodapé
+        self.setStrokeColor(COLOR_BORDER)
+        self.setLineWidth(0.5)
+        self.line(14 * mm, 12 * mm, 210 * mm - 14 * mm, 12 * mm)
+
+        # Identificação técnica à esquerda
+        data_hora_emissao = timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')
+        texto_esquerda = f"EMC Soldas ERP • Proposta Comercial gerada eletronicamente em {data_hora_emissao}"
+        self.drawString(14 * mm, 7.5 * mm, texto_esquerda)
+
+        # Numeração de páginas à direita
+        texto_direita = f"Página {self._pageNumber} de {page_count}"
+        self.drawRightString(210 * mm - 14 * mm, 7.5 * mm, texto_direita)
+        self.restoreState()
 
 
 def formatar_moeda(valor):
@@ -68,7 +111,7 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
         leftMargin=14 * mm,
         rightMargin=14 * mm,
         topMargin=14 * mm,
-        bottomMargin=14 * mm
+        bottomMargin=18 * mm
     )
 
     styles = getSampleStyleSheet()
@@ -131,6 +174,16 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
         alignment=TA_LEFT
     )
 
+    style_cell_header_center = ParagraphStyle(
+        'CellHeaderCenter',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=10,
+        textColor=colors.white,
+        alignment=TA_CENTER
+    )
+
     style_cell_header_right = ParagraphStyle(
         'CellHeaderRight',
         parent=styles['Normal'],
@@ -148,6 +201,16 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
         fontSize=8.5,
         leading=11,
         textColor=COLOR_TEXT_MAIN
+    )
+
+    style_cell_center = ParagraphStyle(
+        'CellCenter',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8.5,
+        leading=11,
+        textColor=COLOR_TEXT_MAIN,
+        alignment=TA_CENTER
     )
 
     style_cell_bold = ParagraphStyle(
@@ -316,21 +379,21 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
 
     # 3. TABELA DE ITENS E SERVIÇOS
     itens_header = [
-        Paragraph("#", style_cell_header),
+        Paragraph("#", style_cell_header_center),
         Paragraph("DESCRIÇÃO DO ITEM / SERVIÇO", style_cell_header),
-        Paragraph("QTD", style_cell_header_right),
-        Paragraph("UN", style_cell_header),
-        Paragraph("PREÇO UNIT.", style_cell_header_right),
-        Paragraph("SUBTOTAL", style_cell_header_right),
+        Paragraph("QTD", style_cell_header_center),
+        Paragraph("UN", style_cell_header_center),
+        Paragraph("PREÇO UNIT.", style_cell_header_center),
+        Paragraph("SUBTOTAL", style_cell_header_center),
     ]
 
     itens_rows = [itens_header]
     col_w_idx = 8 * mm
-    col_w_desc = 94 * mm
+    col_w_desc = 90 * mm
     col_w_qtd = 16 * mm
     col_w_un = 14 * mm
-    col_w_unit = 25 * mm
-    col_w_sub = 25 * mm
+    col_w_unit = 27 * mm
+    col_w_sub = 27 * mm
 
     itens_orcamento = orcamento.itens_orcamento.select_related(
         'produto', 'item', 'produto__unidade_venda', 'item__unidade_compra'
@@ -354,17 +417,18 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
         subtotal_str = formatar_moeda(subtotal_val)
 
         itens_rows.append([
-            Paragraph(f"{idx:02d}", style_cell_text),
+            Paragraph(f"{idx:02d}", style_cell_center),
             Paragraph(nome_item.upper(), style_cell_text),
-            Paragraph(qtd_str, style_cell_right),
-            Paragraph(unidade.upper(), style_cell_text),
+            Paragraph(qtd_str, style_cell_center),
+            Paragraph(unidade.upper(), style_cell_center),
             Paragraph(unit_str, style_cell_right),
             Paragraph(subtotal_str, style_cell_right_bold),
         ])
 
     itens_table = Table(
         itens_rows,
-        colWidths=[col_w_idx, col_w_desc, col_w_qtd, col_w_un, col_w_unit, col_w_sub]
+        colWidths=[col_w_idx, col_w_desc, col_w_qtd, col_w_un, col_w_unit, col_w_sub],
+        repeatRows=1
     )
 
     t_style = [
@@ -526,7 +590,7 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
     elements.append(KeepTogether(bloco_final))
 
     # Constrói o documento
-    doc.build(elements)
+    doc.build(elements, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer
 
@@ -534,7 +598,7 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
 def salvar_pdf_exemplo(caminho_arquivo):
     """
     Gera um PDF de demonstração com dados fictícios completos e salva no caminho especificado.
-    Útil para validação visual e aprovação do usuário.
+    Contém 14 itens detalhados para demonstrar perfeitamente o comportamento e paginação em 2 folhas.
     """
     from apps.cadastros.models import ClienteFornecedor, Equipamento
     from apps.catalogo.models import Item, Produto, DicionarioUom
@@ -543,6 +607,9 @@ def salvar_pdf_exemplo(caminho_arquivo):
 
     uom_un = DicionarioUom(id=1, sigla='UN', descricao='UNIDADE')
     uom_kg = DicionarioUom(id=2, sigla='KG', descricao='QUILOGRAMA')
+    uom_m = DicionarioUom(id=3, sigla='M', descricao='METRO')
+    uom_cj = DicionarioUom(id=4, sigla='CJ', descricao='CONJUNTO')
+    uom_h = DicionarioUom(id=5, sigla='H', descricao='HORA')
 
     cliente = ClienteFornecedor(
         id=1,
@@ -561,27 +628,24 @@ def salvar_pdf_exemplo(caminho_arquivo):
     equipamento = Equipamento(
         id=1,
         placa='EMC-2026',
-        identificacao='MAQUINA SOLDA MIG/MAG ESAB 400A',
-        descricao='CABECOTE REFORCADO E SISTEMA DE REFRIGERACAO INDUSTRIAL'
+        identificacao='MAQUINA SOLDA MIG/MAG ESAB 400A / CARRETA PRANCHA',
+        descricao='CHASSI REFORCADO, SISTEMA DE SUSPENSAO PESADA E ESTRUTURA METÁLICA DE TRANSPORTE'
     )
 
-    item_eletrodo = Item(
-        id=1,
-        nome='ELETRODO REVESTIDO E7018 3.25MM',
-        unidade_compra=uom_kg,
-        fator_conversao=Decimal('1.0000'),
-        ultimo_custo_compra=Decimal('28.50'),
-        tipo_uso='INSUMO_PRODUTIVO'
-    )
+    # Insumos / Materiais
+    item_eletrodo = Item(id=1, nome='ELETRODO REVESTIDO AWS E7018 3.25MM', unidade_compra=uom_kg, ultimo_custo_compra=Decimal('28.50'))
+    item_chapa_aco = Item(id=2, nome='CHAPA ACO CARBONO ASTM A36 1/2 POL (12.7MM)', unidade_compra=uom_kg, ultimo_custo_compra=Decimal('8.90'))
+    item_arame_mig = Item(id=3, nome='ARAME TUBULAR MIG/MAG E71T-1 1.2MM (ROLO 15KG)', unidade_compra=uom_kg, ultimo_custo_compra=Decimal('22.40'))
+    item_viga_w = Item(id=4, nome='VIGA METALICA PERFIL W 200X26.6 ASTM A572 GR50', unidade_compra=uom_m, ultimo_custo_compra=Decimal('185.00'))
+    item_disco_corte = Item(id=5, nome='DISCO DE CORTE INDUSTRIAL 7X1/8 NORTON', unidade_compra=uom_un, ultimo_custo_compra=Decimal('14.20'))
+    item_tinta_epoxi = Item(id=6, nome='TINTA EPOXI PRIMER BI-COMPONENTE ALTA ESPESSURA', unidade_compra=uom_un, ultimo_custo_compra=Decimal('160.00'))
 
-    produto_reforma = Produto(
-        id=1,
-        nome='REFORMA ESTRUTURAL DE CHASSI E SOLDA TIG ALTA PRECISAO',
-        unidade_venda=uom_un,
-        descricao='RECUPERACAO COMPLETA DE VIGAS DE SUSTENTACAO E REFAZIMENTO DE JUNTAS SOLDADAS',
-        tempo_estimado_execucao=Decimal('4.50')
-    )
+    # Produtos / Serviços Compostos
+    prod_recup_chassi = Produto(id=1, nome='RECUPERACAO E ALINHAMENTO ESTRUTURAL DE CHASSI PESADO', unidade_venda=uom_cj, tempo_estimado_execucao=Decimal('8.00'))
+    prod_solda_tig = Produto(id=2, nome='SOLDA TIG ESPECIAL EM TUBULACOES E ACESSORIOS DE INOX', unidade_venda=uom_m, tempo_estimado_execucao=Decimal('3.50'))
+    prod_fabric_suporte = Produto(id=3, nome='FABRICACAO E MONTAGEM DE SUPORTES REFORCADOS DE FIXACAO', unidade_venda=uom_un, tempo_estimado_execucao=Decimal('4.00'))
 
+    # Meios e Regras de Pagamento
     meio_pix = MeioPagamento(id=1, nome='PIX', ativo=True)
     meio_boleto = MeioPagamento(id=2, nome='BOLETO BANCARIO', ativo=True)
 
@@ -596,10 +660,10 @@ def salvar_pdf_exemplo(caminho_arquivo):
 
     regra_boleto = RegraPagamento(
         id=2,
-        nome='BOLETO 30/60 DIAS',
+        nome='BOLETO 30/60/90 DIAS',
         meio_pagamento=meio_boleto,
         tipo_cobranca='PARCELADO',
-        numero_parcelas=2,
+        numero_parcelas=3,
         prazo_primeira_parcela_dias=30,
         intervalo_parcelas_dias=30,
         desconto_concedido_padrao=Decimal('0.00')
@@ -641,39 +705,29 @@ def salvar_pdf_exemplo(caminho_arquivo):
 
     hoje = timezone.now().date()
 
-    # Cria itens mock em memória para renderização
-    item1 = OrcamentoItem(
-        id=1,
-        produto=produto_reforma,
-        quantidade=Decimal('1.0000'),
-        custo_snapshot=Decimal('488.25'),
-        valor_venda_snapshot=Decimal('1450.00')
-    )
-    item2 = OrcamentoItem(
-        id=2,
-        item=item_eletrodo,
-        quantidade=Decimal('5.0000'),
-        custo_snapshot=Decimal('28.50'),
-        valor_venda_snapshot=Decimal('50.00')
-    )
-    item3 = OrcamentoItem(
-        id=3,
-        descricao_livre='TESTE HIDROSTATICO E LAUDO TECNICO DE ENSAIO NAO DESTRUTIVO (END)',
-        quantidade=Decimal('1.0000'),
-        custo_snapshot=Decimal('50.00'),
-        valor_venda_snapshot=Decimal('150.00')
-    )
+    # 14 Itens Detalhados para ocupação de 2 folhas com paginação técnica
+    itens_mock = [
+        OrcamentoItem(id=1, produto=prod_recup_chassi, quantidade=Decimal('1.0000'), custo_snapshot=Decimal('1250.00'), valor_venda_snapshot=Decimal('3400.00')),
+        OrcamentoItem(id=2, item=item_viga_w, quantidade=Decimal('6.0000'), custo_snapshot=Decimal('185.00'), valor_venda_snapshot=Decimal('320.00')),
+        OrcamentoItem(id=3, item=item_chapa_aco, quantidade=Decimal('85.0000'), custo_snapshot=Decimal('8.90'), valor_venda_snapshot=Decimal('16.50')),
+        OrcamentoItem(id=4, produto=prod_fabric_suporte, quantidade=Decimal('4.0000'), custo_snapshot=Decimal('320.00'), valor_venda_snapshot=Decimal('650.00')),
+        OrcamentoItem(id=5, item=item_arame_mig, quantidade=Decimal('30.0000'), custo_snapshot=Decimal('22.40'), valor_venda_snapshot=Decimal('38.00')),
+        OrcamentoItem(id=6, item=item_eletrodo, quantidade=Decimal('15.0000'), custo_snapshot=Decimal('28.50'), valor_venda_snapshot=Decimal('48.00')),
+        OrcamentoItem(id=7, produto=prod_solda_tig, quantidade=Decimal('5.5000'), custo_snapshot=Decimal('210.00'), valor_venda_snapshot=Decimal('420.00')),
+        OrcamentoItem(id=8, item=item_disco_corte, quantidade=Decimal('20.0000'), custo_snapshot=Decimal('14.20'), valor_venda_snapshot=Decimal('25.00')),
+        OrcamentoItem(id=9, descricao_livre='CORTE PLASMA CNC E CHANFRO DE BORDAS PARA SOLDA PENETRACAO TOTAL', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('180.00'), valor_venda_snapshot=Decimal('450.00')),
+        OrcamentoItem(id=10, descricao_livre='USINAGEM DE BUCHAS E PINOS EM ACO SAE 1045 TRATADO TERMICAMENTE', quantidade=Decimal('8.0000'), custo_snapshot=Decimal('65.00'), valor_venda_snapshot=Decimal('140.00')),
+        OrcamentoItem(id=11, descricao_livre='JATEAMENTO ABRASIVO COM GRANALHA DE ACO PADRAO SA 2.5', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('350.00'), valor_venda_snapshot=Decimal('850.00')),
+        OrcamentoItem(id=12, item=item_tinta_epoxi, quantidade=Decimal('3.0000'), custo_snapshot=Decimal('160.00'), valor_venda_snapshot=Decimal('290.00')),
+        OrcamentoItem(id=13, descricao_livre='ENSAIO NAO DESTRUTIVO (END) POR LIQUIDO PENETRANTE E ULTRA-SOM', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('200.00'), valor_venda_snapshot=Decimal('600.00')),
+        OrcamentoItem(id=14, descricao_livre='EMISSAO DE LAUDO TECNICO COM ART (ANOTACAO DE RESPONSABILIDADE TECNICA)', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('150.00'), valor_venda_snapshot=Decimal('400.00')),
+    ]
 
-    prop1 = OrcamentoPropostaPagamento(
-        id=1,
-        regra_pagamento=regra_pix,
-        desconto_personalizado=Decimal('5.00')
-    )
-    prop2 = OrcamentoPropostaPagamento(
-        id=2,
-        regra_pagamento=regra_boleto,
-        desconto_personalizado=Decimal('0.00')
-    )
+    valor_bruto_total = sum(i.quantidade * i.valor_venda_snapshot for i in itens_mock)
+    desconto_aplicado = Decimal('500.00')
+
+    prop1 = OrcamentoPropostaPagamento(id=1, regra_pagamento=regra_pix, desconto_personalizado=Decimal('5.00'))
+    prop2 = OrcamentoPropostaPagamento(id=2, regra_pagamento=regra_boleto, desconto_personalizado=Decimal('0.00'))
 
     orcamento = MockOrcamento(
         id=1089,
@@ -683,14 +737,19 @@ def salvar_pdf_exemplo(caminho_arquivo):
         data_validade=hoje + timezone.timedelta(days=15),
         status_operacional='APROVADO',
         status_financeiro='A_FATURAR',
-        valor_bruto=Decimal('1850.00'),
-        valor_desconto_aplicado=Decimal('100.00'),
-        itens=[item1, item2, item3],
+        valor_bruto=valor_bruto_total,
+        valor_desconto_aplicado=desconto_aplicado,
+        itens=itens_mock,
         propostas=[prop1, prop2]
     )
 
     os.makedirs(os.path.dirname(caminho_arquivo), exist_ok=True)
-    with open(caminho_arquivo, 'wb') as f:
-        gerar_pdf_orcamento(orcamento, buffer=f)
+    try:
+        with open(caminho_arquivo, 'wb') as f:
+            gerar_pdf_orcamento(orcamento, buffer=f)
+    except PermissionError:
+        caminho_arquivo = caminho_arquivo.replace('.pdf', '_multi_pagina.pdf')
+        with open(caminho_arquivo, 'wb') as f:
+            gerar_pdf_orcamento(orcamento, buffer=f)
 
     return caminho_arquivo
