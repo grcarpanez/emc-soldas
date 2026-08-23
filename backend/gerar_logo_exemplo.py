@@ -8,40 +8,41 @@ from PIL import Image, ImageDraw, ImageFont
 def gerar_logo_generica(caminho_destino):
     os.makedirs(os.path.dirname(caminho_destino), exist_ok=True)
 
-    # Dimensões da logo (alta resolução)
-    width, height = 480, 200
+    # Dimensões da logo com margens seguras (Canvas 600 x 180)
+    width, height = 600, 180
     img = Image.new('RGBA', (width, height), (255, 255, 255, 0))
     draw = ImageDraw.Draw(img)
 
     # Cores Industrial Integrity
-    color_rust = (183, 65, 14, 255)       # #B7410E
-    color_dark_iron = (43, 43, 43, 255)   # #2B2B2B
-    color_steel = (113, 121, 126, 255)    # #71797E
+    color_rust = (183, 65, 14, 255)       # #B7410E (Rust Orange)
+    color_dark_iron = (43, 43, 43, 255)   # #2B2B2B (Dark Iron)
+    color_steel = (113, 121, 126, 255)    # #71797E (Steel Gray)
 
-    # Elemento Gráfico: Símbolo geométrico angular de Solda/Arco
-    draw.polygon([(20, 40), (80, 40), (100, 100), (40, 100)], fill=color_rust)
-    draw.polygon([(50, 105), (110, 105), (90, 165), (30, 165)], fill=color_dark_iron)
+    # Símbolo Geométrico Industrial (Solda / Arco Elétrico)
+    draw.polygon([(15, 30), (70, 30), (90, 85), (35, 85)], fill=color_rust)
+    draw.polygon([(45, 90), (100, 90), (80, 145), (25, 145)], fill=color_dark_iron)
     # Centelha / Faísca de solda
-    draw.polygon([(75, 80), (125, 95), (95, 110), (105, 125), (65, 115)], fill=(255, 180, 0, 255))
+    draw.polygon([(68, 70), (112, 82), (86, 95), (96, 110), (58, 100)], fill=(255, 185, 15, 255))
 
-    # Tenta carregar fonte do sistema ou desenha texto
+    # Carrega fontes com fallback
     try:
-        font_large = ImageFont.truetype("arialbd.ttf", 60)
-        font_sub = ImageFont.truetype("arialbd.ttf", 17)
+        font_emc = ImageFont.truetype("arialbd.ttf", 54)
+        font_sub = ImageFont.truetype("arialbd.ttf", 16)
         font_tag = ImageFont.truetype("arial.ttf", 13)
     except Exception:
-        font_large = ImageFont.load_default()
+        font_emc = ImageFont.load_default()
         font_sub = ImageFont.load_default()
         font_tag = ImageFont.load_default()
 
-    # Tipografia Institucional
-    draw.text((140, 36), "EMC", fill=color_dark_iron, font=font_large)
-    draw.text((290, 36), "SOLDAS", fill=color_rust, font=font_large)
-    draw.text((142, 110), "SOLUÇÕES EM SOLDAGEM E USINAGEM", fill=color_steel, font=font_sub)
-    draw.text((142, 138), "ENGENHARIA E CALDEIRARIA PESADA", fill=color_dark_iron, font=font_tag)
-
+    # Tipografia Institucional bem espaçada
+    draw.text((125, 26), "EMC", fill=color_dark_iron, font=font_emc)
+    draw.text((255, 26), "SOLDAS", fill=color_rust, font=font_emc)
+    
     # Linha divisória industrial
-    draw.line([(140, 102), (460, 102)], fill=color_rust, width=3)
+    draw.line([(125, 92), (580, 92)], fill=color_rust, width=3)
+    
+    draw.text((126, 102), "SOLUÇÕES EM SOLDAGEM E USINAGEM", fill=color_steel, font=font_sub)
+    draw.text((126, 128), "ENGENHARIA E CALDEIRARIA PESADA", fill=color_dark_iron, font=font_tag)
 
     img.save(caminho_destino, 'PNG')
     return caminho_destino

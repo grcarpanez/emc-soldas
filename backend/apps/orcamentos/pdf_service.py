@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 
+from PIL import Image as PILImage
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm, inch
@@ -300,7 +301,7 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
     col_width_left = 110 * mm
     col_width_right = 72 * mm
 
-    # Verificação e carregamento seguro da Logo da Empresa
+    # Verificação e carregamento seguro da Logo da Empresa com Bounding Box Fit
     logo_flowable = None
     logo_path = getattr(config, 'logo_empresa_url', None)
     if logo_path and isinstance(logo_path, str) and logo_path.strip():
@@ -313,9 +314,17 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
         for cand in candidatos:
             if os.path.isfile(cand):
                 try:
-                    # Renderiza mantendo a proporção exata sem distorcer (largura máx 42mm, altura máx 22mm)
-                    logo_flowable = Image(cand, width=42 * mm, height=20 * mm, kind='proportional')
-                    break
+                    with PILImage.open(cand) as pil_img:
+                        img_w, img_h = pil_img.size
+                    if img_w > 0 and img_h > 0:
+                        # Bounding Box máxima permitida para a logomarca no cabeçalho
+                        max_w = 46 * mm
+                        max_h = 22 * mm
+                        scale = min(max_w / float(img_w), max_h / float(img_h))
+                        final_w = float(img_w) * scale
+                        final_h = float(img_h) * scale
+                        logo_flowable = Image(cand, width=final_w, height=final_h)
+                        break
                 except Exception:
                     logo_flowable = None
 
@@ -329,10 +338,11 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
         """
         col_esquerda_conteudo = Table(
             [[logo_flowable, Paragraph(empresa_dados_html, style_empresa_dados)]],
-            colWidths=[44 * mm, 66 * mm]
+            colWidths=[48 * mm, 62 * mm]
         )
         col_esquerda_conteudo.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
             ('PADDING', (0, 0), (-1, -1), 0),
             ('RIGHTPADDING', (0, 0), (0, 0), 4),
         ]))
