@@ -125,8 +125,38 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Sintoma:** Durante a execução sequencial da suíte de testes de relatórios, requisições válidas de exportação em PDF e CSV retornavam `429 Too Many Requests` (`AssertionError: 429 != 200`).
 - **Causa:** O DRF aplica o `ScopedRateThrottle` (`heavy_reports = 5/minute`) utilizando a camada de cache do Django. Ao rodar múltiplos testes automatizados em sequência no mesmo segundo, o limite de 5 requisições por minuto por IP/usuário era atingido naturalmente antes do término da suíte.
 - **Solução aplicada:** Inclusão de `django.core.cache.cache.clear()` no `setUp()` e antes das chamadas de exportação na classe de testes, além de adicionar um teste específico que valida propositalmente o bloqueio com `429 Too Many Requests` na 6ª requisição.
-- **Como evitar no futuro:** Sempre que testar endpoints protegidos por classes de Rate Limiting (`AnonRateThrottle`, `UserRateThrottle` ou `ScopedRateThrottle`), limpar o cache do Django (`cache.clear()`) entre cenários de teste isolados para evitar falso-positivos por concorrência de execução.
+---
 
+## 2026-08-23 - Incompatibilidade de Chaves Estrangeiras em Serializers do Catálogo (unidade_compra_id vs unidade_compra)
 
+- **Sintoma:** Ao cadastrar um Insumo/Item pelo frontend, a API retornava `400 Bad Request` com o erro `{"unidade_compra": ["Este campo é obrigatório."]}`.
+- **Causa:** O formulário client-side enviava o payload com a chave `unidade_compra_id`, enquanto o `ItemSerializer` no DRF declarava o campo relacional como `unidade_compra`.
+- **Solução aplicada:** Implementação de método `to_internal_value` defensivo no `ItemSerializer` para aceitar tanto `unidade_compra` quanto `unidade_compra_id` (e `unidade_consumo_id`), além de ajustar o envio no frontend.
+- **Como evitar no futuro:** Sempre implementar mapeamento flexível de aliases `_id` no `to_internal_value` de serializers de entrada ou padronizar a convenção de chaves estrangeiras entre frontend e backend.
 
+---
 
+## 2026-08-23 - Falha de Validação por Ausência de Unidade de Venda Obrigatória no Cadastro de Produto
+
+- **Sintoma:** Ao cadastrar um Produto Composto / Receita BOM, a API retornava `400 Bad Request` com `{"unidade_venda": ["Este campo é obrigatório."]}`.
+- **Causa:** O modelo `Produto` possui a chave estrangeira `unidade_venda` como obrigatória, porém o formulário do modal de Produto no frontend não possuía o seletor de Unidade de Venda.
+- **Solução aplicada:** Inclusão do seletor de Unidade de Venda no modal de Produto do frontend (populado a partir do Dicionário UOM) e configuração de fallback automático no `to_internal_value` do `ProdutoSerializer` para a UOM padrão `'UN'` caso não informada.
+- **Como evitar no futuro:** Assegurar que 100% dos campos obrigatórios dos modelos ORM estejam devidamente mapeados nos formulários visuais correspondentes do frontend.
+
+---
+
+## 2026-08-23 - Tratamento de Vírgula Decimal em Inputs Numéricos do Frontend (Fator de Conversão e Horas)
+
+- **Sintoma:** Ao digitar valores decimais utilizando o padrão brasileiro de vírgula (ex: `4,5` ou `3,5`), campos como Fator de Conversão e Horas de Mão de Obra eram truncados para inteiros pelo `parseFloat` nativo do JavaScript ou rejeitados pelo backend.
+- **Causa:** O JavaScript utiliza o ponto como separador decimal padrão em `parseFloat`, desconsiderando qualquer valor após a vírgula caso a string não passe por sanitização prévia (`.replace(',', '.')`).
+- **Solução aplicada:** Aplicação de `.replace(',', '.')` em todos os inputs numéricos de ponto flutuante no frontend e suporte nativo a strings com vírgula no `to_internal_value` dos serializers do Django REST Framework.
+- **Como evitar no futuro:** Sempre higienizar strings numéricas provenientes de inputs de usuários convertendo vírgulas em pontos antes do parsing matemático.
+
+---
+
+## 2026-08-23 - Segregação de Dados Mestres: Dicionários UOM e Atributos Técnicos em Administração
+
+- **Sintoma:** A tela de "Clientes & Equipamentos" concentrava abas operacionais (Clientes e Veículos) misturadas com abas estruturais/administrativas (Dicionário UOM e Dicionário de Atributos).
+- **Causa:** Estruturação inicial agrupou todos os cadastros em uma mesma visão, sobrecarregando a interface operacional.
+- **Solução aplicada:** Segregação arquitetural: a tela de *Clientes & Equipamentos* passou a conter exclusivamente dados operacionais (*Clientes & Fornecedores* e *Equipamentos & Veículos*), enquanto os *Dicionários Mestres (UOM & Atributos)* foram movidos para a *Central do Administrador*, protegidos por controle de acesso RBAC.
+- **Como evitar no futuro:** Separar dados mestres estruturais e de governança das telas de operação diária de chão de oficina e atendimento.

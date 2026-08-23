@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 14 - Frontend PWA Client-Side e Interface Completa Industrial Integrity)  
+**Última Atualização:** 2026-08-23 (Refinamentos da Fase 14: Segregação de Dicionários na Administração, Validações do Catálogo com Vírgula/Ponto e Ficha Técnica BOM em Tempo Real)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 
