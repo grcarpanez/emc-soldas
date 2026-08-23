@@ -14,7 +14,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm, inch
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, HRFlowable
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, HRFlowable, Image
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
@@ -97,7 +97,7 @@ def formatar_quantidade(valor):
     return f"{valor:.4f}".rstrip('0').rstrip('.').replace('.', ',')
 
 
-def gerar_pdf_orcamento(orcamento, buffer=None):
+def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
     """
     Gera o PDF transacional do orçamento comercial.
     Retorna o buffer BytesIO contendo os bytes do PDF.
@@ -283,25 +283,67 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
     )
 
     elements = []
-    try:
-        config = ConfiguracaoGlobal.get_solo()
-    except Exception:
-        config = ConfiguracaoGlobal(
-            razao_social='EMC SOLDAS LTDA',
-            cnpj='00.000.000/0001-00',
-            telefone_contato='(11) 99999-9999',
-            endereco_oficina='RUA INDUSTRIAL, 100 - OFICINA'
-        )
+    if config_override is not None:
+        config = config_override
+    else:
+        try:
+            config = ConfiguracaoGlobal.get_solo()
+        except Exception:
+            config = ConfiguracaoGlobal(
+                razao_social='EMC SOLDAS LTDA',
+                cnpj='00.000.000/0001-00',
+                telefone_contato='(11) 99999-9999',
+                endereco_oficina='RUA INDUSTRIAL, 100 - OFICINA'
+            )
 
     # 1. CABEÇALHO INSTITUCIONAL & IDENTIFICAÇÃO DO ORÇAMENTO
     col_width_left = 110 * mm
     col_width_right = 72 * mm
 
-    empresa_texto = f"""
-    <b>{config.razao_social.upper()}</b><br/>
-    CNPJ: {config.cnpj} | Fone: {config.telefone_contato}<br/>
-    {config.endereco_oficina}
-    """
+    # Verificação e carregamento seguro da Logo da Empresa
+    logo_flowable = None
+    logo_path = getattr(config, 'logo_empresa_url', None)
+    if logo_path and isinstance(logo_path, str) and logo_path.strip():
+        candidatos = [
+            logo_path,
+            os.path.join(getattr(settings, 'BASE_DIR', ''), logo_path.lstrip('/\\')),
+            os.path.join(getattr(settings, 'MEDIA_ROOT', ''), logo_path.lstrip('/\\')),
+            os.path.join(os.path.dirname(__file__), '..', '..', logo_path.lstrip('/\\')),
+        ]
+        for cand in candidatos:
+            if os.path.isfile(cand):
+                try:
+                    # Renderiza mantendo a proporção exata sem distorcer (largura máx 42mm, altura máx 22mm)
+                    logo_flowable = Image(cand, width=42 * mm, height=20 * mm, kind='proportional')
+                    break
+                except Exception:
+                    logo_flowable = None
+
+    if logo_flowable:
+        # Se tem logo cadastrada: compõe logo à esquerda e dados cadastrais ao lado
+        empresa_dados_html = f"""
+        <b>{config.razao_social.upper()}</b><br/>
+        CNPJ: {config.cnpj}<br/>
+        Fone: {config.telefone_contato}<br/>
+        {config.endereco_oficina}
+        """
+        col_esquerda_conteudo = Table(
+            [[logo_flowable, Paragraph(empresa_dados_html, style_empresa_dados)]],
+            colWidths=[44 * mm, 66 * mm]
+        )
+        col_esquerda_conteudo.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('PADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (0, 0), 4),
+        ]))
+    else:
+        # Se NÃO tem logo: ocupa os 110mm com tipografia institucional limpa
+        empresa_texto = f"""
+        <b>{config.razao_social.upper()}</b><br/>
+        CNPJ: {config.cnpj} | Fone: {config.telefone_contato}<br/>
+        {config.endereco_oficina}
+        """
+        col_esquerda_conteudo = Paragraph(empresa_texto, style_empresa_dados)
 
     dt_geracao_str = orcamento.data_geracao.strftime('%d/%m/%Y') if orcamento.data_geracao else timezone.now().strftime('%d/%m/%Y')
     dt_validade_str = orcamento.data_validade.strftime('%d/%m/%Y') if orcamento.data_validade else "NÃO INFORMADA"
@@ -314,7 +356,7 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
     """
 
     header_data = [
-        [Paragraph(empresa_texto, style_empresa_dados), Paragraph(orc_meta_texto, style_orc_meta)]
+        [col_esquerda_conteudo, Paragraph(orc_meta_texto, style_orc_meta)]
     ]
     header_table = Table(header_data, colWidths=[col_width_left, col_width_right])
     header_table.setStyle(TableStyle([
@@ -595,10 +637,10 @@ def gerar_pdf_orcamento(orcamento, buffer=None):
     return buffer
 
 
-def salvar_pdf_exemplo(caminho_arquivo):
+def salvar_pdf_exemplo(caminho_arquivo, com_logo=True, total_itens=25):
     """
     Gera um PDF de demonstração com dados fictícios completos e salva no caminho especificado.
-    Contém 14 itens detalhados para demonstrar perfeitamente o comportamento e paginação em 2 folhas.
+    Suporta geração com logo ou sem logo para validação do cabeçalho institucional.
     """
     from apps.cadastros.models import ClienteFornecedor, Equipamento
     from apps.catalogo.models import Item, Produto, DicionarioUom
@@ -705,8 +747,8 @@ def salvar_pdf_exemplo(caminho_arquivo):
 
     hoje = timezone.now().date()
 
-    # 25 Itens Detalhados para demonstrar a tabela ocupando 2 páginas com repetição de cabeçalho
-    itens_mock = [
+    # Banco de 25 Itens Detalhados
+    todos_itens = [
         OrcamentoItem(id=1, produto=prod_recup_chassi, quantidade=Decimal('1.0000'), custo_snapshot=Decimal('1250.00'), valor_venda_snapshot=Decimal('3400.00')),
         OrcamentoItem(id=2, item=item_viga_w, quantidade=Decimal('6.0000'), custo_snapshot=Decimal('185.00'), valor_venda_snapshot=Decimal('320.00')),
         OrcamentoItem(id=3, item=item_chapa_aco, quantidade=Decimal('85.0000'), custo_snapshot=Decimal('8.90'), valor_venda_snapshot=Decimal('16.50')),
@@ -734,6 +776,7 @@ def salvar_pdf_exemplo(caminho_arquivo):
         OrcamentoItem(id=25, descricao_livre='MONTAGEM FINAL, TESTE OPERACIONAL DE CARGA E LIBERACAO TECNICA', quantidade=Decimal('1.0000'), custo_snapshot=Decimal('300.00'), valor_venda_snapshot=Decimal('750.00')),
     ]
 
+    itens_mock = todos_itens[:total_itens]
     valor_bruto_total = sum(i.quantidade * i.valor_venda_snapshot for i in itens_mock)
     desconto_aplicado = Decimal('500.00')
 
@@ -754,13 +797,29 @@ def salvar_pdf_exemplo(caminho_arquivo):
         propostas=[prop1, prop2]
     )
 
+    # Configuração customizada da empresa (com ou sem logo)
+    logo_path = None
+    if com_logo:
+        logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'media', 'exemplos', 'logo_generica_emc.png')
+        if not os.path.exists(logo_path):
+            from gerar_logo_exemplo import gerar_logo_generica
+            gerar_logo_generica(logo_path)
+
+    config_mock = ConfiguracaoGlobal(
+        razao_social='EMC SOLDAS LTDA',
+        cnpj='00.000.000/0001-00',
+        telefone_contato='(11) 99999-9999',
+        endereco_oficina='RUA INDUSTRIAL, 100 - OFICINA',
+        logo_empresa_url=logo_path
+    )
+
     os.makedirs(os.path.dirname(caminho_arquivo), exist_ok=True)
     try:
         with open(caminho_arquivo, 'wb') as f:
-            gerar_pdf_orcamento(orcamento, buffer=f)
+            gerar_pdf_orcamento(orcamento, buffer=f, config_override=config_mock)
     except PermissionError:
-        caminho_arquivo = caminho_arquivo.replace('.pdf', '_multi_pagina.pdf')
+        caminho_arquivo = caminho_arquivo.replace('.pdf', '_v2.pdf')
         with open(caminho_arquivo, 'wb') as f:
-            gerar_pdf_orcamento(orcamento, buffer=f)
+            gerar_pdf_orcamento(orcamento, buffer=f, config_override=config_mock)
 
     return caminho_arquivo
