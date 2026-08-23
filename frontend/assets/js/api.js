@@ -87,9 +87,24 @@ class ApiClient {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        let msg = data.message || 'Erro na requisição.';
+        if (data.details && typeof data.details === 'object') {
+          const detailMsgs = [];
+          for (const [key, val] of Object.entries(data.details)) {
+            if (Array.isArray(val)) {
+              detailMsgs.push(`${key.toUpperCase()}: ${val.join(', ')}`);
+            } else if (typeof val === 'string') {
+              detailMsgs.push(`${key.toUpperCase()}: ${val}`);
+            }
+          }
+          if (detailMsgs.length > 0) {
+            msg = detailMsgs.join(' | ');
+          }
+        }
+
         return Promise.reject({
           status: response.status,
-          message: data.message || 'Erro na requisição.',
+          message: msg,
           details: data.details || data
         });
       }

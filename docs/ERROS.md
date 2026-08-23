@@ -163,10 +163,13 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-23 - Segregação de Dados Mestres: Dicionários UOM e Atributos Técnicos em Administração
+## 2026-08-23 - Rejeição de Validação por Incompatibilidade de Case em ChoiceField (CLIENTE vs Cliente)
 
-- **Sintoma:** A tela de "Clientes & Equipamentos" concentrava abas operacionais (Clientes e Veículos) misturadas com abas estruturais/administrativas (Dicionário UOM e Dicionário de Atributos).
-- **Causa:** Estruturação inicial agrupou todos os cadastros em uma mesma visão, sobrecarregando a interface operacional.
-- **Solução aplicada:** Segregação arquitetural: a tela de *Clientes & Equipamentos* passou a conter exclusivamente dados operacionais (*Clientes & Fornecedores* e *Equipamentos & Veículos*), enquanto os *Dicionários Mestres (UOM & Atributos)* foram movidos para a *Central do Administrador*, protegidos por controle de acesso RBAC.
-- **Como evitar no futuro:** Separar dados mestres estruturais e de governança das telas de operação diária de chão de oficina e atendimento.
+- **Sintoma:** Ao cadastrar cliente/fornecedor pelo modal completo do frontend, a API retornava erro `400 Bad Request` com o toast genérico `[ERRO] Falha na validação da requisição.`
+- **Causa:** O `<select>` do frontend enviava `tipo: "CLIENTE"` (em maiúsculas), enquanto o Django ORM definia as choices como `('Cliente', 'Fornecedor', 'Ambos')` (TitleCase). Como o serializer não possuía normalização prévia em `to_internal_value`, o DRF rejeitava com `'CLIENTE' não é uma escolha válida`. Além disso, o manipulador de requisições HTTP do frontend não extraía as mensagens específicas contidas em `details`, exibindo apenas a mensagem genérica.
+- **Solução aplicada:**
+  1. Implementado método `to_internal_value` no `ClienteFornecedorSerializer` para normalizar `tipo` de forma case-insensitive (`CLIENTE` -> `'Cliente'`, `FORNECEDOR` -> `'Fornecedor'`, `AMBOS` -> `'Ambos'`), `tipo_pessoa` (`PJ`/`PF`) e converter strings de e-mail vazias (`""`) para `None`.
+  2. Aprimorado `ApiClient.request` no frontend (`api.js`) para extrair os erros detalhados de cada campo (`details`) e exibi-los de forma clara nos Toasts de notificação.
+- **Como evitar no futuro:** Sempre implementar `to_internal_value` tolerante a variações de maiúsculas/minúsculas em campos `ChoiceField` e extrair mensagens específicas de `details` no cliente HTTP.
+
 

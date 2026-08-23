@@ -86,6 +86,29 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
     def get_quantidade_equipamentos_ativos(self, obj):
         return obj.equipamentos_vinculados.filter(is_ativo=True).count()
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Normaliza tipo case-insensitive (CLIENTE -> Cliente, FORNECEDOR -> Fornecedor, AMBOS -> Ambos)
+        if 'tipo' in data and isinstance(data['tipo'], str):
+            tipo_upper = data['tipo'].upper().strip()
+            if tipo_upper == 'CLIENTE':
+                data['tipo'] = 'Cliente'
+            elif tipo_upper == 'FORNECEDOR':
+                data['tipo'] = 'Fornecedor'
+            elif tipo_upper in ('AMBOS', 'CLIENTE/FORNECEDOR'):
+                data['tipo'] = 'Ambos'
+
+        # Normaliza tipo_pessoa (PF / PJ)
+        if 'tipo_pessoa' in data and isinstance(data['tipo_pessoa'], str):
+            data['tipo_pessoa'] = data['tipo_pessoa'].upper().strip()
+
+        # Normaliza email vazio para None
+        if 'email' in data and (data['email'] is None or not str(data['email']).strip()):
+            data['email'] = None
+
+        return super().to_internal_value(data)
+
     def validate_nome_razao(self, value):
         if not value or not str(value).strip():
             raise serializers.ValidationError("O Nome / Razão Social é de preenchimento obrigatório.")
