@@ -176,9 +176,19 @@ class OrcamentoItem(models.Model):
         verbose_name = 'Item do Orçamento'
         verbose_name_plural = 'Itens do Orçamento'
 
+    @property
+    def nome_exibicao(self):
+        """Retorna o nome técnico para exibição do item."""
+        if self.descricao_livre:
+            return self.descricao_livre
+        if self.produto:
+            return self.produto.nome
+        if self.item:
+            return self.item.nome
+        return "ITEM AVULSO"
+
     def __str__(self):
-        nome = self.descricao_livre or (self.produto.nome if self.produto else (self.item.nome if self.item else "Item Avulso"))
-        return f"{self.quantidade} x {nome} (R$ {self.valor_venda_snapshot})"
+        return f"{self.quantidade} x {self.nome_exibicao} (R$ {self.valor_venda_snapshot})"
 
 
 class OrcamentoPropostaPagamento(models.Model):

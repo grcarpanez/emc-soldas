@@ -100,5 +100,23 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Substituição de `default=timezone.now` por `default=timezone.localdate` no modelo `Orcamento` e atribuição explícita de `timezone.localdate()` em `OrcamentoSerializer`.
 - **Como evitar no futuro:** Em modelos Django, utilizar sempre `default=timezone.localdate` para campos `DateField` e `default=timezone.now` para campos `DateTimeField`.
 
+---
+
+## 2026-08-23 - Campos de Autoria em BaseModel (created_by_id / updated_by_id)
+
+- **Sintoma:** Erro `TypeError: LancamentoFinanceiro() got unexpected keyword arguments: 'created_by'` e `ValueError: The following fields do not exist in this model: updated_by`.
+- **Causa:** Modelos que herdam de `BaseModel`/`AuditableModel` utilizam colunas explícitas de inteiros `created_by_id` e `updated_by_id`, preenchidas pelo `AuditUserMiddleware`. A tentativa de instanciar ou atualizar os campos usando os nomes `created_by` ou `updated_by` causava falha por ausência desses atributos relacionais diretos.
+- **Solução aplicada:** Ajuste em `services.py` para atribuir explicitamente `created_by_id=getattr(user, 'id', None)` e `updated_by_id=getattr(user, 'id', None)`.
+- **Como evitar no futuro:** Em todos os serviços e models herdados de `BaseModel`, utilizar sempre os sufixos `_id` (`created_by_id`, `updated_by_id`, `deleted_by_id`).
+
+---
+
+## 2026-08-23 - Exigência de Campo Pai em Serializer Aninhado de Propostas
+
+- **Sintoma:** Ao enviar `propostas_pagamento` aninhadas na criação de `Fatura`, a API retornava `400 Bad Request` com `'fatura': ['Este campo é obrigatório']`.
+- **Causa:** O `FaturaPropostaPagamentoSerializer` incluía o campo `fatura` em `fields` sem declarar `read_only=True`, exigindo que o ID da fatura estivesse presente no payload antes da persistência do objeto pai.
+- **Solução aplicada:** Definição explícita de `fatura = serializers.PrimaryKeyRelatedField(read_only=True)` no `FaturaPropostaPagamentoSerializer`.
+- **Como evitar no futuro:** Em serializers aninhados onde o vínculo com o objeto pai é estabelecido no método `create()` ou na camada de serviço, declarar a chave estrangeira do pai como `read_only=True`.
+
 
 

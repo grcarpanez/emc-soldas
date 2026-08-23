@@ -19,7 +19,7 @@ urlpatterns = [
     path('api/', include('apps.cadastros.urls')),
     path('api/', include('apps.compras.urls')),
     path('api/', include('apps.orcamentos.urls')),
-    path('api/faturamento/', include('apps.faturamento.urls')),
+    path('api/', include('apps.faturamento.urls')),
     path('api/conciliacao/', include('apps.conciliacao.urls')),
     path('api/administracao/', include('apps.administracao.urls')),
     path('api/relatorios/', include('apps.relatorios.urls')),

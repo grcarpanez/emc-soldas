@@ -27,7 +27,7 @@ class Fatura(BaseModel):
         verbose_name="Cliente"
     )
     data_emissao = models.DateField(
-        default=timezone.now,
+        default=timezone.localdate,
         verbose_name="Data de Emissão / Criação do Rascunho"
     )
     data_fechamento = models.DateField(

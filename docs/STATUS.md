@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 8 - Orçamentos Comerciais, Snapshots de Custos, Validade e Geração PDF)  
-**Fase Atual:** Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) (Pronta para início)  
-**Próxima Fase:** Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 9 - Faturamento Agregado, Conta Corrente, Pré-Fatura, Fatura Final e Quitação)  
+**Fase Atual:** Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos (Pronta para início)  
+**Próxima Fase:** Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos  
 
 ---
 
@@ -22,7 +22,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | **Concluída** | 100% |
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | **Concluída** | 100% |
 | **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | **Concluída** | 100% |
-| **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | Pendente | 0% |
+| **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | **Concluída** | 100% |
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | Pendente | 0% |
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | Pendente | 0% |
 | **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | Pendente | 0% |
@@ -134,12 +134,15 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (87 testes no total acumulado do projeto).
 
 ### Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)
-- [ ] Implementar listagem da Conta Corrente de orçamentos 'A Faturar'.
-- [ ] Implementar fluxo de Pré-Fatura (Rascunho) com simulação de opções de pagamento e PDF Espelho.
-- [ ] Implementar conversão em Fatura Final (`FATURADA`), transição em cascata de orçamentos e geração de parcelas no Contas a Receber.
-- [ ] Implementar quitação total (100% de baixa transitando fatura e orçamentos para `PAGA`/`PAGO`).
-- [ ] Implementar cancelamento de faturas com desvinculação em cascata e reversão para `A FATURAR`.
-- [ ] Implementar quitação em Cortesia (100% de desconto) sem afetar caixa real.
+- [x] Implementar listagem da Conta Corrente de orçamentos 'A Faturar' (`/api/faturas/conta-corrente/`).
+- [x] Implementar fluxo de Pré-Fatura (Rascunho) com simulação de opções de pagamento (`FaturaPropostaPagamento`) e PDF Espelho.
+- [x] Implementar conversão em Fatura Final (`FATURADA` via `/api/faturas/{id}/faturar/`), transição em cascata de orçamentos e geração de parcelas no Contas a Receber.
+- [x] Implementar quitação total (100% de baixa transitando fatura e orçamentos para `PAGA`/`PAGO` via `/api/faturas/{id}/receber/`).
+- [x] Implementar cancelamento de faturas com justificativa obrigatória e desvinculação em cascata (reversão para `A FATURAR` e anulação de parcelas a vencer via `/api/faturas/{id}/cancelar/`).
+- [x] Implementar quitação em Cortesia (100% de desconto) sem afetar caixa real (`/api/faturas/{id}/cortesia/`).
+- [x] Implementar gerador de PDF profissional para Faturas e Pré-Faturas no padrão *Industrial Integrity* (`/api/faturas/{id}/gerar-pdf/`).
+- [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_comercial` (`HasComercialAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (88 testes no total acumulado do projeto).
 
 ### Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos
 - [ ] Implementar Contas a Pagar e Contas a Receber (Regime de Competência) sem impactar saldo imediato.
@@ -190,4 +193,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)**, desenvolvendo a camada de serviços, serializers, viewsets e rotas para `Fatura` (`/api/faturas/`), `FaturaItem` (`/api/fatura-itens/`) e integração com a Conta Corrente de orçamentos, implementando a agregação de orçamentos aprovados de um mesmo cliente, geração de Pré-Fatura (Rascunho), conversão em Fatura Final com transição em cascata do status financeiro dos orçamentos para `FATURADO`, emissão de parcelas no Contas a Receber, quitação total (`PAGA`/`PAGO`), cancelamento com estorno em cascata e quitação em cortesia (100% desconto), protegidos pelo toggle `faturamento_agregado`.
+Iniciar a **Fase 10 - Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos**, desenvolvendo a camada de serviços, serializers, viewsets e rotas para `LancamentoFinanceiro` (`/api/lancamentos-financeiros/`), Cobrindo Contas a Pagar e Contas a Receber (Regime de Competência), Extrato de Caixa Real (Regime de Caixa), Modal Universal de Liquidação com taxa de maquininha, Bloqueio por Limite de Cheque Especial, Transferências Inter-Contas, Cartões Corporativos com acumulação de despesas e rollover de saldo devedor, e fluxo de Estorno de títulos pagos com gravação perpétua em `LogEstorno`, protegidos pelo toggle `acesso_tesouraria`.
