@@ -55,7 +55,7 @@ class Orcamento(BaseModel):
         verbose_name="Fatura Vinculada"
     )
     data_geracao = models.DateField(
-        default=timezone.now,
+        default=timezone.localdate,
         db_index=True,
         verbose_name="Data de Geração"
     )

@@ -91,4 +91,14 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Declaração explícita do campo `chave_acesso = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)` no `DocumentoFiscalCompraSerializer`, permitindo receber a string formatada pelo frontend, para então extrair estritamente os dígitos numéricos e validar o comprimento final exato de 44 dígitos antes de gravar no banco de dados.
 - **Como evitar no futuro:** Sempre que um campo do modelo tiver tamanho estrito no banco mas puder receber dados de entrada formatados (máscaras de CPF, CNPJ, Chaves NFe, Telefones), declarar o campo no serializer com margem de caracteres suficiente para conter a máscara antes da extração dos dígitos.
 
+---
+
+## 2026-08-23 - Coerção de DateTime em DateField no DRF (AssertionError em to_representation)
+
+- **Sintoma:** Ao serializar resposta de criação de `Orcamento`, a view retornava erro 500 com a mensagem `AssertionError: Expected a date, but got a datetime. Refusing to coerce, as this may mean losing timezone information.`
+- **Causa:** O modelo `Orcamento` utilizava `default=timezone.now` em `data_geracao = models.DateField(...)`, que devolve um objeto `datetime.datetime` em vez de um `datetime.date` puro.
+- **Solução aplicada:** Substituição de `default=timezone.now` por `default=timezone.localdate` no modelo `Orcamento` e atribuição explícita de `timezone.localdate()` em `OrcamentoSerializer`.
+- **Como evitar no futuro:** Em modelos Django, utilizar sempre `default=timezone.localdate` para campos `DateField` e `default=timezone.now` para campos `DateTimeField`.
+
+
 

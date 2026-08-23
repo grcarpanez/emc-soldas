@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-18 (Conclusão da Fase 7 - Módulo de Compras, Notas Fiscais de Entrada e Retroalimentação de Custos)  
-**Fase Atual:** Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) (Pronta para início)  
-**Próxima Fase:** Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 8 - Orçamentos Comerciais, Snapshots de Custos, Validade e Geração PDF)  
+**Fase Atual:** Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) (Pronta para início)  
+**Próxima Fase:** Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)  
 
 ---
 
@@ -21,7 +21,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 5** | Módulo de Clientes, Fornecedores e Equipamentos | **Concluída** | 100% |
 | **Fase 6** | Catálogo Base, Materiais, Insumos e Produtos (Motor BOM) | **Concluída** | 100% |
 | **Fase 7** | Módulo de Compras (Notas Fiscais de Entrada e Retroalimentação de Custos) | **Concluída** | 100% |
-| **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | Pendente | 0% |
+| **Fase 8** | Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF) | **Concluída** | 100% |
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | Pendente | 0% |
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | Pendente | 0% |
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | Pendente | 0% |
@@ -122,12 +122,16 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (74 testes no total acumulado do projeto).
 
 ### Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)
-- [ ] Implementar criação ágil de Orçamentos com 3 tipos de itens (Produtos, Itens e Lançamentos Livres).
-- [ ] Implementar persistência imutável de Snapshots de custos e valores de venda.
-- [ ] Implementar máquina de estados duplo (Status Operacional vs Status Financeiro).
-- [ ] Implementar renovação de orçamentos com alerta visual de inflação de insumos/mão de obra.
-- [ ] Implementar cancelamento justificado obrigatório (mínimo 10 caracteres) com gravação de log.
-- [ ] Implementar serviço de geração de PDF com desconto oculto quando zerado.
+- [x] Implementar criação ágil de Orçamentos com 3 tipos de itens (Produtos, Itens e Lançamentos Livres).
+- [x] Implementar persistência imutável de Snapshots de custos e valores de venda.
+- [x] Implementar máquina de estados duplo (Status Operacional vs Status Financeiro).
+- [x] Implementar renovação de orçamentos com alerta visual de inflação de insumos/mão de obra e opção de re-precificação.
+- [x] Implementar cancelamento justificado obrigatório (mínimo 10 caracteres) com gravação de log e auditoria.
+- [x] Implementar detecção preventiva de inadimplência em tempo real com consulta a títulos vencidos.
+- [x] Implementar serviço de geração de PDF comercial via ReportLab (*Industrial Integrity*) com desconto oculto quando zerado.
+- [x] Gerar arquivo PDF de exemplo fictício (`backend/media/exemplos/orcamento_exemplo.pdf`) para aprovação visual do usuário.
+- [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_comercial` (`HasComercialAccess`).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (87 testes no total acumulado do projeto).
 
 ### Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)
 - [ ] Implementar listagem da Conta Corrente de orçamentos 'A Faturar'.
@@ -186,4 +190,4 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)**, desenvolvendo os serializers, viewsets e rotas para `Orcamento` (`/api/orcamentos/`), `OrcamentoItem` (`/api/orcamento-itens/`) e `OrcamentoPropostaPagamento` (`/api/orcamento-propostas-pagamento/`), implementando os 3 tipos de itens (Produtos, Itens e Lançamentos Livres), a persistência imutável de Snapshots (`custo_snapshot`, `valor_venda_snapshot`), o controle de status duplo (Operacional vs Financeiro), a renovação de orçamento com alerta de inflação de insumos/mão de obra, o cancelamento justificado obrigatório (mínimo 10 caracteres) e a geração do PDF comercial com desconto oculto quando zerado, protegidos pelo toggle `acesso_comercial`.
+Iniciar a **Fase 9 - Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação)**, desenvolvendo a camada de serviços, serializers, viewsets e rotas para `Fatura` (`/api/faturas/`), `FaturaItem` (`/api/fatura-itens/`) e integração com a Conta Corrente de orçamentos, implementando a agregação de orçamentos aprovados de um mesmo cliente, geração de Pré-Fatura (Rascunho), conversão em Fatura Final com transição em cascata do status financeiro dos orçamentos para `FATURADO`, emissão de parcelas no Contas a Receber, quitação total (`PAGA`/`PAGO`), cancelamento com estorno em cascata e quitação em cortesia (100% desconto), protegidos pelo toggle `faturamento_agregado`.

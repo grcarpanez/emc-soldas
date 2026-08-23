@@ -203,6 +203,35 @@ class Produto(BaseModel):
     def __str__(self):
         return f"{self.nome} ({self.unidade_venda.sigla})"
 
+    @property
+    def preco_custo_apurado(self) -> Decimal:
+        """
+        Calcula o Preço de Custo Apurado em tempo real:
+        Custo Total de Materiais (Ficha Técnica BOM) + Custo de Mão de Obra (Horas * Taxa Horária Global).
+        """
+        from decimal import Decimal
+        from apps.administracao.models import ConfiguracaoGlobal
+
+        config = ConfiguracaoGlobal.get_solo()
+        taxa_hora = Decimal(str(config.taxa_mao_de_obra_hora or 0))
+
+        total_materiais = Decimal('0.00')
+        fichas = self.ficha_tecnica_itens.select_related('item').all()
+        for f in fichas:
+            if f.item:
+                ultimo_custo = Decimal(str(f.item.ultimo_custo_compra or 0))
+                fator = Decimal(str(f.item.fator_conversao or 1))
+                if fator <= Decimal('0'):
+                    fator = Decimal('1')
+                custo_consumo = ultimo_custo / fator
+                qtd = Decimal(str(f.quantidade_utilizada or 0))
+                total_materiais += qtd * custo_consumo
+
+        horas = Decimal(str(self.tempo_estimado_execucao or 0))
+        custo_mo = horas * taxa_hora
+
+        return (total_materiais + custo_mo).quantize(Decimal('0.01'))
+
 
 class FichaTecnica(models.Model):
     """
