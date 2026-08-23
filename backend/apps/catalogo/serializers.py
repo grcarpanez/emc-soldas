@@ -185,6 +185,26 @@ class ItemSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("O último custo de compra não pode ser negativo.")
         return value
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Mapeia aliases de chave estrangeira
+        if 'unidade_compra_id' in data and 'unidade_compra' not in data:
+            data['unidade_compra'] = data['unidade_compra_id']
+        if 'unidade_consumo_id' in data and 'unidade_consumo' not in data:
+            data['unidade_consumo'] = data['unidade_consumo_id']
+
+        # Converte vírgula para ponto em campos decimais
+        if 'fator_conversao' in data and isinstance(data['fator_conversao'], str):
+            data['fator_conversao'] = data['fator_conversao'].replace(',', '.').strip()
+        if 'ultimo_custo_compra' in data and isinstance(data['ultimo_custo_compra'], str):
+            val_str = data['ultimo_custo_compra'].replace('R$', '').strip()
+            if ',' in val_str:
+                val_str = val_str.replace('.', '').replace(',', '.')
+            data['ultimo_custo_compra'] = val_str or '0.00'
+
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         unidade_compra = attrs.get('unidade_compra') or (self.instance.unidade_compra if self.instance else None)
         unidade_consumo = attrs.get('unidade_consumo')
@@ -322,6 +342,14 @@ class FichaTecnicaSerializer(serializers.ModelSerializer):
         subtotal = (qtd * custo_consumo).quantize(Decimal('0.01'))
         return f"{subtotal:.2f}"
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'item_id' in data and 'item' not in data:
+            data['item'] = data['item_id']
+        if 'quantidade_utilizada' in data and isinstance(data['quantidade_utilizada'], str):
+            data['quantidade_utilizada'] = data['quantidade_utilizada'].replace(',', '.').strip()
+        return super().to_internal_value(data)
+
     def validate_quantidade_utilizada(self, value):
         if value is None or Decimal(str(value)) <= Decimal('0'):
             raise serializers.ValidationError("A quantidade utilizada deve ser maior que zero.")
@@ -429,6 +457,23 @@ class ProdutoSerializer(serializers.ModelSerializer):
         total_mo = Decimal(self.get_custo_mao_de_obra(obj))
         total_apurado = (total_mat + total_mo).quantize(Decimal('0.01'))
         return f"{total_apurado:.2f}"
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+
+        # Mapeia alias e fallback de unidade_venda
+        if 'unidade_venda_id' in data and 'unidade_venda' not in data:
+            data['unidade_venda'] = data['unidade_venda_id']
+        if not data.get('unidade_venda') and not (self.instance and self.instance.unidade_venda_id):
+            uom_un = DicionarioUom.objects.filter(sigla='UN').first() or DicionarioUom.objects.first()
+            if uom_un:
+                data['unidade_venda'] = uom_un.id
+
+        # Converte vírgula para ponto em tempo_estimado_execucao
+        if 'tempo_estimado_execucao' in data and isinstance(data['tempo_estimado_execucao'], str):
+            data['tempo_estimado_execucao'] = data['tempo_estimado_execucao'].replace(',', '.').strip()
+
+        return super().to_internal_value(data)
 
     def validate_nome(self, value):
         nome_sanitizado = sanitizar_texto_maiusculo(value)

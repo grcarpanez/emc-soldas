@@ -129,13 +129,18 @@ window.CatalogoView = {
   async abrirModalItem(item = null) {
     const isEdit = !!item;
 
-    // Carrega UOMs para o select
+    // Carrega UOMs para os selects
     const uoms = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM).catch(() => []);
     const listaUoms = uoms.results || uoms || [];
 
-    let optionsUom = '';
+    let optionsUomCompra = '';
+    let optionsUomConsumo = '';
     listaUoms.forEach((u) => {
-      optionsUom += `<option value="${u.id}">${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+      const selectedCompra = (item && (item.unidade_compra === u.id || item.unidade_compra_id === u.id || item.unidade_compra_sigla === u.sigla)) ? 'selected' : (!item && u.sigla === 'UN' ? 'selected' : '');
+      const selectedConsumo = (item && (item.unidade_consumo === u.id || item.unidade_consumo_id === u.id || item.unidade_consumo_sigla === u.sigla)) ? 'selected' : (!item && u.sigla === 'UN' ? 'selected' : '');
+
+      optionsUomCompra += `<option value="${u.id}" ${selectedCompra}>${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+      optionsUomConsumo += `<option value="${u.id}" ${selectedConsumo}>${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
     });
 
     window.EMCUtils.openModal({
@@ -153,13 +158,13 @@ window.CatalogoView = {
             <div class="form-group">
               <label class="form-label" for="item-uom-compra">Unidade de Compra (NF-e) *</label>
               <select id="item-uom-compra" class="form-control">
-                ${optionsUom}
+                ${optionsUomCompra}
               </select>
             </div>
             <div class="form-group">
               <label class="form-label" for="item-uom-consumo">Unidade de Consumo (Oficina) *</label>
               <select id="item-uom-consumo" class="form-control">
-                ${optionsUom}
+                ${optionsUomConsumo}
               </select>
             </div>
           </div>
@@ -167,7 +172,8 @@ window.CatalogoView = {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="item-fator">Fator de Conversão (Compra ➔ Consumo)</label>
-              <input type="number" step="0.0001" id="item-fator" class="form-control mono-text" placeholder="1.0000" value="${item?.fator_conversao || '1.0000'}" required>
+              <input type="text" id="item-fator" class="form-control mono-text" placeholder="Ex: 1,0 ou 4,5" value="${item?.fator_conversao ? String(item.fator_conversao).replace('.', ',') : '1,0'}" required>
+              <small class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant);">Ex: 1 Chapa (UN) = 4,5 Metros Quadrados (M2)</small>
             </div>
             <div class="form-group">
               <label class="form-label" for="item-custo">Último Custo de Compra</label>
@@ -178,45 +184,49 @@ window.CatalogoView = {
       `,
       onConfirm: async () => {
         const nome = document.getElementById('item-nome').value.trim();
-        const unidade_compra_id = document.getElementById('item-uom-compra').value;
-        const unidade_consumo_id = document.getElementById('item-uom-consumo').value;
-        const fator_conversao = parseFloat(document.getElementById('item-fator').value) || 1;
-        const ultimo_custo_compra = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('item-custo').value);
+        const unidade_compra = parseInt(document.getElementById('item-uom-compra').value) || null;
+        const unidade_consumo = parseInt(document.getElementById('item-uom-consumo').value) || unidade_compra;
+        
+        const fatorStr = document.getElementById('item-fator').value.replace(',', '.').trim();
+        const fator_conversao = parseFloat(fatorStr) || 1.0;
+        
+        const custoStr = document.getElementById('item-custo').value;
+        const ultimo_custo_compra = window.EMCUtils.converterMoedaATMParaFloat(custoStr);
 
-        if (!nome || !unidade_compra_id) {
-          window.EMCUtils.showToast('Nome e Unidade de Compra são obrigatórios.', 'error');
+        if (!nome) {
+          window.EMCUtils.showToast('O nome do insumo é obrigatório.', 'error');
+          return false;
+        }
+
+        if (!unidade_compra) {
+          window.EMCUtils.showToast('A unidade de compra é obrigatória.', 'error');
           return false;
         }
 
         try {
           const payload = {
             nome,
-            unidade_compra_id,
-            unidade_consumo_id,
+            unidade_compra,
+            unidade_consumo,
             fator_conversao,
             ultimo_custo_compra
           };
 
           if (isEdit) {
             await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}${item.id}/`, payload);
-            window.EMCUtils.showToast('Item atualizado com sucesso!', 'success');
+            window.EMCUtils.showToast('Insumo atualizado com sucesso!', 'success');
           } else {
             await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.ITENS, payload);
-            window.EMCUtils.showToast('Item cadastrado com sucesso!', 'success');
+            window.EMCUtils.showToast('Insumo cadastrado com sucesso!', 'success');
           }
           this.carregarListaItens();
           return true;
         } catch (err) {
-          window.EMCUtils.showToast(err.message || 'Erro ao salvar item.', 'error');
+          window.EMCUtils.showToast(err.message || 'Erro ao salvar insumo.', 'error');
           return false;
         }
       }
     });
-
-    if (item) {
-      if (item.unidade_compra_id) document.getElementById('item-uom-compra').value = item.unidade_compra_id;
-      if (item.unidade_consumo_id) document.getElementById('item-uom-consumo').value = item.unidade_consumo_id;
-    }
   },
 
   async editarItem(id) {
@@ -229,7 +239,7 @@ window.CatalogoView = {
   },
 
   // ==========================================================================
-  // 2. PRODUTOS E RECEITAS BOM
+  // 2. PRODUTOS E RECEITAS BOM (BILL OF MATERIALS)
   // ==========================================================================
   async renderProdutos(container) {
     container.innerHTML = `
@@ -311,10 +321,20 @@ window.CatalogoView = {
   async abrirModalProduto(prod = null) {
     const isEdit = !!prod;
 
+    // Carrega UOMs para o select de unidade_venda
+    const uoms = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM).catch(() => []);
+    const listaUoms = uoms.results || uoms || [];
+
+    let optionsUomVenda = '';
+    listaUoms.forEach((u) => {
+      const selected = (prod && (prod.unidade_venda === u.id || prod.unidade_venda_id === u.id || prod.unidade_venda_sigla === u.sigla)) ? 'selected' : (!prod && u.sigla === 'UN' ? 'selected' : '');
+      optionsUomVenda += `<option value="${u.id}" ${selected}>${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+    });
+
     window.EMCUtils.openModal({
       title: isEdit ? `EDITAR PRODUTO #${prod.id}` : 'NOVO PRODUTO / RECEITA DE SERVIÇO',
       size: 'md',
-      confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
+      confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR E MONTAR BOM',
       content: `
         <form id="form-produto">
           <div class="form-group">
@@ -322,38 +342,60 @@ window.CatalogoView = {
             <input type="text" id="prod-nome" class="form-control" placeholder="EX: REFORMA DE CAÇAMBA COM REVESTIMENTO HARDOX" value="${prod?.nome || ''}" required autofocus>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="prod-descricao">Descrição / Especificação Técnica</label>
-            <textarea id="prod-descricao" class="form-control" rows="3" placeholder="DETALHAMENTO DA FABRICAÇÃO...">${prod?.descricao || ''}</textarea>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="prod-uom-venda">Unidade de Venda *</label>
+              <select id="prod-uom-venda" class="form-control">
+                ${optionsUomVenda}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prod-horas">Tempo Mão de Obra (Horas) *</label>
+              <input type="text" id="prod-horas" class="form-control mono-text" placeholder="Ex: 3,5 ou 8" value="${prod?.tempo_estimado_execucao ? String(prod.tempo_estimado_execucao).replace('.', ',') : '1,0'}" required>
+            </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="prod-horas">Tempo Estimado de Mão de Obra (Horas) *</label>
-            <input type="number" step="0.25" id="prod-horas" class="form-control mono-text" placeholder="EX: 4.50" value="${prod?.tempo_estimado_execucao || '1.00'}" required>
+            <label class="form-label" for="prod-descricao">Descrição / Especificação Técnica</label>
+            <textarea id="prod-descricao" class="form-control" rows="3" placeholder="DETALHAMENTO DA FABRICAÇÃO E ESPECIFICAÇÃO DE MATERIAIS...">${prod?.descricao || ''}</textarea>
           </div>
         </form>
       `,
       onConfirm: async () => {
         const nome = document.getElementById('prod-nome').value.trim();
+        const unidade_venda = parseInt(document.getElementById('prod-uom-venda').value) || null;
         const descricao = document.getElementById('prod-descricao').value.trim();
-        const tempo_estimado_execucao = parseFloat(document.getElementById('prod-horas').value) || 0;
+        
+        const horasStr = document.getElementById('prod-horas').value.replace(',', '.').trim();
+        const tempo_estimado_execucao = parseFloat(horasStr) || 0.0;
 
         if (!nome) {
           window.EMCUtils.showToast('O nome do produto é obrigatório.', 'error');
           return false;
         }
 
-        try {
-          const payload = { nome, descricao, tempo_estimado_execucao };
+        if (!unidade_venda) {
+          window.EMCUtils.showToast('A unidade de venda é obrigatória.', 'error');
+          return false;
+        }
 
+        try {
+          const payload = { nome, unidade_venda, descricao, tempo_estimado_execucao };
+
+          let novoId = prod?.id;
           if (isEdit) {
             await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${prod.id}/`, payload);
-            window.EMCUtils.showToast('Produto atualizado!', 'success');
+            window.EMCUtils.showToast('Produto atualizado com sucesso!', 'success');
           } else {
-            await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS, payload);
-            window.EMCUtils.showToast('Produto cadastrado! Agora monte a Ficha Técnica BOM.', 'success');
+            const resCriado = await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS, payload);
+            novoId = resCriado.id || resCriado.data?.id;
+            window.EMCUtils.showToast('Produto cadastrado! Abrindo Ficha Técnica (BOM)...', 'success');
           }
           this.carregarListaProdutos();
+
+          if (!isEdit && novoId) {
+            setTimeout(() => this.gerenciarFichaTecnica(novoId), 400);
+          }
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar produto.', 'error');
@@ -380,22 +422,26 @@ window.CatalogoView = {
       ]);
 
       const listaItens = itensCatalogo.results || itensCatalogo || [];
-      const ficha = prod.ficha_tecnica || [];
+      const ficha = prod.ficha_tecnica_itens || prod.ficha_tecnica || [];
 
-      let optionsItens = '<option value="">SELECIONE UM INSUMO...</option>';
+      let optionsItens = '<option value="">SELECIONE UM INSUMO / MATÉRIA-PRIMA...</option>';
       listaItens.forEach((it) => {
-        const uom = it.unidade_consumo_sigla || 'UN';
-        optionsItens += `<option value="${it.id}">${window.EMCUtils.escapeHtml(it.nome)} (${uom})</option>`;
+        const uom = it.unidade_consumo_sigla || it.unidade_compra_sigla || 'UN';
+        const custoConsumo = parseFloat(it.custo_unitario_consumo) || 0;
+        optionsItens += `<option value="${it.id}" data-custo="${custoConsumo}" data-uom="${uom}">${window.EMCUtils.escapeHtml(it.nome)} [${uom}] - ${window.EMCUtils.formatarMoeda(custoConsumo)}/${uom}</option>`;
       });
 
       let rowsFicha = '';
       ficha.forEach((f) => {
-        const custoUnit = parseFloat(f.custo_unitario_consumo) || 0;
-        const subtotal = (parseFloat(f.quantidade_utilizada) || 0) * custoUnit;
+        const custoUnit = parseFloat(f.item_custo_unitario_consumo || f.custo_unitario_consumo) || 0;
+        const qtd = parseFloat(f.quantidade_utilizada) || 0;
+        const subtotal = parseFloat(f.subtotal_custo) || (qtd * custoUnit);
+        const uomSigla = f.item_unidade_consumo_sigla || f.unidade_sigla || '';
+
         rowsFicha += `
           <tr id="ficha-row-${f.id}">
             <td><strong>${window.EMCUtils.escapeHtml(f.item_nome || 'Insumo')}</strong></td>
-            <td class="mono-text">${parseFloat(f.quantidade_utilizada).toFixed(4)} ${f.unidade_sigla || ''}</td>
+            <td class="mono-text">${qtd.toFixed(4)} ${uomSigla}</td>
             <td class="mono-text">${window.EMCUtils.formatarMoeda(custoUnit)}</td>
             <td class="mono-text" style="color: var(--color-rust-orange); font-weight: 700;">${window.EMCUtils.formatarMoeda(subtotal)}</td>
             <td style="text-align: right;">
@@ -405,23 +451,30 @@ window.CatalogoView = {
         `;
       });
 
+      const taxaMo = parseFloat(prod.taxa_mao_de_obra_hora_aplicada) || 0;
+      const horasMo = parseFloat(prod.tempo_estimado_execucao) || 0;
+      const custoMo = parseFloat(prod.custo_mao_de_obra) || (horasMo * taxaMo);
+      const custoMat = parseFloat(prod.custo_total_materiais) || 0;
+      const precoApurado = parseFloat(prod.preco_custo_apurado) || (custoMat + custoMo);
+
       window.EMCUtils.openModal({
         title: `FICHA TÉCNICA (BOM) - ${prod.nome}`,
         size: 'lg',
         hideFooter: true,
         content: `
           <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
-            <h4 style="margin-bottom: 12px;">ADICIONAR INSUMO À RECEITA DO PRODUTO</h4>
+            <h4 style="margin-bottom: 8px;">+ COMPOSIÇÃO DE MATERIAIS (BOM - BILL OF MATERIALS)</h4>
+            <p class="mono-text mb-12" style="font-size: 11px; color: var(--color-on-surface-variant);">Adicione matérias-primas e insumos consumidos por unidade deste produto fabricado.</p>
             <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Insumo do Catálogo</label>
+                <label class="form-label">Insumo do Catálogo *</label>
                 <select id="add-ficha-item-id" class="form-control">${optionsItens}</select>
               </div>
               <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Quantidade Consumida</label>
-                <input type="number" step="0.0001" id="add-ficha-qtd" class="form-control mono-text" placeholder="1.0000">
+                <label class="form-label">Quantidade Consumida *</label>
+                <input type="text" id="add-ficha-qtd" class="form-control mono-text" placeholder="Ex: 2,5 ou 10">
               </div>
-              <button class="btn btn-primary" id="btn-add-item-ficha" style="height: 42px;">+ ADICIONAR</button>
+              <button class="btn btn-primary" id="btn-add-item-ficha" style="height: 40px;">+ ADICIONAR</button>
             </div>
           </div>
 
@@ -429,43 +482,56 @@ window.CatalogoView = {
             <table class="table">
               <thead>
                 <tr>
-                  <th>INSUMO</th>
-                  <th>QUANTIDADE</th>
-                  <th>CUSTO CONSUMO</th>
+                  <th>INSUMO / MATÉRIA-PRIMA</th>
+                  <th>QUANTIDADE CONSUMIDA</th>
+                  <th>CUSTO UNITÁRIO</th>
                   <th>SUBTOTAL</th>
                   <th style="text-align: right;">AÇÕES</th>
                 </tr>
               </thead>
               <tbody id="ficha-tecnica-tbody">
-                ${rowsFicha || '<tr><td colspan="5" class="text-center mono-text" style="padding: 16px;">Nenhum insumo adicionado a esta ficha técnica.</td></tr>'}
+                ${rowsFicha || '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px; color: var(--color-on-surface-variant);">Nenhum insumo adicionado a esta Ficha Técnica BOM.</td></tr>'}
               </tbody>
             </table>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; background-color: var(--color-surface-container-low); padding: 16px; border: 1px solid var(--color-steel-gray);">
+          <!-- Memória de Cálculo em Tempo Real -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; background-color: var(--color-surface-container-lowest); padding: 16px; border: 1px solid var(--color-steel-gray);">
             <div>
-              <span class="mono-text" style="font-size: 13px;">MÃO DE OBRA: <strong>${parseFloat(prod.tempo_estimado_execucao || 0).toFixed(2)} Horas</strong></span>
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">CUSTO MATERIAIS (BOM):</span>
+              <div class="mono-text" style="font-size: 16px; font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(custoMat)}</div>
             </div>
             <div>
-              <span class="mono-text" style="font-size: 16px; color: var(--color-success);">PREÇO DE CUSTO APURADO: <strong>${window.EMCUtils.formatarMoeda(prod.preco_custo_apurado || 0)}</strong></span>
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">MÃO DE OBRA (${horasMo.toFixed(2)}h @ ${window.EMCUtils.formatarMoeda(taxaMo)}/h):</span>
+              <div class="mono-text" style="font-size: 16px; font-weight: 700; color: var(--color-on-surface);">${window.EMCUtils.formatarMoeda(custoMo)}</div>
+            </div>
+            <div style="text-align: right;">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PREÇO DE CUSTO APURADO:</span>
+              <div class="mono-text" style="font-size: 18px; font-weight: 700; color: var(--color-success);">${window.EMCUtils.formatarMoeda(precoApurado)}</div>
             </div>
           </div>
         `
       });
 
       document.getElementById('btn-add-item-ficha')?.addEventListener('click', async () => {
-        const item_id = document.getElementById('add-ficha-item-id').value;
-        const quantidade_utilizada = parseFloat(document.getElementById('add-ficha-qtd').value);
+        const item_id = parseInt(document.getElementById('add-ficha-item-id').value);
+        const qtdStr = document.getElementById('add-ficha-qtd').value.replace(',', '.').trim();
+        const quantidade_utilizada = parseFloat(qtdStr);
 
-        if (!item_id || !quantidade_utilizada || quantidade_utilizada <= 0) {
-          window.EMCUtils.showToast('Selecione um insumo e informe uma quantidade válida.', 'warning');
+        if (!item_id) {
+          window.EMCUtils.showToast('Selecione um insumo do catálogo.', 'warning');
+          return;
+        }
+
+        if (!quantidade_utilizada || quantidade_utilizada <= 0) {
+          window.EMCUtils.showToast('Informe uma quantidade válida maior que zero.', 'warning');
           return;
         }
 
         try {
           await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.FICHAS_TECNICAS, {
-            produto_id: produtoId,
-            item_id,
+            produto: produtoId,
+            item: item_id,
             quantidade_utilizada
           });
           window.EMCUtils.showToast('Insumo adicionado à Ficha Técnica!', 'success');
@@ -487,7 +553,7 @@ window.CatalogoView = {
       this.gerenciarFichaTecnica(produtoId);
       this.carregarListaProdutos();
     } catch (e) {
-      window.EMCUtils.showToast('Erro ao remover insumo.', 'error');
+      window.EMCUtils.showToast(e.message || 'Erro ao remover insumo.', 'error');
     }
   }
 };
