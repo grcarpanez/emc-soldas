@@ -14,7 +14,7 @@
   <!-- Tipografia Técnica do Design System (Google Fonts) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
   <!-- Estilos do Design System Industrial Integrity -->
   <link rel="stylesheet" href="/assets/css/industrial-integrity.css">
@@ -31,64 +31,63 @@
 
       <nav class="sidebar-nav">
         <a href="#/dashboard" class="nav-item active" data-route="dashboard">
-          <span class="mono-text">[01]</span> Dashboard
+          Dashboard
         </a>
-        <a href="#/orcamentos" class="nav-item" data-route="orcamentos">
-          <span class="mono-text">[02]</span> Orçamentos
+        <a href="#/orcamentos" class="nav-item" data-route="orcamentos" data-permission="acesso_comercial">
+          Orçamentos
         </a>
-        <a href="#/faturamento" class="nav-item" data-route="faturamento">
-          <span class="mono-text">[03]</span> Faturamento
+        <a href="#/faturamento" class="nav-item" data-route="faturamento" data-permission="acesso_comercial">
+          Faturamento & Conta Corrente
         </a>
-        <a href="#/tesouraria" class="nav-item" data-route="tesouraria">
-          <span class="mono-text">[04]</span> Tesouraria & Caixa
+        <a href="#/tesouraria" class="nav-item" data-route="tesouraria" data-permission="acesso_tesouraria">
+          Tesouraria & Caixa
         </a>
-        <a href="#/conciliacao" class="nav-item" data-route="conciliacao">
-          <span class="mono-text">[05]</span> Conciliação
+        <a href="#/conciliacao" class="nav-item" data-route="conciliacao" data-permission="acesso_tesouraria">
+          Conciliação Bancária
         </a>
-        <a href="#/compras" class="nav-item" data-route="compras">
-          <span class="mono-text">[06]</span> Compras (Notas)
+        <a href="#/compras" class="nav-item" data-route="compras" data-permission="acesso_compras">
+          Compras & Entradas
         </a>
-        <a href="#/catalogo" class="nav-item" data-route="catalogo">
-          <span class="mono-text">[07]</span> Catálogo & BOM
+        <a href="#/catalogo" class="nav-item" data-route="catalogo" data-permission="gestao_catalogo">
+          Catálogo & Motor BOM
         </a>
         <a href="#/clientes" class="nav-item" data-route="clientes">
-          <span class="mono-text">[08]</span> Clientes & Veículos
+          Clientes & Equipamentos
         </a>
-        <a href="#/relatorios" class="nav-item" data-route="relatorios">
-          <span class="mono-text">[09]</span> Central Analítica
+        <a href="#/relatorios" class="nav-item" data-route="relatorios" data-permission="visao_relatorios">
+          Central Analítica
         </a>
-        <a href="#/administracao" class="nav-item" data-route="administracao">
-          <span class="mono-text">[10]</span> Administração
+        <a href="#/administracao" class="nav-item" data-route="administracao" data-permission="configuracoes_globais">
+          Administração
         </a>
       </nav>
     </aside>
 
+    <!-- Overlay para fechar sidebar no mobile/tablet -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Área de Conteúdo Principal -->
     <main class="main-content">
       <header class="topbar">
-        <h2 class="topbar-title" id="page-title">Painel de Operações</h2>
-        <div class="topbar-actions">
-          <span class="status-chip success">ONLINE</span>
-          <span class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">EMC V1.0</span>
+        <div class="topbar-title-wrapper">
+          <button class="btn btn-ghost btn-sm" id="btn-toggle-sidebar" style="display: none; padding: 4px 8px; font-size: 14px;" title="Abrir Menu">☰</button>
+          <h2 class="topbar-title" id="page-title">Painel de Operações</h2>
+        </div>
+
+        <div class="topbar-actions" id="topbar-actions-container">
+          <span class="status-chip success" id="network-status-chip">ONLINE</span>
+          <span class="status-chip info" id="user-role-badge">OPERADOR</span>
+          <span class="mono-text" id="user-email-display">-</span>
+          
+          <button class="btn btn-secondary btn-sm" id="btn-manual-soft-lock" title="Bloquear Tela (Soft Lock)">🔒 TRAVAR</button>
+          <button class="btn btn-ghost btn-sm" id="btn-topbar-logout" title="Encerrar Sessão">SAIR</button>
         </div>
       </header>
 
       <section class="content-body" id="app-root">
-        <!-- Visualização inicial da casca do sistema -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Base do Sistema Preparada</h3>
-            <span class="status-chip info">FASE 1 PRONTA</span>
-          </div>
-          <p style="margin-bottom: 12px; color: var(--color-on-surface-variant);">
-            O ambiente base desacoplado (Backend Django REST Framework + Frontend PWA Vanilla) foi estruturado com sucesso.
-          </p>
-          <div style="background-color: var(--color-surface-container-low); padding: 16px; border: 1px solid var(--color-steel-gray);">
-            <p class="mono-text" style="font-size: 13px;">
-              <strong>Design System:</strong> Industrial Integrity (0px border-radius, IBM Plex Sans, Inter, JetBrains Mono)<br>
-              <strong>Status:</strong> Arquitetura e arquivos vivos configurados. Pronto para a Fase 2 (Banco de Dados e Models ORM).
-            </p>
-          </div>
+        <div class="text-center" style="padding: 60px 0;">
+          <div class="loader-spinner"></div>
+          <p class="mono-text mt-16" style="color: var(--color-on-surface-variant);">INICIALIZANDO SISTEMA INDUSTRIAL...</p>
         </div>
       </section>
     </main>
@@ -97,10 +96,31 @@
   <!-- Container Global de Modais -->
   <div id="modal-root"></div>
 
+  <!-- Container de Notificações Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
   <!-- Scripts da Aplicação Client-Side -->
   <script src="/assets/js/config.js"></script>
   <script src="/assets/js/utils.js"></script>
   <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+
+  <!-- Módulos de Telas (Views) -->
+  <script src="/assets/js/views/auth-view.js"></script>
+  <script src="/assets/js/views/dashboard-view.js"></script>
+  <script src="/assets/js/views/cadastros-view.js"></script>
+  <script src="/assets/js/views/catalogo-view.js"></script>
+  <script src="/assets/js/views/compras-view.js"></script>
+  <script src="/assets/js/views/orcamentos-view.js"></script>
+  <script src="/assets/js/views/faturamento-view.js"></script>
+  <script src="/assets/js/views/financeiro-view.js"></script>
+  <script src="/assets/js/views/conciliacao-view.js"></script>
+  <script src="/assets/js/views/administracao-view.js"></script>
+  <script src="/assets/js/views/relatorios-view.js"></script>
+
+  <!-- Roteador SPA e Inicializador Central -->
+  <script src="/assets/js/router.js"></script>
   <script src="/assets/js/app.js"></script>
 </body>
 </html>
+

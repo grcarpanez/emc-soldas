@@ -54,7 +54,7 @@ class ApiClient {
     const fetchConfig = {
       method,
       headers,
-      credentials: 'same-origin', // Envia Cookies de Sessão HttpOnly
+      credentials: 'include', // Envia Cookies de Sessão HttpOnly e CSRF em dev (portas diferentes) e prod
       ...options
     };
 
@@ -132,6 +132,73 @@ class ApiClient {
   delete(endpoint, options = {}) {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
+
+  /**
+   * Faz o download seguro de arquivos (PDF, CSV, OFX, XML) retornados pela API via Blob.
+   * @param {string} endpoint 
+   * @param {string} defaultFilename 
+   */
+  async downloadFile(endpoint, defaultFilename = 'download') {
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    const csrfToken = this.getCsrfToken();
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+        },
+        credentials: 'include'
+      });
+
+      if (response.status === 401) {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        throw new Error('Sessão expirada.');
+      }
+
+      if (response.status === 403) {
+        window.dispatchEvent(new CustomEvent('auth:forbidden'));
+        throw new Error('Acesso proibido.');
+      }
+
+      if (response.status === 429) {
+        window.dispatchEvent(new CustomEvent('api:throttled'));
+        throw new Error('Limite de requisições atingido. Aguarde um minuto.');
+      }
+
+      if (!response.ok) {
+        const erroJson = await response.json().catch(() => ({}));
+        throw new Error(erroJson.message || erroJson.detail || 'Falha ao baixar arquivo.');
+      }
+
+      // Obtém o nome do arquivo pelo cabeçalho Content-Disposition se existir
+      let filename = defaultFilename;
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+
+      return { success: true, filename };
+    } catch (error) {
+      console.error('[ApiClient Download Error]:', error);
+      throw error;
+    }
+  }
 }
 
 window.api = new ApiClient();
+

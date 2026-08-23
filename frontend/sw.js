@@ -3,14 +3,29 @@
  * Sistema EMC Soldas - Industrial Integrity PWA
  */
 
-const CACHE_NAME = 'emc-soldas-v1';
+const CACHE_NAME = 'emc-soldas-v1.7';
 const STATIC_ASSETS = [
   '/',
+  '/index.html',
   '/manifest.json',
   '/assets/css/industrial-integrity.css',
   '/assets/css/layout.css',
   '/assets/js/config.js',
+  '/assets/js/utils.js',
   '/assets/js/api.js',
+  '/assets/js/auth.js',
+  '/assets/js/views/auth-view.js',
+  '/assets/js/views/dashboard-view.js',
+  '/assets/js/views/cadastros-view.js',
+  '/assets/js/views/catalogo-view.js',
+  '/assets/js/views/compras-view.js',
+  '/assets/js/views/orcamentos-view.js',
+  '/assets/js/views/faturamento-view.js',
+  '/assets/js/views/financeiro-view.js',
+  '/assets/js/views/conciliacao-view.js',
+  '/assets/js/views/administracao-view.js',
+  '/assets/js/views/relatorios-view.js',
+  '/assets/js/router.js',
   '/assets/js/app.js'
 ];
 

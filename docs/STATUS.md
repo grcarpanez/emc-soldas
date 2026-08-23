@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 13 - Dashboards, Relatórios Estratégicos e Exportações PDF/CSV)  
-**Fase Atual:** Fase 14 - Frontend PWA Client-Side e Interface Completa (Pronta para início)  
-**Próxima Fase:** Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 14 - Frontend PWA Client-Side e Interface Completa Industrial Integrity)  
+**Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
+**Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 
 ---
 
@@ -27,7 +27,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | **Concluída** | 100% |
 | **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | **Concluída** | 100% |
 | **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | **Concluída** | 100% |
-| **Fase 14** | Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*) | Pendente | 0% |
+| **Fase 14** | Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*) | **Concluída** | 100% |
 | **Fase 15** | Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy | Pendente | 0% |
 
 ---
@@ -82,7 +82,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 ### Fase 3.5 - Adequação de Sanitização Universal (Uppercase/Sem Acentos) e Utilitários de Máscaras
 - [x] Criar função utilitária de sanitização universal `sanitizar_texto_maiusculo` no backend (`backend/core/utils.py`).
 - [x] Atualizar dados padrão do seeder inicial (`backend/core/management/commands/seed_initial_data.py`) convertendo 100% dos textos para maiúsculas sem acento e enums em UPPERCASE.
-- [x] Criar biblioteca de utilitários no frontend (`frontend/assets/js/utils.js`) com conversão em tempo real (`input`/`paste`), Máscara ATM de Moeda (`R$ 0,00`), CPF/CNPJ, Telefone, CEP, Placas e Linha Digitável.
+- [x] Criar biblioteca de utilitários no frontend (`frontend/assets/js/utils.js`) com conversão em tempo real (`input`/`paste`), Máscara ATM de Moeda (`R$ 0,00`), CPF/CNPJ, Telefone, CEP, Placas, Chave NFe e Linha Digitável.
 - [x] Criar e validar testes automatizados de sanitização de strings no backend com 100% de sucesso.
 
 ### Fase 4 - Cadastros Estruturais e Dicionários Centrais
@@ -188,13 +188,19 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (146 testes no total acumulado do projeto).
 
 ### Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)
-- [ ] Implementar roteador client-side SPA, Service Worker e cache offline.
-- [ ] Implementar Telas de Acesso (Login, PIN de 6 dígitos, Recuperação de Senha).
-- [ ] Implementar Dashboard de Flip Cards interativos e atalhos rápidos.
-- [ ] Implementar telas operacionais de Orçamentos, Faturas, Clientes, Equipamentos, Catálogo e Compras.
-- [ ] Implementar telas de Tesouraria, Liquidação, Cartões e Conciliação Split-Screen.
-- [ ] Implementar Central do Administrador, Gestão de Permissões, Logs e Lixeira.
-- [ ] Integrar todos os formulários com validação visual, feedback em tempo real e Design System 100% fiel ao `docs/DESIGN.md`.
+- [x] Implementar roteador client-side SPA (`router.js`), Service Worker (`sw.js`) e cache de assets estáticos offline.
+- [x] Implementar Telas de Acesso (`auth-view.js`: Login, PIN de 6 dígitos, Recuperação de Senha e Ativação de Conta).
+- [x] Implementar Dashboard Principal (`dashboard-view.js`: 5 Flip Cards 3D com métricas em tempo real, filtros temporais e feed de eventos).
+- [x] Implementar telas operacionais de Cadastros (`cadastros-view.js`: Clientes com consulta de CNPJ e validação CPF Módulo 11, Fornecedores, Equipamentos e Dicionários UOM/Atributos).
+- [x] Implementar Catálogo de Insumos e Motor BOM (`catalogo-view.js`: Itens, conversão de unidades, Produtos e Ficha Técnica BOM calculando Custo Apurado em tempo real).
+- [x] Implementar Módulo de Compras (`compras-view.js`: Notas de Entrada com máscara de chave NFe 44 dígitos, itens e histórico).
+- [x] Implementar Orçamentos Comerciais (`orcamentos-view.js`: Elaboração ágil com 3 tipos de itens, snapshots imutáveis, renovação com alerta de inflação, cancelamento justificado e geração de PDF).
+- [x] Implementar Faturamento Agregado (`faturamento-view.js`: Conta Corrente, Pré-Faturas, Faturas Finais, Baixas com taxa de maquininha, Cortesias 100% e cancelamento em cascata).
+- [x] Implementar Tesouraria & Caixa Real (`financeiro-view.js`: Contas a Pagar/Receber por competência, Extrato de Caixa Real, Cartões Corporativos com rollover e Estorno com justificativa perpétua).
+- [x] Implementar Conciliação Bancária Inteligente (`conciliacao-view.js`: Layout Split-Screen de 2 colunas, importação OFX/CSV, Match 1:1, Match Múltiplo e Lançamento Rápido no Ato).
+- [x] Implementar Central do Administrador (`administracao-view.js`: Parâmetros Globais, teste SMTP em tempo real, Gestão de Equipe com 10 toggles dinâmicos e desbloqueio anti-bruteforce, Log Viewer com expurgo TTL e Lixeira com restauração lógica em 1 clique).
+- [x] Implementar Central Analítica (`relatorios-view.js`: Inadimplência, Dossiê do Cliente, Curvas ABC de Clientes/Itens, DRE Simplificado e Divergências de Conciliação com exportação PDF/CSV).
+- [x] Integrar 100% dos componentes e formulários ao Design System *Industrial Integrity* (0px border-radius, tipografia técnica, paleta Dark Iron, Steel Gray e Rust Orange, máscaras e toasts).
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).
@@ -206,5 +212,6 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 14 - Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*)**, desenvolvendo a aplicação client-side SPA/PWA completa em HTML5 semântico, CSS3 puro (sem Tailwind/Bootstrap) rigorosamente alinhada ao `docs/DESIGN.md` (paleta Dark Iron, Steel Gray, Rust Orange, tipografia técnica IBM Plex Sans, Inter e JetBrains Mono, cantos retos 0px border-radius), roteador client-side em Vanilla JS, Service Worker (`sw.js`) para resiliência offline e consumo desacoplado de todas as APIs REST construídas nas fases 1 a 13.
+Iniciar a **Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy**, executando a suíte consolidada de testes de integração, os 6 testes mandatórios de pentest/segurança (RBAC/IDOR, Brute-force, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256), disponibilizando o gerador de chaves criptográficas seguras (`tools/generate_keys.py`) e o roteiro final de deploy em produção Cloud PaaS.
+
 

@@ -74,6 +74,33 @@
   margin: 0;
   padding: 0;
   border-radius: 0 !important; /* Força 0px border-radius em todos os elementos */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-steel-gray) var(--color-surface-container-lowest);
+}
+
+/* Scrollbars Customizadas (Industrial Integrity) */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-surface-container);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-steel-gray);
+  border: 1px solid var(--color-surface-container-lowest);
+  border-radius: 0px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-rust-orange);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--color-surface-container-lowest);
 }
 
 body {
@@ -258,7 +285,9 @@ p, span, label, input, textarea, select {
 
 /* Status Chips Retangulares */
 .status-chip {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 8px;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -291,3 +320,403 @@ p, span, label, input, textarea, select {
   color: #8ac8f0;
   border-color: #244b63;
 }
+
+/* ==========================================================================
+   FLIP CARDS INTERATIVOS 3D (DASHBOARD)
+   ========================================================================== */
+.flip-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.flip-card-wrapper {
+  background-color: transparent;
+  perspective: 1000px;
+  height: 220px;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.flip-card-wrapper.flipped .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-front, .flip-card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  background-color: var(--color-surface-container);
+  border: 1px solid var(--color-steel-gray);
+  border-top: 2px solid var(--color-rust-orange);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.flip-card-back {
+  transform: rotateY(180deg);
+  background-color: var(--color-surface-container-high);
+  border-top: 2px solid var(--color-brushed-metal);
+}
+
+.flip-card-body {
+  cursor: pointer;
+  flex: 1;
+}
+
+.flip-card-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flip-card-value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--color-on-surface);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.flip-card-sub {
+  font-size: 13px;
+  color: var(--color-on-surface-variant);
+}
+
+.flip-card-footer {
+  border-top: 1px solid var(--color-surface-container-highest);
+  padding-top: 8px;
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.flip-card-btn-detail {
+  background: none;
+  border: none;
+  color: var(--color-rust-orange);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.flip-card-btn-detail:hover {
+  text-decoration: underline;
+  color: #ffb59c;
+}
+
+/* ==========================================================================
+   MODAIS E OVERLAYS (INDUSTRIAL)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.modal-card {
+  background-color: var(--color-surface-container);
+  border: 1px solid var(--color-brushed-metal);
+  border-top: 3px solid var(--color-rust-orange);
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+}
+
+.modal-size-sm { max-width: 420px; }
+.modal-size-md { max-width: 640px; }
+.modal-size-lg { max-width: 900px; }
+.modal-size-xl { max-width: 1200px; }
+.modal-size-full { max-width: 95vw; height: 90vh; }
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-steel-gray);
+  background-color: var(--color-surface-container-high);
+}
+
+.modal-title {
+  font-family: var(--font-headline);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-on-surface);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-steel-gray);
+  background-color: var(--color-surface-container-low);
+}
+
+/* ==========================================================================
+   SISTEMA DE TOASTS
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.toast {
+  background-color: var(--color-surface-container-highest);
+  border: 1px solid var(--color-steel-gray);
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--color-on-surface);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast-success {
+  border-left: 4px solid var(--color-success);
+  background-color: #152418;
+}
+
+.toast-error {
+  border-left: 4px solid var(--color-error);
+  background-color: #2b1315;
+}
+
+.toast-warning {
+  border-left: 4px solid var(--color-warning);
+  background-color: #292010;
+}
+
+.toast-info {
+  border-left: 4px solid var(--color-rust-orange);
+  background-color: #1e1e1e;
+}
+
+.toast-fade-out {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+/* ==========================================================================
+   TABS & NAVEGAÇÃO INTERNA
+   ========================================================================== */
+.tabs-nav {
+  display: flex;
+  border-bottom: 2px solid var(--color-steel-gray);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  gap: 2px;
+}
+
+.tab-btn {
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface-variant);
+  border: 1px solid var(--color-steel-gray);
+  border-bottom: none;
+  padding: 10px 18px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface);
+}
+
+.tab-btn.active {
+  background-color: var(--color-surface-container-highest);
+  color: #ffffff;
+  border-top: 3px solid var(--color-rust-orange);
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* ==========================================================================
+   SPLIT-SCREEN (CONCILIAÇÃO BANCÁRIA)
+   ========================================================================== */
+.split-screen-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 500px;
+}
+
+@media (max-width: 900px) {
+  .split-screen-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.split-column {
+  background-color: var(--color-surface-container-low);
+  border: 1px solid var(--color-steel-gray);
+  display: flex;
+  flex-direction: column;
+}
+
+.split-column-header {
+  padding: 12px 16px;
+  background-color: var(--color-surface-container-high);
+  border-bottom: 1px solid var(--color-steel-gray);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.split-column-body {
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 550px;
+  flex: 1;
+}
+
+.split-item {
+  background-color: var(--color-surface-container);
+  border: 1px solid var(--color-steel-gray);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.split-item:hover {
+  border-color: var(--color-brushed-metal);
+  background-color: var(--color-surface-container-high);
+}
+
+.split-item.selected {
+  border: 2px solid var(--color-rust-orange);
+  background-color: #271c18;
+}
+
+.split-item.matched {
+  border-left: 4px solid var(--color-success);
+}
+
+/* ==========================================================================
+   UTILITÁRIOS DIVERSOS (LOADER, INADIMPLÊNCIA, TIMELINE)
+   ========================================================================== */
+.alert-banner {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.alert-banner.alert-danger {
+  background-color: #381214;
+  border-color: var(--color-error);
+  color: #ffdad6;
+}
+
+.alert-banner.alert-warning {
+  background-color: #33230b;
+  border-color: var(--color-warning);
+  color: #ffe2a8;
+}
+
+.alert-banner.alert-info {
+  background-color: #122838;
+  border-color: #4da6e0;
+  color: #d1ecfc;
+}
+
+.loader-spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--color-steel-gray);
+  border-top-color: var(--color-rust-orange);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.justify-center { justify-content: center; }
+.d-flex { display: flex; }
+.align-center { align-items: center; }
+.gap-8 { gap: 8px; }
+.gap-16 { gap: 16px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+.w-100 { width: 100%; }
+

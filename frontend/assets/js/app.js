@@ -1,51 +1,87 @@
 /**
- * Aplicação Principal PWA (EMC Soldas).
- * Inicialização, Registro de Service Worker e Gestão de Ociosidade (Soft Lock).
+ * EMC Soldas - Aplicação Principal SPA / PWA (Industrial Integrity)
+ * Inicialização, Registro de Service Worker, Gestão de Conexão e Roteamento.
  */
 
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('EMC Soldas - Sistema Inicializado (Industrial Integrity PWA)');
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[EMC Soldas] Inicializando PWA Industrial Integrity...');
 
   // 1. Registro do Service Worker
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('[PWA] Service Worker registrado com sucesso:', reg.scope))
-        .catch((err) => console.warn('[PWA] Falha ao registrar Service Worker:', err));
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => console.log('[PWA] Service Worker ativo no escopo:', reg.scope))
+      .catch((err) => console.warn('[PWA] Falha ao registrar Service Worker:', err));
+  }
+
+  // 2. Monitoramento de Conexão Online / Offline
+  const updateOnlineStatus = () => {
+    const statusChip = document.getElementById('network-status-chip');
+    if (statusChip) {
+      if (navigator.onLine) {
+        statusChip.textContent = 'ONLINE';
+        statusChip.className = 'status-chip success';
+      } else {
+        statusChip.textContent = 'OFFLINE (CACHE)';
+        statusChip.className = 'status-chip warning';
+        window.EMCUtils?.showToast('Você está offline. Operando em modo de contingência local.', 'warning');
+      }
+    }
+  };
+
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
+
+  // 3. Botão de Bloqueio Manual (Soft Lock)
+  document.getElementById('btn-manual-soft-lock')?.addEventListener('click', () => {
+    window.auth.triggerSoftLock();
+  });
+
+  // 4. Botão de Logout
+  document.getElementById('btn-topbar-logout')?.addEventListener('click', async () => {
+    if (confirm('Deseja realmente encerrar sua sessão?')) {
+      await window.auth.logout();
+    }
+  });
+
+  // 5. Toggle de Sidebar para Mobile e Tablet
+  const toggleBtn = document.getElementById('btn-toggle-sidebar');
+  const sidebar = document.getElementById('app-sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+
+  const closeSidebar = () => {
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('open');
+  };
+
+  const openSidebar = () => {
+    sidebar?.classList.add('open');
+    overlay?.classList.add('open');
+  };
+
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener('click', () => {
+      if (sidebar.classList.contains('open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
+    });
+
+    overlay?.addEventListener('click', closeSidebar);
+
+    // Fecha a sidebar ao clicar em um link de navegação
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        if (window.innerWidth <= 1024) {
+          closeSidebar();
+        }
+      });
     });
   }
 
-  // 2. Temporizador de Ociosidade (Soft Lock - 30 Minutos)
-  let inactivityTimer = null;
-  const INACTIVITY_LIMIT_MS = (window.CONFIG?.SOFT_LOCK_TIMEOUT_MINUTES || 30) * 60 * 1000;
-
-  function resetInactivityTimer() {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-      triggerSoftLock();
-    }, INACTIVITY_LIMIT_MS);
-  }
-
-  function triggerSoftLock() {
-    console.warn('[Segurança] Tempo de ociosidade atingido (30 min). Ativando Soft Lock.');
-    window.dispatchEvent(new CustomEvent('auth:soft_lock'));
-  }
-
-  // Monitora interações do usuário para renovar o timer
-  ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll'].forEach((event) => {
-    window.addEventListener(event, resetInactivityTimer, { passive: true });
-  });
-
-  resetInactivityTimer();
-
-  // 3. Ouvintes de Eventos Globais de Autenticação
-  window.addEventListener('auth:unauthorized', () => {
-    console.log('[Auth] Redirecionando para Login...');
-    // A ser integrado na Fase 3
-  });
-
-  window.addEventListener('auth:soft_lock', () => {
-    console.log('[Auth] Exibindo modal de destravamento com PIN de 6 dígitos...');
-    // A ser integrado na Fase 3
-  });
+  // 6. Verificação Inicial de Autenticação e Roteamento
+  await window.auth.checkAuth();
+  await window.router.handleRouteChange();
 });
+

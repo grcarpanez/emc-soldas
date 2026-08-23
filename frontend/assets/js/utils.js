@@ -189,7 +189,232 @@ function formatarLinhaDigitavelBoleto(valor) {
 }
 
 // ============================================================================
-// 4. OUVIDO GLOBAL DE EVENTOS (DELEGAÇÃO NO DOCUMENT)
+// 4. FORMATADORES DE EXIBIÇÃO E CONVERSÃO
+// ============================================================================
+
+/**
+ * Formata um número/string decimal para moeda brasileira (R$ 1.250,50).
+ * @param {number|string} valor 
+ * @returns {string}
+ */
+function formatarMoeda(valor) {
+  const num = parseFloat(valor) || 0;
+  return 'R$ ' + num.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+/**
+ * Formata data ISO (YYYY-MM-DD) para padrão brasileiro (DD/MM/YYYY).
+ * @param {string} dataIso 
+ * @returns {string}
+ */
+function formatarDataPtBr(dataIso) {
+  if (!dataIso) return '-';
+  const partes = String(dataIso).split('T')[0].split('-');
+  if (partes.length === 3) {
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  }
+  return dataIso;
+}
+
+/**
+ * Formata data e hora ISO para padrão brasileiro (DD/MM/YYYY HH:mm).
+ * @param {string} dataHoraIso 
+ * @returns {string}
+ */
+function formatarDataHoraPtBr(dataHoraIso) {
+  if (!dataHoraIso) return '-';
+  try {
+    const d = new Date(dataHoraIso);
+    if (isNaN(d.getTime())) return dataHoraIso;
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const ano = d.getFullYear();
+    const hora = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dia}/${mes}/${ano} ${hora}:${min}`;
+  } catch {
+    return dataHoraIso;
+  }
+}
+
+/**
+ * Formata número de horas para exibição (ex: "1,50 h").
+ * @param {number|string} valor 
+ * @returns {string}
+ */
+function formatarHoras(valor) {
+  const num = parseFloat(valor) || 0;
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' h';
+}
+
+/**
+ * Formata porcentagem (ex: "5,00 %").
+ * @param {number|string} valor 
+ * @returns {string}
+ */
+function formatarPorcentagem(valor) {
+  const num = parseFloat(valor) || 0;
+  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %';
+}
+
+/**
+ * Escapa strings contra XSS ao interpolar em HTML.
+ * @param {string} str 
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ============================================================================
+// 5. SISTEMA DE NOTIFICAÇÕES TOAST (INDUSTRIAL INTEGRITY)
+// ============================================================================
+
+/**
+ * Exibe notificação toast estilo industrial no canto superior direito.
+ * @param {string} mensagem - Texto da mensagem
+ * @param {'success'|'error'|'warning'|'info'} tipo - Tipo do toast
+ * @param {number} duracaoMs - Tempo em milissegundos
+ */
+function showToast(mensagem, tipo = 'info', duracaoMs = 4000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+  
+  const prefixo = {
+    success: '[SUCESSO]',
+    error: '[ERRO]',
+    warning: '[ALERTA]',
+    info: '[INFO]'
+  }[tipo] || '[INFO]';
+
+  toast.innerHTML = `
+    <span class="mono-text" style="font-weight: 700; margin-right: 8px;">${prefixo}</span>
+    <span class="toast-text">${escapeHtml(mensagem)}</span>
+  `;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('toast-fade-out');
+    setTimeout(() => {
+      if (toast.parentElement) toast.parentElement.removeChild(toast);
+    }, 300);
+  }, duracaoMs);
+}
+
+// ============================================================================
+// 6. MODAL UNIVERSAL INDUSTRIAL (0PX BORDER-RADIUS)
+// ============================================================================
+
+/**
+ * Abre modal universal no container #modal-root.
+ * @param {Object} options
+ * @param {string} options.title - Título do cabeçalho
+ * @param {string} options.content - Conteúdo HTML ou texto
+ * @param {string} [options.confirmText] - Texto do botão de confirmação
+ * @param {string} [options.cancelText] - Texto do botão de cancelamento
+ * @param {Function} [options.onConfirm] - Callback de confirmação
+ * @param {Function} [options.onCancel] - Callback de cancelamento
+ * @param {'sm'|'md'|'lg'|'xl'|'full'} [options.size='md'] - Tamanho do modal
+ * @param {boolean} [options.hideFooter=false] - Oculta os botões padrão de rodapé
+ */
+function openModal(options = {}) {
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return;
+
+  const {
+    title = 'Confirmação',
+    content = '',
+    confirmText = 'CONFIRMAR',
+    cancelText = 'CANCELAR',
+    onConfirm = null,
+    onCancel = null,
+    size = 'md',
+    hideFooter = false
+  } = options;
+
+  modalRoot.innerHTML = `
+    <div class="modal-overlay" id="active-modal-overlay">
+      <div class="modal-card modal-size-${size}">
+        <div class="modal-header">
+          <h3 class="modal-title">${escapeHtml(title)}</h3>
+          <button class="btn btn-ghost btn-sm" id="modal-close-btn" title="Fechar">X</button>
+        </div>
+        <div class="modal-body" id="active-modal-body">
+          ${content}
+        </div>
+        ${!hideFooter ? `
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="modal-cancel-btn">${escapeHtml(cancelText)}</button>
+            <button class="btn btn-primary" id="modal-confirm-btn">${escapeHtml(confirmText)}</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  const overlay = document.getElementById('active-modal-overlay');
+  const closeBtn = document.getElementById('modal-close-btn');
+  const cancelBtn = document.getElementById('modal-cancel-btn');
+  const confirmBtn = document.getElementById('modal-confirm-btn');
+
+  function fechar() {
+    modalRoot.innerHTML = '';
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      fechar();
+      if (onCancel) onCancel();
+    });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      fechar();
+      if (onCancel) onCancel();
+    });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async () => {
+      if (onConfirm) {
+        const ret = await onConfirm();
+        if (ret !== false) fechar();
+      } else {
+        fechar();
+      }
+    });
+  }
+}
+
+/**
+ * Fecha o modal ativo.
+ */
+function closeModal() {
+  const modalRoot = document.getElementById('modal-root');
+  if (modalRoot) modalRoot.innerHTML = '';
+}
+
+// ============================================================================
+// 7. OUVIDO GLOBAL DE EVENTOS (DELEGAÇÃO NO DOCUMENT)
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -251,7 +476,7 @@ document.addEventListener('input', (event) => {
 
   // 2. Tratamento Universal de Uppercase sem Acentos para Textos Livres
   if ((tag === 'INPUT' && type === 'text') || tag === 'TEXTAREA') {
-    // Ignora e-mail, senha, campos explicitamente marcados como data-no-transform ou máscaras com lógica própria
+    // Ignora e-mail, senha, campos explicitamente marcados como data-no-transform ou com máscaras específicas
     if (target.dataset.noTransform || type === 'email' || type === 'password' || maskType) {
       return;
     }
@@ -288,6 +513,10 @@ document.addEventListener('paste', (event) => {
     setTimeout(() => { target.value = formatarTelefoneDinamico(target.value); }, 0);
     return;
   }
+  if (maskType === 'chave-nfe') {
+    setTimeout(() => { target.value = formatarChaveAcessoNfe(target.value); }, 0);
+    return;
+  }
 });
 
 // Disponibilização no escopo global para consumo da SPA
@@ -302,5 +531,14 @@ window.EMCUtils = {
   formatarCep,
   formatarPlacaVeiculo,
   formatarChaveAcessoNfe,
-  formatarLinhaDigitavelBoleto
+  formatarLinhaDigitavelBoleto,
+  formatarMoeda,
+  formatarDataPtBr,
+  formatarDataHoraPtBr,
+  formatarHoras,
+  formatarPorcentagem,
+  escapeHtml,
+  showToast,
+  openModal,
+  closeModal
 };
