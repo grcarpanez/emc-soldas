@@ -546,12 +546,14 @@ Construir a Central do Administrador contemplando: Parâmetros Globais da Empres
 - [ ] Criar serializers, viewsets e rotas para `ConfiguracaoGlobal` (`/api/configuracoes-globais/`):
   - Criptografia simétrica AES-256 da senha SMTP no banco (`smtp_password_encrypted`).
   - Endpoint de teste de disparo SMTP em tempo real (`POST /api/configuracoes-globais/testar-smtp/`).
-  - Não-retroatividade de alterações de taxa horária e validade de orçamentos.
-- [ ] Criar rotina de expurgo de logs gerenciada pela tabela `ControleArquivoLog` (`/api/controle-arquivos-log/`).
-- [ ] Implementar Log Viewer do servidor para visualização segura de arquivos diários (`logs/app-YYYY-MM-DD.log`) pelo Admin.
+  - Presets rápidos (Gmail, Outlook, Personalizado) e não-retroatividade de taxa horária e validade.
+- [ ] Criar rotina de expurgo de logs gerenciada pela tabela `ControleArquivoLog` (`/api/controle-arquivos-log/`):
+  - Rotina de envio de backup por e-mail contendo os arquivos `.log` expirados em anexo antes do expurgo definitivo (remetente e destinatário configurados na Central do Admin).
+  - Endpoint de expurgo (`POST /api/controle-arquivos-log/expurgar/`) e comando CLI agendável (`python manage.py expurgar_logs --enviar-backup`).
+- [ ] Implementar Log Viewer do servidor para visualização segura de arquivos diários (`logs/app-YYYY-MM-DD.log`) pelo Admin, com blindagem anti-path traversal.
 - [ ] Implementar gestão de colaboradores e permissões (`/api/usuarios/` e `/api/permissoes/`) com os 10 toggles dinâmicos.
 - [ ] Implementar Painel de Lixeira e Restauração (`/api/lixeira/`):
-  - Listagem com filtros por entidade, data e usuário autor.
+  - Listagem com filtros por 16 entidades, data e usuário autor.
   - Endpoint `POST /api/lixeira/{entidade}/{id}/restaurar/` (revertendo `deleted_at = NULL`).
   - Isolamento de visão: Admin enxerga Lixeira Global; Operador enxerga apenas "Minha Lixeira" (`deleted_by_id = request.user.id`).
 - [ ] Aplicar permissões `configuracoes_globais`, `gestao_equipe` e `auditoria_logs_recovery`.
@@ -559,6 +561,7 @@ Construir a Central do Administrador contemplando: Parâmetros Globais da Empres
 ### Critérios de Pronto
 - Configurações globais salvas e protegidas no banco com AES-256.
 - Teste de SMTP funcionando (com fallback seguro para console).
+- Rotina de envio de backup de logs expirados por e-mail antes do expurgo físico validada.
 - Gestão de equipe e controle dos 10 toggles dinâmicos operacional.
 - Log Viewer e Lixeira com restauração lógica funcionando para Admin e Operador.
 

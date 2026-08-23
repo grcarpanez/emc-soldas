@@ -554,6 +554,13 @@ Essa contingência confere estabilidade garantida: mesmo se o banco parar de int
 
 Os logs associados ao risco à infraestrutura registrarão todos os episódios de tentativa de fraude local e manipulação intencional: IPs anômalos em múltiplas falhas de login da conta dos Operadores, quebras contrárias nas áreas de autorizações, ações suspeitas, cancelamentos/estornos justificados e suspensão em bloqueios restritivos de sessão.
 
+### Rotina de Backup por E-mail antes do Expurgo
+
+Antes da exclusão física definitiva de qualquer arquivo de log no processo de expurgo TTL, o sistema executa automaticamente uma rotina de arquivamento por e-mail:
+- **Destinatário e Remetente:** O e-mail configurado na Central Administrativa (`ConfiguracaoGlobal.smtp_user` / `ConfiguracaoGlobal.email_remetente_nome`) opera simultaneamente como remetente e destinatário do envio de backup (com fallback para o e-mail do Administrador Master caso o usuário SMTP não seja um e-mail válido).
+- **Conteúdo e Anexo:** O e-mail contém um sumário estruturado com as datas de criação e expurgo, quantidade de eventos/linhas registradas e o(s) arquivo(s) físico(s) `.log` anexado(s) diretamente (ou compactado em `.zip`).
+- **Garantia de Integridade:** O arquivo físico só é excluído do disco em `backend/logs/` e baixado no manifesto `Controle_Arquivos_Log` após a confirmação do envio com sucesso do backup por e-mail (ou fallback para `console.EmailBackend` em testes/desenvolvimento).
+
 ## 20. Configurações Globais
 
 - A interface apresentará ao Gestor campos de personalização universal da ferramenta (parâmetros de duração da sessão, validade de orçamento, expurgo de logs e configuração do serviço SMTP de e-mails com armazenamento criptografado de senha) que aplicam fallback padronizado caso os campos sofram reset forçado.

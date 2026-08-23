@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Conclusão da Fase 11 - Conciliação Bancária Inteligente Split-Screen OFX/CSV)  
-**Fase Atual:** Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Pronta para início)  
-**Próxima Fase:** Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)  
+**Última Atualização:** 2026-08-23 (Conclusão da Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira)  
+**Fase Atual:** Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (Pronta para início)  
+**Próxima Fase:** Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)  
 
 ---
 
@@ -25,7 +25,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 | **Fase 9** | Faturamento Agregado (Conta Corrente, Pré-Fatura, Fatura Final e Quitação) | **Concluída** | 100% |
 | **Fase 10** | Tesouraria, Contas a Pagar/Receber, Caixa Real e Cartões Corporativos | **Concluída** | 100% |
 | **Fase 11** | Conciliação Bancária Inteligente Split-Screen (OFX/CSV) | **Concluída** | 100% |
-| **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | Pendente | 0% |
+| **Fase 12** | Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete) | **Concluída** | 100% |
 | **Fase 13** | Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV) | Pendente | 0% |
 | **Fase 14** | Frontend PWA Client-Side e Interface Completa (*Industrial Integrity*) | Pendente | 0% |
 | **Fase 15** | Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy | Pendente | 0% |
@@ -165,12 +165,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (118 testes no total acumulado do projeto).
 
 ### Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)
-- [ ] Implementar Parâmetros Globais com criptografia simétrica AES-256 da senha SMTP e teste de disparo em tempo real.
-- [ ] Implementar blindagem de não-retroatividade para taxa horária e validade de orçamentos.
-- [ ] Implementar rotina de expurgo de logs via manifesto TTL (`ControleArquivoLog`).
-- [ ] Implementar Log Viewer do servidor para o Administrador.
-- [ ] Implementar Gestão de Equipe com os 10 toggles dinâmicos por usuário e desbloqueio de contas.
-- [ ] Implementar Painel de Lixeira e Restauração (Lixeira Global para Admin e Minha Lixeira para Operador).
+- [x] Implementar Parâmetros Globais com criptografia simétrica AES-256 da senha SMTP, presets rápidos e teste de disparo em tempo real.
+- [x] Implementar blindagem de não-retroatividade para taxa horária e validade de orçamentos sobre orçamentos passados.
+- [x] Implementar rotina de expurgo de logs via manifesto TTL (`ControleArquivoLog`), com envio de backup por e-mail dos arquivos expirados antes da exclusão física.
+- [x] Implementar comando CLI agendável `python manage.py expurgar_logs --enviar-backup`.
+- [x] Implementar Log Viewer seguro do servidor para visualização estruturada de falhas pelo Administrador, com blindagem rigorosa contra Path Traversal.
+- [x] Implementar Gestão de Equipe com os 10 toggles dinâmicos por usuário, onboarding por e-mail e desbloqueio manual de contas travadas por Anti-Bruteforce.
+- [x] Implementar Painel de Lixeira e Restauração Lógica mapeando 16 entidades com isolamento de visão (Lixeira Global para Admin e Minha Lixeira para Operador).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (133 testes no total acumulado do projeto).
 
 ### Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)
 - [ ] Implementar agregação do Dashboard de Flip Cards (Operação, Faturamento, Receita, Caixa e Alertas).
@@ -197,5 +199,5 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 12 - Central Administrativa, Configurações Globais, SMTP e Lixeira (Soft Delete)**, implementando a parametrização de Parâmetros Globais com criptografia simétrica AES-256 para senhas SMTP e teste de envio em tempo real, blindagem de não-retroatividade para taxa horária e validade de orçamentos, rotina de expurgo de logs via manifesto TTL (`ControleArquivoLog`), Log Viewer do servidor para o Administrador, Gestão de Equipe com os 10 toggles dinâmicos por usuário, e Painel de Lixeira e Restauração segregado (Lixeira Global para Administrador e Minha Lixeira para Operador).
+Iniciar a **Fase 13 - Dashboards, Relatórios Estratégicos e Exportações (PDF/CSV)**, implementando os endpoints de agregação analítica para o Dashboard de Flip Cards (Operação, Faturamento, Receita, Caixa e Alertas), Gráficos de Receitas x Despesas, Feed de Atividades Recentes, e a Central de Relatórios Estratégicos (Painel de Inadimplência, Dossiê do Cliente, Curva ABC de Clientes, Curva ABC de Consumo de Itens, DRE Simplificado e Relatório de Divergências de Conciliação), com exportações consolidadas em PDF e CSV protegidas por rate limiting (5 req/min).
 
