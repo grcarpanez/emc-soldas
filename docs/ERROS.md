@@ -232,19 +232,22 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-24 - Erro 400 ao Filtrar Nível AUDIT no Log Viewer e Exibição de Log de Ontem sem Sincronização Manual
+## 2026-08-24 - Erro 400 ao Filtrar Nível AUDIT no Log Viewer e Limitação de Categorias de Log
 
-- **Sintoma:** O usuário executou mutações de colaboradores (desativação, ativação e alteração de permissões RBAC) que foram gravadas corretamente no arquivo físico do dia (`app-2026-08-24.log`), porém ao abrir a tela do Log Viewer, visualizava o arquivo do dia anterior (`app-2026-08-23.log`) e ao tentar filtrar por `[AUDIT]`, a API retornava `400 Bad Request`.
-- **Causa:**
-  1. No `LogViewerFilterSerializer`, o campo `nivel` continha `choices=['TODOS', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']`, sem incluir a opção `'AUDIT'` enviada pelo frontend.
-  2. Em `ler_arquivo_log_seguro`, a filtragem de nível buscava `[NIVEL]` nos colchetes de severidade do logging do Python (onde a linha é registrada como `[INFO]`), não encontrando a tag de conteúdo `[AUDIT]`.
-  3. A lista de arquivos do manifesto (`ControleArquivoLog`) só era atualizada com o arquivo físico de hoje se o usuário clicasse manualmente no botão "SINCRONIZAR MANIFESTO". Sem clicar, a tabela exibia como primeiro registro o arquivo de ontem.
+- **Sintoma:** Ao selecionar o filtro `AUDIT` no modal do Log Viewer, a API retornava `400 Bad Request` com a mensagem `"AUDIT" não é uma escolha válida.`, disparando o Toast de erro.
+- **Causa:** O serializer `LogViewerFilterSerializer` declarava o campo `nivel` com `ChoiceField` restrito aos níveis clássicos de severidade do Python (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`), rejeitando categorias estruturadas de auditoria e segurança como `AUDIT` ou `SEGURANCA`.
 - **Solução aplicada:**
-  1. Adicionada a opção `'AUDIT'` nas `choices` do `LogViewerFilterSerializer`.
-  2. Ajustada a função `ler_arquivo_log_seguro` para filtrar especificamente pela tag `[AUDIT]` no corpo do texto quando `nivel_filtro == 'AUDIT'`.
-  3. Sobrescrito o método `list` no `ControleArquivoLogViewSet` para executar `sincronizar_manifesto_logs()` automaticamente antes de renderizar a lista, garantindo que o arquivo do dia atual esteja sempre indexado e exibido no topo.
-  4. Adicionados testes automatizados cobrindo a filtragem de `AUDIT` e auto-sincronização (157 testes aprovados com 100% de sucesso).
-- **Como evitar no futuro:** Sempre incluir todas as opções da UI nos `ChoiceField` dos serializers do backend e acoplar a atualização de estado em tempo real no carregamento das views.
+  1. Flexibilização do campo `nivel` em `LogViewerFilterSerializer` para aceitar qualquer string válida com conversão automática para maiúsculas no `validate_nivel`.
+  2. Aprimoramento do método `ler_arquivo_log_seguro` em `backend/apps/administracao/services.py` com suporte inteligente a categorias:
+     - `AUDIT`: captura `[AUDIT]`, `[SOFT_DELETE]`, `[RESTAURACAO]`, `[CANCELAMENTO]`, `[ESTORNO]`.
+     - `SEGURANCA`: captura `[SEGURANÇA]`, `[SEGURANCA]`, `[SECURITY]`, `401`, `403`, `Unauthorized`, `Forbidden`.
+     - `ERROR`: captura `[ERROR]`, `[CRITICAL]`.
+     - `WARNING`: captura `[WARNING]`.
+     - `INFO`: captura `[INFO]`.
+     - `DEBUG`: captura `[DEBUG]`.
+  3. Atualização do modal no frontend (`administracao-view.js`) com a combobox completa de 6 categorias bem descritas e badges estilizados no padrão *Industrial Integrity*.
+  4. Adicionados testes automatizados cobrindo a filtragem de `AUDIT` e `SEGURANCA` com 100% de sucesso.
+- **Como evitar no futuro:** Sempre que filtros de UI puderem receber marcadores contextuais ou tags estruturadas, utilizar campos de string flexíveis nos serializers com normalização de entrada.
 
 
 
