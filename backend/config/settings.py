@@ -42,8 +42,8 @@ ENCRYPTION_KEY = os.environ.get(
 # Modo de Depuração
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-# Hosts Permitidos
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+# Hosts Permitidos (Aceita qualquer IP local em modo DEBUG/Dev)
+ALLOWED_HOSTS = ['*'] if DEBUG else os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
 # Definição das Aplicações Instaladas
 INSTALLED_APPS = [
@@ -233,6 +233,9 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:3000',
     'http://localhost:5500',
     'http://127.0.0.1:5500',
+    'http://192.168.2.104:8000',
+    'http://192.168.2.104:5500',
+    'http://192.168.2.104:3000',
 ]
 
 # Configuração de E-mail (com Fallback Seguro para Console em Desenvolvimento)

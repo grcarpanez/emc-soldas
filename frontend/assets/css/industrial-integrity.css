@@ -851,3 +851,182 @@ p, span, label, input, textarea, select {
   font-family: var(--font-mono);
 }
 
+/* ==========================================================================
+   ESCALA COMPACTA E RESPONSIVIDADE MOBILE (INDUSTRIAL INTEGRITY)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  body {
+    font-size: 13.5px;
+  }
+
+  /* Tipografia Compacta */
+  h1 { font-size: 20px; line-height: 26px; }
+  h2 { font-size: 17px; line-height: 22px; }
+  h3 { font-size: 15px; line-height: 20px; }
+  h4 { font-size: 13px; line-height: 18px; }
+
+  /* Botões Compactos Usinados */
+  .btn {
+    padding: 7px 12px;
+    font-size: 11px;
+    gap: 6px;
+    min-height: 32px;
+  }
+
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 9.5px;
+    min-height: 24px;
+  }
+
+  /* Inputs e Controles */
+  .form-control {
+    padding: 6px 10px;
+    font-size: 12.5px;
+    min-height: 34px;
+  }
+
+  .form-label {
+    font-size: 10.5px;
+    margin-bottom: 2px;
+  }
+
+  .form-group {
+    margin-bottom: 10px;
+  }
+
+  /* Cards e Containers */
+  .card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .card-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Tabelas Compactas */
+  .table th {
+    padding: 8px 10px;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .status-chip {
+    padding: 2px 6px;
+    font-size: 9.5px;
+  }
+
+  /* Combobox Mobile */
+  .emc-combobox-display {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 34px;
+  }
+
+  .emc-combobox-item {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .emc-combobox-search {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  /* Modais Compactos */
+  .modal-dialog {
+    padding: 14px;
+    max-width: 96vw;
+    width: 96vw;
+    max-height: 94vh;
+    margin: 8px auto;
+  }
+
+  .modal-header {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .modal-title {
+    font-size: 13.5px;
+  }
+
+  .modal-footer {
+    margin-top: 12px;
+    padding-top: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* Abas / Nav Tabs com Scroll Suave */
+  .tab-container, .nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn, .nav-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Colapso Responsivo de Grids de Formulários em Modais */
+  form div[style*="grid-template-columns"],
+  form div[style*="display: grid"],
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Barras de Ação e Filtros */
+  .action-bar, .filter-bar {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .action-bar > *, .filter-bar > * {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 12.5px;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .table th, .table td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .flip-card-wrapper {
+    height: 160px;
+  }
+
+  .flip-card-value {
+    font-size: 17px;
+  }
+}
+
+

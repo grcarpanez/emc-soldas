@@ -268,21 +268,25 @@
     grid-template-columns: repeat(4, 1fr);
   }
 
-  .col-span-8, .col-span-6, .col-span-4, .col-span-3 {
+  .col-span-12, .col-span-8, .col-span-6, .col-span-4, .col-span-3 {
     grid-column: span 4;
   }
 
   .content-body {
-    padding: 14px;
+    padding: 10px 12px 30px 12px;
   }
 
   .topbar {
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
     padding: 0 10px;
-    gap: 8px;
+    gap: 6px;
   }
 
   .topbar-title {
-    font-size: 13px;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
   }
 
   #network-status-chip {
@@ -291,7 +295,49 @@
 
   #btn-manual-soft-lock {
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 9.5px;
+  }
+
+  .flip-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .flip-card-wrapper {
+    height: 175px;
+  }
+
+  .flip-card-front, .flip-card-back {
+    padding: 10px;
+  }
+
+  .flip-card-title {
+    font-size: 10.5px;
+  }
+
+  .flip-card-value {
+    font-size: 19px;
   }
 }
+
+@media (max-width: 480px) {
+  .content-body {
+    padding: 8px 8px 24px 8px;
+  }
+
+  .flip-card-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .flip-card-wrapper {
+    height: 155px;
+  }
+
+  .flip-card-value {
+    font-size: 16px;
+  }
+}
+
 
