@@ -215,6 +215,22 @@ Utilize o padrão abaixo para cada novo erro registrado:
   4. Integração universal de emissão de logs de auditoria `[AUDIT] [SOFT_DELETE]` e `[AUDIT] [RESTAURACAO]` em `SoftDeleteModel` para que todas as exclusões de clientes, equipamentos e registros de negócio constem nos logs do servidor.
 - **Como evitar no futuro:** Garantir alinhamento bidirecional de contratos de dados e rotas entre frontend e serializers do DRF e cobrir serializers com testes automatizados dedicados.
 
+---
+
+## 2026-08-24 - Rota 404 no Botão de Permissões RBAC e Falta de Controle de Ativação de Colaboradores
+
+- **Sintoma:** Na Central do Administrador -> aba Gestão de Equipe (RBAC), ao clicar no botão "PERMISSÕES (10 TOGGLES)", o modal não abria e exibia a notificação Toast de erro "Erro ao carregar permissões.". Além disso, não havia botões para ativar/desativar colaboradores nem proteção contra auto-desativação.
+- **Causa:** O JavaScript tentava requisitar `GET /api/permissoes/?usuario_id=X` e `PATCH /api/permissoes/{id}/`. Essa rota não existia como viewset separado no Django REST Framework, pois as permissões 1:1 eram geridas como action no `UsuarioViewSet` em `/api/usuarios/{id}/permissoes/` (que até então aceitava apenas PATCH/PUT sem suporte a GET).
+- **Solução aplicada:**
+  1. Habilitado suporte completo a `GET`, `PATCH` e `PUT` na action `permissoes` do `UsuarioViewSet`, retornando a matriz completa de 10 toggles.
+  2. Implementação de novas actions semânticas no backend: `alternar_status`, `desativar`, `ativar` e `alterar_perfil` (promoção/rebaixamento).
+  3. Aplicação de travas de segurança mandatórias no backend: bloqueio de auto-desativação (`request.user.id == usuario.id`), bloqueio de auto-exclusão lógica e proteção contra desativação/rebaixamento/exclusão do único Administrador ativo do sistema.
+  4. Integração de emissão de logs estruturados de auditoria `[AUDIT]` para todas as ações de colaboradores (promoção, rebaixamento, ativação, desativação, diff de permissões, convite e desbloqueio).
+  5. Refatoração da interface da aba Gestão de Equipe no PWA com modal unificado de perfil e 10 toggles dinâmicos, botões diretos de ativação/desativação e auto-identificação da conta logada com tag `[VOCÊ]` e botão desabilitado.
+  6. Criação de 7 novos testes automatizados dedicados no `apps.authentication.tests` cobrindo 100% dos novos cenários e travas de segurança (157 testes aprovados).
+- **Como evitar no futuro:** Sempre validar os contratos de rotas de actions de ViewSets no DRF com testes unitários de integração e alinhar os endpoints mapeados no `config.js` do frontend.
+
+
 
 
 

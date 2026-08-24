@@ -216,6 +216,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Exclusão e Desativação (Soft Delete) com Blindagem de Integridade Histórica:** Implementação de botões `EXCLUIR` e modais industriais de confirmação para Clientes, Fornecedores e Equipamentos (`cadastros-view.js`), configuração de `base_manager_name = 'all_objects'` no núcleo ORM (`core/models.py`), inativação de vínculos ativos de frota sem quebrar orçamentos, faturas, títulos, relatórios analíticos ou geração de PDFs de registros passados, com segregação de inativos exclusivamente em novos lançamentos e restauração ágil via Lixeira.
 - [x] **Aprimoramento do Painel de Lixeira & Restauração:** Correção no parser de resposta de itens da Lixeira, suporte à opção de não filtrar com exibição unificada de todo o histórico cronológico de exclusões por padrão (`TODAS AS ENTIDADES`), adição de Equipamentos e todas as 16 entidades na combobox, coluna de tipo/entidade na tabela e campo de busca textual em tempo real (150 testes automatizados aprovados com 100% de sucesso).
 - [x] **Log Viewer do Servidor, Contagem Real de Eventos e Auditoria Universal de Soft Delete:** Implementação do handler `DailyDateFileHandler` em `backend/core/logging_handlers.py` gravando diretamente nos arquivos imutáveis `app-YYYY-MM-DD.log` (eliminando bloqueios de arquivo `PermissionError WinError 32` no Windows), adição dos campos computados `total_eventos`, `quantidade_linhas` e `data_log` no `ControleArquivoLogSerializer`, correção de rotas (`/controle-arquivos-log/visualizar/`), modal do Log Viewer enriquecido com destaque semântico de severidade (*Industrial Integrity* com tags `[AUDIT]`, `ERROR`, `WARNING`, `INFO`), filtros em tempo real, sincronização manual de manifesto e rastreamento perpétuo de exclusões e restaurações em log físico (150 testes automatizados aprovados com 100% de sucesso).
+- [x] **Gestão de Equipe (RBAC), Permissões Dinâmicas, Promoção/Rebaixamento, Ativação/Desativação e Auditoria Universal:**
+  - Correção dos endpoints REST de permissões (`/api/usuarios/{id}/permissoes/`) com suporte completo aos métodos `GET`, `PATCH` e `PUT`.
+  - Implementação de ações semânticas de ativação/desativação (`/api/usuarios/{id}/alternar-status/`, `desativar/`, `ativar/`) com **blindagem de segurança contra auto-desativação** (`request.user.id == usuario.id`) e **proteção de último Administrador ativo** do sistema.
+  - Implementação de promoção e rebaixamento de colaboradores (`/api/usuarios/{id}/alterar-perfil/`) com atribuição plena de 10 toggles para Admins e proteção contra rebaixamento do único Administrador ativo.
+  - Sobrescrita com resposta protegida para auto-exclusão lógica no `UsuarioViewSet`.
+  - Registro perpétuo em log físico imutável com marcadores de auditoria `[AUDIT]` para promoções, rebaixamentos, ativações, desativações, diffs de permissões RBAC, desbloqueios e convites.
+  - Interface do frontend PWA atualizada na aba Gestão de Equipe com modal unificado de perfil e matriz de 10 toggles dinâmicos, botões diretos de ativação/desativação e tag de auto-identificação `[VOCÊ]` com botão desabilitado para o usuário da sessão (157 testes automatizados aprovados com 100% de sucesso).
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).
@@ -227,7 +234,8 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy**, executando a suíte consolidada de testes de integração, os 6 testes mandatórios de pentest/segurança (RBAC/IDOR, Brute-force, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256), disponibilizando o gerador de chaves criptográficas seguras (`tools/generate_keys.py`) e o roteiro final de deploy em produção Cloud PaaS.
+Iniciar a **Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy**, executando a suíte consolidada de testes de integração (157 testes automatizados), os 6 testes mandatórios de pentest/segurança (RBAC/IDOR, Brute-force, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256), disponibilizando o gerador de chaves criptográficas seguras (`tools/generate_keys.py`) e o roteiro final de deploy em produção Cloud PaaS.
+
 
 
 
