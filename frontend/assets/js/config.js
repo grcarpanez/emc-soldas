@@ -23,11 +23,16 @@ const CONFIG = {
       LISTA: '/usuarios/',
       DETALHE: '/usuarios/{id}/',
       CONVIDAR: '/usuarios/convidar/',
-      DESBLOQUEAR: '/usuarios/{id}/desbloquear/'
+      DESBLOQUEAR: '/usuarios/{id}/desbloquear/',
+      PERMISSOES: '/usuarios/{id}/permissoes/',
+      ALTERAR_PERFIL: '/usuarios/{id}/alterar-perfil/',
+      ALTERNAR_STATUS: '/usuarios/{id}/alternar-status/',
+      DESATIVAR: '/usuarios/{id}/desativar/',
+      ATIVAR: '/usuarios/{id}/ativar/'
     },
     PERMISSOES: {
-      LISTA: '/permissoes/',
-      DETALHE: '/permissoes/{id}/'
+      LISTA: '/usuarios/{id}/permissoes/',
+      DETALHE: '/usuarios/{id}/permissoes/'
     },
     CADASTROS: {
       CLIENTES: '/clientes-fornecedores/',

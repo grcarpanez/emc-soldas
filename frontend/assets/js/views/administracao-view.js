@@ -276,13 +276,15 @@ window.AdministracaoView = {
   },
 
   // ==========================================================================
-  // 3. GESTÃO DE EQUIPE (RBAC)
+  // 3. GESTÃO DE EQUIPE (RBAC & CONTROLE DE ACESSO)
   // ==========================================================================
   async renderEquipe(container) {
     container.innerHTML = `
       <div class="card mb-16">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">COLABORADORES, MATRIZ DOS 10 TOGGLES DINÂMICOS E ONBOARDING</p>
+          <div>
+            <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">GESTÃO DE COLABORADORES, PERFIS (ADMIN/OPERADOR), 10 TOGGLES RBAC E ATIVAÇÃO</p>
+          </div>
           <button class="btn btn-primary" id="btn-convidar-usuario">+ CONVIDAR COLABORADOR</button>
         </div>
       </div>
@@ -292,8 +294,8 @@ window.AdministracaoView = {
           <thead>
             <tr>
               <th>ID</th>
-              <th>E-MAIL</th>
-              <th>PERFIL</th>
+              <th>COLABORADOR / E-MAIL</th>
+              <th>PERFIL BASE</th>
               <th>STATUS DE ACESSO</th>
               <th style="text-align: right;">AÇÕES</th>
             </tr>
@@ -312,25 +314,33 @@ window.AdministracaoView = {
         confirmText: 'ENVIAR CONVITE',
         content: `
           <div class="form-group">
-            <label class="form-label">E-mail do Colaborador *</label>
-            <input type="email" id="convite-email" class="form-control" placeholder="colaborador@emcsoldas.com.br" required data-no-transform="true" autofocus>
+            <label class="form-label">Nome Completo do Colaborador *</label>
+            <input type="text" id="convite-nome" class="form-control" placeholder="NOME DO COLABORADOR" required autofocus>
           </div>
           <div class="form-group">
-            <label class="form-label">Perfil Base *</label>
+            <label class="form-label">E-mail de Acesso *</label>
+            <input type="email" id="convite-email" class="form-control" placeholder="colaborador@emcsoldas.com.br" required data-no-transform="true">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Perfil Base Inicial *</label>
             <select id="convite-role" class="form-control">
-              <option value="OPERADOR" selected>OPERADOR</option>
-              <option value="ADMIN">ADMINISTRADOR</option>
+              <option value="Operador" selected>OPERADOR (ACESSO RESTRITO POR TOGGLES)</option>
+              <option value="Admin">ADMINISTRADOR (ACESSO TOTAL PLENO)</option>
             </select>
           </div>
         `,
         onConfirm: async () => {
+          const nome = document.getElementById('convite-nome').value.trim();
           const email = document.getElementById('convite-email').value.trim().toLowerCase();
           const role = document.getElementById('convite-role').value;
 
-          if (!email) return false;
+          if (!nome || !email) {
+            window.EMCUtils.showToast('Informe o nome e e-mail do colaborador.', 'warning');
+            return false;
+          }
 
           try {
-            await window.api.post(window.CONFIG.ENDPOINTS.USUARIOS.CONVIDAR, { email, role });
+            await window.api.post(window.CONFIG.ENDPOINTS.USUARIOS.CONVIDAR, { nome, email, role });
             window.EMCUtils.showToast('Convite com link de ativação enviado por e-mail com sucesso!', 'success');
             this.renderEquipe(container);
             return true;
@@ -347,22 +357,62 @@ window.AdministracaoView = {
       const usuarios = res.results || res || [];
       const tbody = document.getElementById('lista-usuarios-tbody');
 
+      if (!usuarios.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px;">Nenhum colaborador encontrado.</td></tr>';
+        return;
+      }
+
+      const currentUserId = window.auth.user?.id;
       let html = '';
+
       usuarios.forEach((u) => {
-        const isBloqueado = !!u.bloqueado_ate;
+        const isSelf = currentUserId && (currentUserId === u.id);
+        const isBloqueado = u.bloqueado_ate && new Date(u.bloqueado_ate) > new Date();
+        const isAdmin = (u.role === 'Admin' || u.role === 'ADMIN');
+
+        let statusChip = '';
+        if (isBloqueado) {
+          statusChip = '<span class="status-chip danger">BLOQUEADO (BRUTE-FORCE)</span>';
+        } else if (!u.is_ativo) {
+          statusChip = '<span class="status-chip secondary">DESATIVADO</span>';
+        } else {
+          statusChip = '<span class="status-chip success">ATIVO</span>';
+        }
+
+        // Ação de Ativação / Desativação com proteção para o usuário logado
+        let btnStatus = '';
+        if (isSelf) {
+          btnStatus = `<button class="btn btn-ghost btn-sm" disabled title="Não é permitido desativar seu próprio usuário" style="opacity: 0.35; cursor: not-allowed;">DESATIVAR</button>`;
+        } else if (u.is_ativo) {
+          btnStatus = `<button class="btn btn-danger btn-sm" onclick="window.AdministracaoView.confirmarDesativacaoUsuario(${u.id}, '${window.EMCUtils.escapeHtml(u.nome || u.email)}')">DESATIVAR</button>`;
+        } else {
+          btnStatus = `<button class="btn btn-primary btn-sm" onclick="window.AdministracaoView.ativarUsuario(${u.id}, '${window.EMCUtils.escapeHtml(u.nome || u.email)}')">ATIVAR</button>`;
+        }
+
         html += `
           <tr>
             <td class="mono-text">#${u.id}</td>
-            <td><strong>${window.EMCUtils.escapeHtml(u.email)}</strong></td>
-            <td><span class="status-chip ${u.role === 'ADMIN' ? 'warning' : 'info'}">${u.role}</span></td>
             <td>
-              <span class="status-chip ${isBloqueado ? 'danger' : 'success'}">${isBloqueado ? 'BLOQUEADO (BRUTE-FORCE)' : 'ATIVO'}</span>
+              <strong>${window.EMCUtils.escapeHtml(u.nome || 'COLABORADOR')}</strong>
+              <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 2px;">
+                ${window.EMCUtils.escapeHtml(u.email)}
+              </div>
+            </td>
+            <td>
+              <span class="status-chip ${isAdmin ? 'warning' : 'info'}">${isAdmin ? 'ADMINISTRADOR' : 'OPERADOR'}</span>
+              ${isSelf ? '<span class="status-chip secondary" style="font-size: 10px; margin-left: 4px;">VOCÊ</span>' : ''}
+            </td>
+            <td>
+              ${statusChip}
             </td>
             <td style="text-align: right; white-space: nowrap;">
-              ${isBloqueado ? `
-                <button class="btn btn-primary btn-sm" onclick="window.AdministracaoView.desbloquearUsuario(${u.id})">DESBLOQUEAR</button>
-              ` : ''}
-              <button class="btn btn-secondary btn-sm" onclick="window.AdministracaoView.gerenciarPermissoes(${u.id})">PERMISSÕES (10 TOGGLES)</button>
+              <div style="display: inline-flex; gap: 6px; align-items: center;">
+                ${isBloqueado ? `
+                  <button class="btn btn-warning btn-sm" onclick="window.AdministracaoView.desbloquearUsuario(${u.id})">DESBLOQUEAR</button>
+                ` : ''}
+                <button class="btn btn-secondary btn-sm" onclick="window.AdministracaoView.gerenciarPermissoesEPerfil(${u.id})">PERMISSÕES & PERFIL</button>
+                ${btnStatus}
+              </div>
             </td>
           </tr>
         `;
@@ -375,7 +425,7 @@ window.AdministracaoView = {
 
   async desbloquearUsuario(userId) {
     try {
-      const endpoint = window.CONFIG.ENDPOINTS.USUARIOS.DESBLOQUEAR.replace('{id}', userId);
+      const endpoint = `${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/desbloquear/`;
       await window.api.post(endpoint, {});
       window.EMCUtils.showToast('Conta desbloqueada com sucesso!', 'success');
       this.renderEquipe(document.getElementById('administracao-tab-content'));
@@ -384,63 +434,184 @@ window.AdministracaoView = {
     }
   },
 
-  async gerenciarPermissoes(userId) {
+  async confirmarDesativacaoUsuario(userId, userNome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAR DESATIVAÇÃO DE COLABORADOR',
+      size: 'sm',
+      confirmText: 'CONFIRMAR DESATIVAÇÃO',
+      content: `
+        <div style="padding: 8px 0;">
+          <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 12px;">
+            Deseja realmente desativar o acesso de <strong>${userNome}</strong> (#${userId})?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px;">
+            O colaborador será impedido de realizar login no sistema até que sua conta seja reativada por um Administrador.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          const endpoint = `${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/desativar/`;
+          await window.api.post(endpoint, {});
+          window.EMCUtils.showToast(`Usuário ${userNome} desativado com sucesso.`, 'success');
+          this.renderEquipe(document.getElementById('administracao-tab-content'));
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao desativar usuário.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async ativarUsuario(userId, userNome) {
     try {
-      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.PERMISSOES.LISTA}?usuario_id=${userId}`);
-      const perm = (res.results && res.results[0]) || res[0] || {};
+      const endpoint = `${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/ativar/`;
+      await window.api.post(endpoint, {});
+      window.EMCUtils.showToast(`Usuário ${userNome} ativado com sucesso!`, 'success');
+      this.renderEquipe(document.getElementById('administracao-tab-content'));
+    } catch (err) {
+      window.EMCUtils.showToast(err.message || 'Erro ao ativar usuário.', 'error');
+    }
+  },
+
+  async gerenciarPermissoesEPerfil(userId) {
+    try {
+      // Busca dados completos do usuário e permissões
+      const userRes = await window.api.get(`${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/`);
+      const permRes = await window.api.get(`${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/permissoes/`);
+
+      const usuario = userRes || {};
+      const perm = permRes.permissoes || usuario.permissoes || {};
+      const currentRole = usuario.role || 'Operador';
+      const isAdmin = (currentRole === 'Admin' || currentRole === 'ADMIN');
+
+      // Busca todos os usuários para saber se este é o único Admin
+      const todosUsuariosRes = await window.api.get(window.CONFIG.ENDPOINTS.USUARIOS.LISTA);
+      const todosUsuarios = todosUsuariosRes.results || todosUsuariosRes || [];
+      const totalAdminsAtivos = todosUsuarios.filter(u => (u.role === 'Admin' || u.role === 'ADMIN') && u.is_ativo && u.id !== userId).length;
+      const isUnicoAdmin = isAdmin && totalAdminsAtivos === 0;
 
       const toggles = [
-        { key: 'acesso_comercial', label: '01. Acesso Comercial (Orçamentos e Faturas)' },
-        { key: 'acesso_tesouraria', label: '02. Acesso à Tesouraria (Caixa e Estornos)' },
-        { key: 'acesso_compras', label: '03. Acesso a Compras (Notas de Entrada)' },
-        { key: 'gestao_catalogo', label: '04. Gestão de Catálogo (Itens e BOM)' },
-        { key: 'visao_relatorios', label: '05. Visualização de Relatórios Estratégicos' },
+        { key: 'acesso_comercial', label: '01. Acesso Comercial (Orçamentos, Faturas e Clientes)' },
+        { key: 'acesso_tesouraria', label: '02. Acesso à Tesouraria (Caixa Real, Contas e Estornos)' },
+        { key: 'acesso_compras', label: '03. Acesso a Compras (Notas Fiscais de Entrada)' },
+        { key: 'gestao_catalogo', label: '04. Gestão de Catálogo (Itens, Produtos e Motor BOM)' },
+        { key: 'visao_relatorios', label: '05. Visualização de Relatórios Estratégicos & DRE' },
         { key: 'cadastros_financeiros', label: '06. Cadastros Financeiros (Contas e Regras)' },
-        { key: 'gestao_dicionario_uom', label: '07. Dicionário Central UOM e Atributos' },
-        { key: 'configuracoes_globais', label: '08. Configurações Globais e SMTP' },
-        { key: 'gestao_equipe', label: '09. Gestão de Equipe e Colaboradores' },
-        { key: 'auditoria_logs_recovery', label: '10. Auditoria, Log Viewer e Lixeira' }
+        { key: 'gestao_dicionario_uom', label: '07. Dicionário Central UOM e Atributos Técnicos' },
+        { key: 'configuracoes_globais', label: '08. Configurações Globais, Empresa e SMTP' },
+        { key: 'gestao_equipe', label: '09. Gestão de Equipe, Permissões e Desbloqueio' },
+        { key: 'auditoria_logs_recovery', label: '10. Auditoria, Log Viewer do Servidor e Lixeira' }
       ];
 
-      let htmlToggles = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
+      let htmlToggles = '<div id="container-toggles-rbac" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
       toggles.forEach((t) => {
-        const checked = perm[t.key] ? 'checked' : '';
+        const checked = (isAdmin || perm[t.key]) ? 'checked' : '';
+        const disabled = isAdmin ? 'disabled' : '';
         htmlToggles += `
-          <label style="display: flex; align-items: center; gap: 8px; background-color: var(--color-surface-container); padding: 10px; border: 1px solid var(--color-steel-gray); cursor: pointer;">
-            <input type="checkbox" id="toggle-${t.key}" ${checked}>
+          <label style="display: flex; align-items: center; gap: 8px; background-color: var(--color-surface-container); padding: 10px; border: 1px solid var(--color-steel-gray); cursor: ${isAdmin ? 'default' : 'pointer'};">
+            <input type="checkbox" id="toggle-${t.key}" class="toggle-rbac-item" ${checked} ${disabled}>
             <span style="font-size: 13px;">${t.label}</span>
           </label>
         `;
       });
       htmlToggles += '</div>';
 
+      const modalContent = `
+        <div style="margin-bottom: 20px; background-color: var(--color-surface-container); padding: 14px; border: 1px solid var(--color-steel-gray);">
+          <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--color-rust-orange);">1. PERFIL BASE DE ACESSO (ROLE)</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="modal-user-role">Papel do Colaborador *</label>
+              <select id="modal-user-role" class="form-control">
+                <option value="Operador" ${!isAdmin ? 'selected' : ''}>OPERADOR (PERSONALIZÁVEL)</option>
+                <option value="Admin" ${isAdmin ? 'selected' : ''}>ADMINISTRADOR (ACESSO PLENO)</option>
+              </select>
+            </div>
+            <div style="font-size: 12px; color: var(--color-on-surface-variant); line-height: 1.5;">
+              ${isUnicoAdmin
+                ? '<div class="alert-banner alert-warning" style="margin: 0; padding: 6px 10px; font-size: 11px;"><strong>[BLOQUEIO]</strong> Único Administrador ativo do sistema. Rebaixamento bloqueado.</div>'
+                : 'Administradores possuem direitos irrestritos a todos os 10 módulos. Operadores têm acesso regulado pela matriz abaixo.'
+              }
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: var(--color-rust-orange);">2. MATRIZ DOS 10 TOGGLES DINÂMICOS (RBAC)</h4>
+            <span id="role-hint-badge" class="status-chip ${isAdmin ? 'warning' : 'info'}" style="font-size: 11px;">
+              ${isAdmin ? 'ACESSO TOTAL HABILITADO' : 'ACESSO RESTRITO POR TOGGLES'}
+            </span>
+          </div>
+          ${htmlToggles}
+        </div>
+      `;
+
       window.EMCUtils.openModal({
-        title: `MATRIZ DE PERMISSÕES DINÂMICAS (RBAC) - USUÁRIO #${userId}`,
+        title: `GESTÃO DE ACESSO & PERMISSÕES (RBAC) - ${window.EMCUtils.escapeHtml(usuario.nome || usuario.email).toUpperCase()} (#${userId})`,
         size: 'lg',
-        confirmText: 'SALVAR PERMISSÕES',
-        content: htmlToggles,
+        confirmText: 'SALVAR PERMISSÕES & PERFIL',
+        content: modalContent,
         onConfirm: async () => {
-          const payload = {};
+          const selectedRole = document.getElementById('modal-user-role')?.value || currentRole;
+          const isNowAdmin = (selectedRole === 'Admin');
+
+          const payloadPermissoes = {};
           toggles.forEach((t) => {
-            payload[t.key] = document.getElementById(`toggle-${t.key}`).checked;
+            const inputEl = document.getElementById(`toggle-${t.key}`);
+            payloadPermissoes[t.key] = isNowAdmin ? true : (inputEl ? inputEl.checked : false);
           });
 
           try {
-            if (perm.id) {
-              await window.api.patch(`${window.CONFIG.ENDPOINTS.PERMISSOES.LISTA}${perm.id}/`, payload);
-            } else {
-              await window.api.post(window.CONFIG.ENDPOINTS.PERMISSOES.LISTA, { usuario_id: userId, ...payload });
+            // 1. Atualiza Perfil (se modificado)
+            if (selectedRole !== currentRole) {
+              await window.api.post(`${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/alterar-perfil/`, { role: selectedRole });
             }
-            window.EMCUtils.showToast('Permissões dinâmicas salvas com sucesso!', 'success');
+
+            // 2. Atualiza os 10 Toggles Dinâmicos
+            await window.api.patch(`${window.CONFIG.ENDPOINTS.USUARIOS.LISTA}${userId}/permissoes/`, payloadPermissoes);
+
+            window.EMCUtils.showToast('Perfil e permissões atualizados com sucesso!', 'success');
+
+            // Se alterou o próprio usuário logado, atualiza o contexto de autenticação
+            if (window.auth.user && window.auth.user.id === userId) {
+              await window.auth.checkAuth();
+            }
+
+            this.renderEquipe(document.getElementById('administracao-tab-content'));
             return true;
           } catch (e) {
-            window.EMCUtils.showToast(e.message || 'Erro ao salvar permissões.', 'error');
+            window.EMCUtils.showToast(e.message || 'Erro ao salvar permissões e perfil.', 'error');
             return false;
           }
         }
       });
+
+      // Dinâmica de alternância de perfil no modal
+      const roleSelect = document.getElementById('modal-user-role');
+      roleSelect?.addEventListener('change', (e) => {
+        const isAdm = e.target.value === 'Admin';
+        const hintBadge = document.getElementById('role-hint-badge');
+        if (hintBadge) {
+          hintBadge.textContent = isAdm ? 'ACESSO TOTAL HABILITADO' : 'ACESSO RESTRITO POR TOGGLES';
+          hintBadge.className = `status-chip ${isAdm ? 'warning' : 'info'}`;
+        }
+
+        document.querySelectorAll('.toggle-rbac-item').forEach((chk) => {
+          if (isAdm) {
+            chk.checked = true;
+            chk.disabled = true;
+            chk.closest('label').style.cursor = 'default';
+          } else {
+            chk.disabled = false;
+            chk.closest('label').style.cursor = 'pointer';
+          }
+        });
+      });
     } catch (e) {
-      window.EMCUtils.showToast('Erro ao carregar permissões.', 'error');
+      window.EMCUtils.showToast(e.message || 'Erro ao carregar dados do colaborador.', 'error');
     }
   },
 
