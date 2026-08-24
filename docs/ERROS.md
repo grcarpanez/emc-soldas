@@ -258,7 +258,17 @@ Utilize o padrão abaixo para cada novo erro registrado:
   2. Adição da categoria `HTTP` no backend e frontend para isolar consultas de API e tráfego web.
   3. Atualização de `administracao-view.js` para renderizar badges estritamente a partir da propriedade `item.categoria` enviada pelo backend, eliminando 100% dos falsos positivos.
   4. Ampliação da suíte de testes unitários cobrindo todas as categorias de filtragem (157 testes aprovados com 100% de sucesso).
-- **Como evitar no futuro:** Nunca determinar tipos semânticos de registros por busca em texto livre na linha inteira; sempre aplicar classificação estruturada com validação de posição de cabeçalhos e tags.
+---
+
+## 2026-08-24 - Truncamento Acidental do Arquivo de Log Real do Dia Durante Execução de Testes Automatizados
+
+- **Sintoma:** Após a execução da suíte completa de testes automatizados (`manage.py test`), o arquivo de log do dia atual (`app-2026-08-24.log`) teve seu histórico anterior substituído, passando de 160+ linhas para ~80 linhas.
+- **Causa:** O teste unitário `test_log_viewer_leitura_estruturada_e_filtros` abria o arquivo do dia de hoje `open(f"app-{hoje_str}.log", 'w')` no modo de escrita/sobrescrita para injetar 6 linhas de teste mock, apagando o histórico real anterior.
+- **Solução aplicada:**
+  1. Refatoração do teste unitário para utilizar uma data fictícia e segura no futuro (`data_teste = "2099-12-31"`, arquivo `app-2099-12-31.log`).
+  2. Implementação de estrutura `try / finally` garantindo que o arquivo e o registro de teste no manifesto sejam removidos ao final do teste.
+  3. Varredura completa na suíte garantindo que nenhum teste manipule arquivos diários reais do dia corrente.
+- **Como evitar no futuro:** Testes unitários e de integração que manipulam arquivos físicos em disco devem sempre utilizar diretórios temporários (`tempfile.mkdtemp()`) ou datas fictícias isoladas com limpeza obrigatória no encerramento do teste.
 
 
 
