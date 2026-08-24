@@ -735,17 +735,22 @@ window.AdministracaoView = {
           if (item.is_error || item.conteudo.includes('ERROR') || item.conteudo.includes('CRITICAL')) {
             cor = '#ffb4ab';
             bg = 'rgba(147, 0, 10, 0.2)';
-            tagBadge = '<span style="background: #93000a; color: #ffdad6; padding: 1px 4px; font-size: 10px; margin-right: 6px;">ERROR</span>';
+            tagBadge = '<span style="background: #93000a; color: #ffdad6; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">ERROR</span>';
+          } else if (item.is_security || item.conteudo.includes('[SEGURANÇA]') || item.conteudo.includes('[SEGURANCA]') || item.conteudo.includes('Unauthorized') || item.conteudo.includes('Forbidden')) {
+            cor = '#c2c6d2';
+            bg = 'rgba(100, 104, 114, 0.2)';
+            tagBadge = '<span style="background: #2c3139; color: #e4e8f4; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">SEGURANÇA</span>';
+          } else if (item.is_audit || item.conteudo.includes('[AUDIT]') || item.conteudo.includes('[SOFT_DELETE]') || item.conteudo.includes('[RESTAURACAO]') || item.conteudo.includes('[CANCELAMENTO]') || item.conteudo.includes('[ESTORNO]')) {
+            cor = '#72cf88';
+            bg = 'rgba(0, 77, 37, 0.15)';
+            tagBadge = '<span style="background: #004d25; color: #b7f4c5; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">AUDIT</span>';
           } else if (item.is_warning || item.conteudo.includes('WARNING')) {
             cor = '#ffb59c';
-            tagBadge = '<span style="background: #5c1a00; color: #ffe2d9; padding: 1px 4px; font-size: 10px; margin-right: 6px;">WARN</span>';
-          } else if (item.is_audit || item.conteudo.includes('[AUDIT]')) {
-            cor = '#72cf88';
-            tagBadge = '<span style="background: #004d25; color: #b7f4c5; padding: 1px 4px; font-size: 10px; margin-right: 6px;">AUDIT</span>';
+            tagBadge = '<span style="background: #5c1a00; color: #ffe2d9; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">WARN</span>';
           }
 
           linhasHtml += `
-            <div style="background-color: ${bg}; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; line-height: 1.5; font-family: 'JetBrains Mono', monospace; word-break: break-all;">
+            <div style="background-color: ${bg}; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; line-height: 1.5; font-family: 'JetBrains Mono', monospace; word-break: break-all;">
               <span style="color: var(--color-steel-gray); margin-right: 8px; user-select: none;">#${item.linha_numero || ''}</span>
               ${tagBadge}
               <span style="color: ${cor};">${window.EMCUtils.escapeHtml(item.conteudo)}</span>
@@ -761,13 +766,15 @@ window.AdministracaoView = {
         content: `
           <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background-color: var(--color-surface-container); padding: 10px; border: 1px solid var(--color-steel-gray);">
             <div style="display: flex; gap: 6px; align-items: center;">
-              <label style="font-size: 12px; font-family: 'JetBrains Mono', monospace;">NÍVEL:</label>
-              <select id="log-modal-nivel" class="form-control" style="width: 130px; height: 32px; font-size: 12px; padding: 2px 8px;">
-                <option value="TODOS" ${nivelFiltro === 'TODOS' ? 'selected' : ''}>TODOS</option>
-                <option value="AUDIT" ${nivelFiltro === 'AUDIT' ? 'selected' : ''}>[AUDIT]</option>
-                <option value="ERROR" ${nivelFiltro === 'ERROR' ? 'selected' : ''}>ERROR / CRITICAL</option>
-                <option value="WARNING" ${nivelFiltro === 'WARNING' ? 'selected' : ''}>WARNING</option>
-                <option value="INFO" ${nivelFiltro === 'INFO' ? 'selected' : ''}>INFO / DEBUG</option>
+              <label style="font-size: 12px; font-family: 'JetBrains Mono', monospace;">CATEGORIA / NÍVEL:</label>
+              <select id="log-modal-nivel" class="form-control" style="width: 230px; height: 32px; font-size: 12px; padding: 2px 8px;">
+                <option value="TODOS" ${nivelFiltro === 'TODOS' ? 'selected' : ''}>TODOS OS EVENTOS</option>
+                <option value="AUDIT" ${nivelFiltro === 'AUDIT' ? 'selected' : ''}>[AUDIT] AUDITORIA E MUTAÇÕES</option>
+                <option value="SEGURANCA" ${nivelFiltro === 'SEGURANCA' || nivelFiltro === 'SEGURANÇA' ? 'selected' : ''}>[SEGURANÇA] ACESSOS E BLOQUEIOS</option>
+                <option value="ERROR" ${nivelFiltro === 'ERROR' ? 'selected' : ''}>[ERROR] ERROS E FALHAS</option>
+                <option value="WARNING" ${nivelFiltro === 'WARNING' ? 'selected' : ''}>[WARNING] AVISOS E ALERTAS</option>
+                <option value="INFO" ${nivelFiltro === 'INFO' ? 'selected' : ''}>[INFO] OPERAÇÕES INFORMATIVAS</option>
+                <option value="DEBUG" ${nivelFiltro === 'DEBUG' ? 'selected' : ''}>[DEBUG] DETALHES TÉCNICOS</option>
               </select>
             </div>
             <div style="flex: 1; min-width: 200px;">

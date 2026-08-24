@@ -223,14 +223,20 @@ class LogViewerFilterSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Data do log no formato YYYY-MM-DD"
     )
-    nivel = serializers.ChoiceField(
-        choices=['TODOS', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+    nivel = serializers.CharField(
+        required=False,
         default='TODOS',
-        required=False
+        allow_blank=True,
+        help_text="Nível de severidade ou categoria (TODOS, AUDIT, SEGURANCA, ERROR, WARNING, INFO, DEBUG, CRITICAL)"
     )
     busca = serializers.CharField(required=False, allow_blank=True)
     limit = serializers.IntegerField(default=100, min_value=1, max_value=1000, required=False)
     offset = serializers.IntegerField(default=0, min_value=0, required=False)
+
+    def validate_nivel(self, value):
+        if not value:
+            return 'TODOS'
+        return value.strip().upper()
 
 
 class LixeiraItemSerializer(serializers.Serializer):

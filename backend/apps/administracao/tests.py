@@ -338,6 +338,18 @@ class AdministracaoTests(TestCase):
         self.assertEqual(res_busca.data['total_linhas_filtradas'], 1)
         self.assertIn("Orcamento #99 cancelado", res_busca.data['linhas'][0]['conteudo'])
 
+        # Consulta com filtro de nível AUDIT
+        res_audit = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'AUDIT'})
+        self.assertEqual(res_audit.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_audit.data['total_linhas_filtradas'], 1)
+        self.assertIn("Orcamento #99 cancelado", res_audit.data['linhas'][0]['conteudo'])
+
+        # Consulta com filtro de nível WARNING
+        res_warn = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'WARNING'})
+        self.assertEqual(res_warn.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_warn.data['total_linhas_filtradas'], 1)
+        self.assertIn("Tentativa de acesso", res_warn.data['linhas'][0]['conteudo'])
+
         # Consulta via ViewSet action /visualizar/ com parâmetro data
         res_viewset = self.client.get('/api/controle-arquivos-log/visualizar/', {'data': hoje_str})
         self.assertEqual(res_viewset.status_code, status.HTTP_200_OK)

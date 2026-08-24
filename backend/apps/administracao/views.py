@@ -98,6 +98,14 @@ class ControleArquivoLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ControleArquivoLogSerializer
     permission_classes = [IsAuthenticated, HasAuditoriaLogsAccess]
 
+    def list(self, request, *args, **kwargs):
+        """Sincroniza automaticamente o manifesto antes de listar os arquivos físicos."""
+        try:
+            sincronizar_manifesto_logs()
+        except Exception:
+            pass
+        return super().list(request, *args, **kwargs)
+
     @action(detail=False, methods=['post'], url_path='sincronizar')
     def sincronizar(self, request):
         """Varre a pasta de logs e indexa arquivos físicos novos no manifesto."""

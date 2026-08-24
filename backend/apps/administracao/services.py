@@ -400,8 +400,17 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
         if not texto:
             continue
 
-        # Filtro de Nível
-        if nivel_filtro != 'TODOS':
+        # Filtro de Nível / Categoria
+        if nivel_filtro == 'AUDIT':
+            if "[AUDIT]" not in texto and "[SOFT_DELETE]" not in texto and "[RESTAURACAO]" not in texto and "[CANCELAMENTO]" not in texto and "[ESTORNO]" not in texto:
+                continue
+        elif nivel_filtro in ('SEGURANCA', 'SEGURANÇA', 'SECURITY'):
+            if "[SEGURANCA]" not in texto and "[SEGURANÇA]" not in texto and "[SECURITY]" not in texto and "401" not in texto and "403" not in texto and "Unauthorized" not in texto and "Forbidden" not in texto and "Too Many Requests" not in texto:
+                continue
+        elif nivel_filtro == 'ERROR':
+            if "[ERROR]" not in texto and "[CRITICAL]" not in texto and " ERROR " not in texto and " CRITICAL " not in texto:
+                continue
+        elif nivel_filtro != 'TODOS':
             if f"[{nivel_filtro}]" not in texto and f" {nivel_filtro} " not in texto:
                 continue
 
@@ -410,12 +419,14 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
             if termo_busca not in texto.lower():
                 continue
 
+        is_security = "[SEGURANÇA]" in texto or "[SEGURANCA]" in texto or "[SECURITY]" in texto or "Unauthorized" in texto or "Forbidden" in texto
         linhas_processadas.append({
             "linha_numero": len(todas_linhas) - i,
             "conteudo": texto,
             "is_error": "ERROR" in texto or "CRITICAL" in texto,
             "is_warning": "WARNING" in texto,
-            "is_audit": "[AUDIT]" in texto
+            "is_audit": "[AUDIT]" in texto or "[SOFT_DELETE]" in texto or "[RESTAURACAO]" in texto or "[CANCELAMENTO]" in texto or "[ESTORNO]" in texto,
+            "is_security": is_security
         })
 
     total_filtradas = len(linhas_processadas)
