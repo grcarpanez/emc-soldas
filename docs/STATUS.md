@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-24 (Exclusão e Desativação Soft Delete de Clientes, Fornecedores e Equipamentos com Blindagem e Garantia Total de Integridade Histórica)  
+**Última Atualização:** 2026-08-24 (Aprimoramento da Lixeira com Histórico Completo Unificado, Suporte a Equipamentos, Busca em Tempo Real e Correção de Parser)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 
@@ -213,7 +213,8 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Conectividade Wi-Fi e Firewall:** Configuração de `ALLOWED_HOSTS = ['*']` e `CSRF_TRUSTED_ORIGINS` para IPs de rede local (`192.168.2.104:8000`) e documentação da regra do Windows Firewall (`netsh advfirewall firewall add rule name="EMC_Soldas_8000" dir=in action=allow protocol=TCP localport=8000`).
 - [x] **Assets PWA e Favicon:** Geração dos arquivos físicos `favicon.ico`, `icon-192.png` e `icon-512.png` eliminando requisições 404.
 - [x] **Dinamização Reativa CPF/CNPJ no Modal de Cadastro:** Inicialização do modal como Pessoa Física ("NOME COMPLETO *" e campo "NOME FANTASIA" oculto com grid de 1 coluna), transição em tempo real para Pessoa Jurídica ("RAZÃO SOCIAL *", reexibição de "NOME FANTASIA" e grid de 2 colunas) ao ultrapassar 11 dígitos, e reversão completa ao apagar dígitos.
-- [x] **Exclusão e Desativação (Soft Delete) com Blindagem de Integridade Histórica:** Implementação de botões `EXCLUIR` e modais industriais de confirmação para Clientes, Fornecedores e Equipamentos (`cadastros-view.js`), configuração de `base_manager_name = 'all_objects'` no núcleo ORM (`core/models.py`), inativação de vínculos ativos de frota sem quebrar orçamentos, faturas, títulos, relatórios analíticos ou geração de PDFs de registros passados, com segregação de inativos exclusivamente em novos lançamentos e restauração ágil via Lixeira (149 testes automatizados aprovados com 100% de sucesso).
+- [x] **Exclusão e Desativação (Soft Delete) com Blindagem de Integridade Histórica:** Implementação de botões `EXCLUIR` e modais industriais de confirmação para Clientes, Fornecedores e Equipamentos (`cadastros-view.js`), configuração de `base_manager_name = 'all_objects'` no núcleo ORM (`core/models.py`), inativação de vínculos ativos de frota sem quebrar orçamentos, faturas, títulos, relatórios analíticos ou geração de PDFs de registros passados, com segregação de inativos exclusivamente em novos lançamentos e restauração ágil via Lixeira.
+- [x] **Aprimoramento do Painel de Lixeira & Restauração:** Correção no parser de resposta de itens da Lixeira, suporte à opção de não filtrar com exibição unificada de todo o histórico cronológico de exclusões por padrão (`TODAS AS ENTIDADES`), adição de Equipamentos e todas as 16 entidades na combobox, coluna de tipo/entidade na tabela e campo de busca textual em tempo real (150 testes automatizados aprovados com 100% de sucesso).
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

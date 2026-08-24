@@ -447,3 +447,32 @@ class AdministracaoTests(TestCase):
         response = self.client.post(f'/api/lixeira/itens/{item_admin.id}/restaurar/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("permissão", response.data['message'].lower())
+
+    def test_listar_lixeira_sem_filtro_retorna_todas_as_entidades(self):
+        """Valida que a consulta na Lixeira sem o parâmetro entidade retorna registros de múltiplos modelos."""
+        from apps.cadastros.models import Equipamento
+
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao="CLIENTE DELETADO GLOBAL",
+            tipo="Cliente",
+            tipo_pessoa="PJ",
+            created_by_id=self.admin_user.id
+        )
+        cliente.delete(user_id=self.admin_user.id)
+
+        equip = Equipamento.objects.create(
+            placa="DEL-9999",
+            identificacao="FROTA DELETADA",
+            descricao="CAMINHAO BASCULANTE",
+            created_by_id=self.admin_user.id
+        )
+        equip.delete(user_id=self.admin_user.id)
+
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.get('/api/lixeira/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('itens', response.data)
+
+        entidades_retornadas = [i['entidade'] for i in response.data['itens']]
+        self.assertIn('clientes', entidades_retornadas)
+        self.assertIn('equipamentos', entidades_retornadas)

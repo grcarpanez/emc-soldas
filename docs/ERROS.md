@@ -184,6 +184,16 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Configuração mandatória de `base_manager_name = 'all_objects'` nas classes `Meta` de `SoftDeleteModel`, `BaseModel` (`backend/core/models.py`) e `Usuario` (`backend/apps/authentication/models.py`), garantindo resolução relacional perfeita sem quebrar orçamentos, faturas, relatórios ou PDFs passados.
 - **Como evitar no futuro:** Em arquiteturas com Soft Delete universal no Django ORM, sempre declarar `base_manager_name = 'all_objects'` na classe base abstrata para blindar 100% da integridade referencial histórica de entidades coligadas.
 
+---
+
+## 2026-08-24 - Correção de Parser de Resposta JSON da Lixeira e Inclusão de Equipamentos no Histórico
+
+- **Sintoma:** Ao inativar clientes ou equipamentos, a tabela da Lixeira exibia a mensagem "Lixeira vazia para esta entidade", e a opção de Equipamentos não constava na combobox de entidades.
+- **Causa:** O endpoint `GET /api/lixeira/` retorna o payload `{ "status": "success", "total": N, "itens": [...] }`. O JavaScript tentava extrair `const lista = res.results || res || [];`. Como `res.results` era indefinido, `lista` recebia o objeto `res`, cuja propriedade `.length` é indefinida (`false`), acionando a mensagem de tabela vazia. Além disso, a combobox continha apenas 5 entidades hardcoded e iniciava fixa em orçamentos sem opção de histórico geral.
+- **Solução aplicada:** Atualização do parser no frontend para `const lista = res.itens || res.results || (Array.isArray(res) ? res : []);`, adição da opção `TODAS AS ENTIDADES (HISTÓRICO COMPLETO)` como padrão, inclusão de `EQUIPAMENTOS / VEÍCULOS` e de todas as 16 entidades mapeadas, com novo campo de busca textual e coluna de tipo/entidade na tabela.
+- **Como evitar no futuro:** Padronizar a extração de listas de endpoints REST que encapsulam arrays em chaves personalizadas (`res.itens`), sempre utilizando `res.itens || res.results || (Array.isArray(res) ? res : [])`.
+
+
 
 
 

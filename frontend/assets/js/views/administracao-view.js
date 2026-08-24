@@ -542,14 +542,31 @@ ${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
     container.innerHTML = `
       <div class="card mb-16">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">AUDITORIA DE REGISTROS INATIVADOS COM RESTAURAÇÃO LÓGICA EM 1 CLIQUE</p>
-          <select id="filtro-lixeira-entidade" class="form-control" style="width: 220px;">
-            <option value="orcamentos">ORÇAMENTOS</option>
-            <option value="faturas">FATURAS</option>
-            <option value="clientes">CLIENTES / FORNECEDORES</option>
-            <option value="itens">INSUMOS / ITENS</option>
-            <option value="produtos">PRODUTOS BOM</option>
-          </select>
+          <div>
+            <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">AUDITORIA DE REGISTROS INATIVADOS COM RESTAURAÇÃO LÓGICA EM 1 CLIQUE</p>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <input type="text" id="filtro-lixeira-busca" class="form-control" placeholder="BUSCAR POR NOME, PLACA, ID OU DETALHES..." style="max-width: 360px;">
+            <select id="filtro-lixeira-entidade" class="form-control" style="width: 320px;">
+              <option value="" selected>TODAS AS ENTIDADES (HISTÓRICO COMPLETO)</option>
+              <option value="clientes">CLIENTES / FORNECEDORES</option>
+              <option value="equipamentos">EQUIPAMENTOS / VEÍCULOS</option>
+              <option value="orcamentos">ORÇAMENTOS</option>
+              <option value="faturas">FATURAS</option>
+              <option value="itens">INSUMOS / ITENS</option>
+              <option value="produtos">PRODUTOS BOM</option>
+              <option value="lancamentos">LANÇAMENTOS FINANCEIROS</option>
+              <option value="documentos_compra">NOTAS FISCAIS DE COMPRA</option>
+              <option value="contas_bancarias">CONTAS BANCÁRIAS</option>
+              <option value="cartoes">CARTÕES CORPORATIVOS</option>
+              <option value="categorias_financeiras">CATEGORIAS FINANCEIRAS</option>
+              <option value="meios_pagamento">MEIOS DE PAGAMENTO</option>
+              <option value="regras_pagamento">REGRAS DE PAGAMENTO</option>
+              <option value="dicionario_uom">UNIDADES DE MEDIDA (UOM)</option>
+              <option value="dicionario_atributos">ATRIBUTOS TÉCNICOS</option>
+              <option value="usuarios">USUÁRIOS / COLABORADORES</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -558,6 +575,7 @@ ${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
           <thead>
             <tr>
               <th>ID</th>
+              <th>TIPO / ENTIDADE</th>
               <th>IDENTIFICAÇÃO DO REGISTRO</th>
               <th>DELETADO EM</th>
               <th>DELETADO POR</th>
@@ -565,49 +583,69 @@ ${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
             </tr>
           </thead>
           <tbody id="lista-lixeira-tbody">
-            <tr><td colspan="5" class="text-center"><div class="loader-spinner"></div></td></tr>
+            <tr><td colspan="6" class="text-center"><div class="loader-spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
     `;
 
     const selectEntidade = document.getElementById('filtro-lixeira-entidade');
-    selectEntidade?.addEventListener('change', () => this.carregarLixeira(selectEntidade.value));
+    const inputBusca = document.getElementById('filtro-lixeira-busca');
 
-    this.carregarLixeira(selectEntidade?.value || 'orcamentos');
+    selectEntidade?.addEventListener('change', () => this.carregarLixeira());
+    inputBusca?.addEventListener('input', () => this.carregarLixeira());
+
+    await this.carregarLixeira();
   },
 
-  async carregarLixeira(entidade) {
+  async carregarLixeira() {
     const tbody = document.getElementById('lista-lixeira-tbody');
     if (!tbody) return;
 
+    const entidade = document.getElementById('filtro-lixeira-entidade')?.value || '';
+    const busca = document.getElementById('filtro-lixeira-busca')?.value.trim() || '';
+
     try {
-      const endpoint = `${window.CONFIG.ENDPOINTS.ADMINISTRACAO.LIXEIRA}?entidade=${entidade}`;
+      const params = new URLSearchParams();
+      if (entidade) params.append('entidade', entidade);
+      if (busca) params.append('busca', busca);
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      const endpoint = `${window.CONFIG.ENDPOINTS.ADMINISTRACAO.LIXEIRA}${qs}`;
       const res = await window.api.get(endpoint);
-      const lista = res.results || res || [];
+      const lista = res.itens || res.results || (Array.isArray(res) ? res : []);
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px;">Lixeira vazia para esta entidade.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="padding: 24px;">Lixeira vazia para os filtros selecionados.</td></tr>';
         return;
       }
 
       let html = '';
       lista.forEach((item) => {
+        const podeRestaurar = item.pode_restaurar !== false;
+        const btnRestaurar = podeRestaurar
+          ? `<button class="btn btn-primary btn-sm" onclick="window.AdministracaoView.restaurarRegistro('${item.entidade}', ${item.id})">RESTAURAR</button>`
+          : '<span class="status-chip warning" style="font-size: 11px;">SEM PERMISSÃO</span>';
+
         html += `
           <tr>
             <td class="mono-text">#${item.id}</td>
-            <td><strong>${window.EMCUtils.escapeHtml(item.identificacao || item.nome || item.descricao || 'Registro')}</strong></td>
+            <td><span class="status-chip info" style="font-size: 11px;">${window.EMCUtils.escapeHtml(item.entidade_nome || item.entidade)}</span></td>
+            <td>
+              <strong>${window.EMCUtils.escapeHtml(item.identificador || 'Registro')}</strong>
+              ${item.detalhes ? `<div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 2px;">${window.EMCUtils.escapeHtml(item.detalhes)}</div>` : ''}
+            </td>
             <td class="mono-text">${window.EMCUtils.formatarDataHoraPtBr(item.deleted_at)}</td>
-            <td class="mono-text">${window.EMCUtils.escapeHtml(item.deleted_by_email || 'Colaborador')}</td>
-            <td style="text-align: right;">
-              <button class="btn btn-primary btn-sm" onclick="window.AdministracaoView.restaurarRegistro('${entidade}', ${item.id})">RESTAURAR</button>
+            <td class="mono-text">${window.EMCUtils.escapeHtml(item.deleted_by_nome || 'Sistema')}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              ${btnRestaurar}
             </td>
           </tr>
         `;
       });
       tbody.innerHTML = html;
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   },
 
@@ -616,7 +654,7 @@ ${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
       const endpoint = window.CONFIG.ENDPOINTS.ADMINISTRACAO.RESTAURAR_LIXEIRA.replace('{entidade}', entidade).replace('{id}', id);
       await window.api.post(endpoint, {});
       window.EMCUtils.showToast(`Registro #${id} restaurado com sucesso!`, 'success');
-      this.carregarLixeira(entidade);
+      this.carregarLixeira();
     } catch (err) {
       window.EMCUtils.showToast(err.message || 'Erro ao restaurar registro.', 'error');
     }
