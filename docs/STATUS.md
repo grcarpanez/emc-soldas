@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Refinamento UX: Comboboxes Pesquisáveis com Autocomplete Industrial, Filtragem Estrita de Clientes na Frota e Equipamentos Dinâmicos por Cliente no Orçamento)  
+**Última Atualização:** 2026-08-23 (Evolução Cadastros: Modal de Histórico Cronológico de Vínculos com Timestamp e Vinculação Inteligente de Frota com Confirmação de Transferência)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 

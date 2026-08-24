@@ -174,7 +174,8 @@ window.CadastrosView = {
               <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(eq.placa ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : '-')}</strong></td>
               <td class="mono-text">${window.EMCUtils.escapeHtml(eq.identificacao || '-')}</td>
               <td>${window.EMCUtils.escapeHtml(eq.descricao || '-')}</td>
-              <td style="text-align: right;">
+              <td style="text-align: right; white-space: nowrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${eq.id})">HISTÓRICO</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="window.CadastrosView.desvincularEquipamento(${v.id}, ${clienteId})">DESVINCULAR</button>
               </td>
             </tr>
@@ -194,7 +195,7 @@ window.CadastrosView = {
                 Total de equipamentos ativos vinculados: <strong>${vinculos.length}</strong>
               </p>
             </div>
-            <button type="button" class="btn btn-primary btn-sm" id="btn-novo-equip-cliente">+ NOVO EQUIPAMENTO PARA ESTE CLIENTE</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-novo-equip-cliente">+ VINCULAR / CADASTRAR EQUIPAMENTO</button>
           </div>
 
           <div class="table-container" style="margin-bottom: 0;">
@@ -216,10 +217,245 @@ window.CadastrosView = {
       });
 
       document.getElementById('btn-novo-equip-cliente')?.addEventListener('click', () => {
-        this.abrirModalEquipamento(null, clienteId);
+        this.abrirModalVincularOuCriarEquipamentoFrota(clienteId);
       });
     } catch (err) {
       window.EMCUtils.showToast('Erro ao carregar frota do cliente.', 'error');
+    }
+  },
+
+  async abrirModalVincularOuCriarEquipamentoFrota(clienteId) {
+    try {
+      const cliente = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}${clienteId}/`);
+      const equipsRes = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}?page_size=1000`);
+      const todosEquips = equipsRes.results || equipsRes || [];
+
+      let optionsEquip = '<option value="__NOVO__">+ CADASTRAR NOVO EQUIPAMENTO PARA ESTE CLIENTE</option>';
+      todosEquips.forEach((e) => {
+        const placa = e.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
+        const ident = e.identificacao ? ` - ${e.identificacao}` : '';
+        const dono = e.cliente_atual_nome ? ` (Vinculado a: ${e.cliente_atual_nome})` : ' (Sem dono / Disponível)';
+        optionsEquip += `<option value="${e.id}">${window.EMCUtils.escapeHtml(e.descricao)}${placa}${ident}${dono}</option>`;
+      });
+
+      window.EMCUtils.openModal({
+        title: `VINCULAR OU CADASTRAR EQUIPAMENTO - ${cliente.nome_razao}`,
+        size: 'md',
+        confirmText: 'VINCULAR / SALVAR',
+        content: `
+          <form id="form-frota-equip">
+            <div class="form-group">
+              <label class="form-label" for="frota-sel-equip-busca">Pesquisar Equipamento Existente ou Criar Novo</label>
+              <select id="frota-sel-equip-busca" class="form-control">
+                ${optionsEquip}
+              </select>
+              <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">
+                Selecione um equipamento existente para vincular/transferir ou escolha cadastrar um novo.
+              </small>
+            </div>
+
+            <div id="frota-aviso-transferencia" class="alert-banner alert-warning mb-16" style="display: none;"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label" for="frota-equip-placa">Placa (Antiga / Mercosul)</label>
+                <input type="text" id="frota-equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC1D23">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="frota-equip-identificacao">Identificação / Chassi / Frota</label>
+                <input type="text" id="frota-equip-identificacao" class="form-control mono-text" placeholder="EX: TRATOR 04">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="frota-equip-descricao">Descrição Completa *</label>
+              <input type="text" id="frota-equip-descricao" class="form-control" placeholder="EX: ESCAVADEIRA HIDRÁULICA CAT 320D" required>
+            </div>
+          </form>
+        `,
+        onConfirm: async () => {
+          const selVal = document.getElementById('frota-sel-equip-busca').value;
+          const placa = document.getElementById('frota-equip-placa').value.trim();
+          const identificacao = document.getElementById('frota-equip-identificacao').value.trim();
+          const descricao = document.getElementById('frota-equip-descricao').value.trim();
+
+          if (selVal === '__NOVO__') {
+            if (!descricao) {
+              window.EMCUtils.showToast('A descrição do equipamento é obrigatória.', 'error');
+              return false;
+            }
+
+            try {
+              await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS, {
+                placa: window.EMCUtils.sanitizarTextoEmTempoReal(placa),
+                identificacao: window.EMCUtils.sanitizarTextoEmTempoReal(identificacao),
+                descricao,
+                cliente_id: clienteId
+              });
+              window.EMCUtils.showToast('Equipamento criado e vinculado com sucesso!', 'success');
+              this.abrirModalFrotaCliente(clienteId);
+              this.carregarListaClientes();
+              return true;
+            } catch (err) {
+              window.EMCUtils.showToast(err.message || 'Erro ao criar equipamento.', 'error');
+              return false;
+            }
+          } else {
+            // Equipamento existente selecionado
+            const equipId = parseInt(selVal, 10);
+            const equipObj = todosEquips.find(e => e.id === equipId);
+
+            if (equipObj && equipObj.cliente_atual && equipObj.cliente_atual.id === clienteId) {
+              window.EMCUtils.showToast('Este equipamento já está vinculado a este cliente.', 'info');
+              return true;
+            }
+
+            if (equipObj && equipObj.cliente_atual && equipObj.cliente_atual.id !== clienteId) {
+              const donoAntigo = equipObj.cliente_atual_nome || 'outro cliente';
+              const confirma = confirm(`Este equipamento pertence atualmente a '${donoAntigo}'. Deseja transferir a titularidade e vinculá-lo a '${cliente.nome_razao}'?`);
+              if (!confirma) return false;
+
+              try {
+                await window.api.post(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equipId}/transferir/`, {
+                  novo_cliente_id: clienteId
+                });
+                window.EMCUtils.showToast('Titularidade do equipamento transferida com sucesso!', 'success');
+                this.abrirModalFrotaCliente(clienteId);
+                this.carregarListaClientes();
+                return true;
+              } catch (err) {
+                window.EMCUtils.showToast(err.message || 'Erro ao transferir equipamento.', 'error');
+                return false;
+              }
+            } else {
+              // Equipamento sem dono
+              try {
+                await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTE_EQUIPAMENTOS, {
+                  cliente: clienteId,
+                  equipamento: equipId,
+                  is_ativo: true
+                });
+                window.EMCUtils.showToast('Equipamento vinculado com sucesso!', 'success');
+                this.abrirModalFrotaCliente(clienteId);
+                this.carregarListaClientes();
+                return true;
+              } catch (err) {
+                window.EMCUtils.showToast(err.message || 'Erro ao vincular equipamento.', 'error');
+                return false;
+              }
+            }
+          }
+        }
+      });
+
+      // Inicializa combobox pesquisável e listeners de autopreenchimento
+      setTimeout(() => {
+        const selEquip = document.getElementById('frota-sel-equip-busca');
+        const inputPlaca = document.getElementById('frota-equip-placa');
+        const inputIdent = document.getElementById('frota-equip-identificacao');
+        const inputDesc = document.getElementById('frota-equip-descricao');
+        const avisoTransf = document.getElementById('frota-aviso-transferencia');
+
+        if (selEquip) {
+          window.EMCUtils.initSearchableSelect(selEquip, {
+            placeholder: 'DIGITE PLACA, IDENTIFICAÇÃO OU DESCRIÇÃO...'
+          });
+
+          selEquip.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val === '__NOVO__') {
+              if (inputPlaca) { inputPlaca.value = ''; inputPlaca.readOnly = false; }
+              if (inputIdent) { inputIdent.value = ''; inputIdent.readOnly = false; }
+              if (inputDesc) { inputDesc.value = ''; inputDesc.readOnly = false; }
+              if (avisoTransf) avisoTransf.style.display = 'none';
+            } else {
+              const eq = todosEquips.find(x => x.id === parseInt(val, 10));
+              if (eq) {
+                if (inputPlaca) { inputPlaca.value = eq.placa ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : ''; inputPlaca.readOnly = true; }
+                if (inputIdent) { inputIdent.value = eq.identificacao || ''; inputIdent.readOnly = true; }
+                if (inputDesc) { inputDesc.value = eq.descricao || ''; inputDesc.readOnly = true; }
+
+                if (eq.cliente_atual && eq.cliente_atual.id !== clienteId && avisoTransf) {
+                  avisoTransf.style.display = 'block';
+                  avisoTransf.innerHTML = `<strong>[AVISO DE TRANSFERÊNCIA]</strong> Este equipamento está atualmente vinculado a <strong>${window.EMCUtils.escapeHtml(eq.cliente_atual_nome)}</strong>. Ao salvar, a titularidade será transferida para este cliente com registro de data/hora no histórico.`;
+                } else if (avisoTransf) {
+                  avisoTransf.style.display = 'none';
+                }
+              }
+            }
+          });
+        }
+      }, 50);
+    } catch (err) {
+      window.EMCUtils.showToast('Erro ao carregar dados para vinculação.', 'error');
+    }
+  },
+
+  async abrirModalHistoricoEquipamento(equipId) {
+    try {
+      const equip = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equipId}/`);
+      const historicoRes = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equipId}/historico-proprietarios/`);
+      const historico = historicoRes.results || historicoRes || [];
+
+      let linhasHtml = '';
+      if (!historico.length) {
+        linhasHtml = '<tr><td colspan="5" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 18px;">Nenhum registro de titularidade encontrado no histórico.</td></tr>';
+      } else {
+        historico.forEach((h) => {
+          const statusBadge = h.is_ativo 
+            ? '<span class="status-chip success">PROPRIETÁRIO ATUAL</span>' 
+            : '<span class="status-chip neutral">PROPRIETÁRIO ANTERIOR</span>';
+
+          const doc = h.cnpj_cpf ? ` (${window.EMCUtils.formatarCpfCnpjDinamico(h.cnpj_cpf)})` : '';
+          const tel = h.telefone ? window.EMCUtils.formatarTelefoneDinamico(h.telefone) : '-';
+          const dataFormatada = window.EMCUtils.formatarDataHoraPtBr(h.data_vinculo);
+
+          linhasHtml += `
+            <tr>
+              <td>${statusBadge}</td>
+              <td><strong>${window.EMCUtils.escapeHtml(h.nome_razao)}</strong>${doc}</td>
+              <td class="mono-text">${tel}</td>
+              <td class="mono-text" style="font-weight: 700; color: var(--color-rust-orange);">${dataFormatada}</td>
+              <td class="mono-text">#${h.vinculo_id}</td>
+            </tr>
+          `;
+        });
+      }
+
+      const placaTexto = equip.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(equip.placa)}]` : '';
+
+      window.EMCUtils.openModal({
+        title: `HISTÓRICO DE TITULARIDADE E VÍNCULOS - #${equip.id} ${equip.descricao}${placaTexto}`,
+        size: 'lg',
+        showCancel: false,
+        confirmText: 'FECHAR',
+        content: `
+          <div style="margin-bottom: 14px;">
+            <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant);">
+              Rastreabilidade cronológica de todas as transferências de propriedade com data e hora de registro.
+            </p>
+          </div>
+
+          <div class="table-container" style="margin-bottom: 0;">
+            <table class="table" style="font-size: 13px;">
+              <thead>
+                <tr>
+                  <th>STATUS</th>
+                  <th>CLIENTE / PROPRIETÁRIO</th>
+                  <th>TELEFONE</th>
+                  <th>DATA E HORA DO VÍNCULO (TIMESTAMP)</th>
+                  <th>ID VÍNCULO</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${linhasHtml}
+              </tbody>
+            </table>
+          </div>
+        `
+      });
+    } catch (err) {
+      window.EMCUtils.showToast('Erro ao carregar histórico de proprietários.', 'error');
     }
   },
 
@@ -668,7 +904,8 @@ window.CadastrosView = {
             <td class="mono-text">${window.EMCUtils.escapeHtml(item.identificacao || '-')}</td>
             <td>${window.EMCUtils.escapeHtml(item.descricao)}</td>
             <td><span class="status-chip ${item.cliente_atual_nome ? 'info' : 'warning'}">${window.EMCUtils.escapeHtml(dono)}</span></td>
-            <td style="text-align: right;">
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">HISTÓRICO</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarEquipamento(${item.id})">EDITAR</button>
             </td>
           </tr>
