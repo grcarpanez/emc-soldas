@@ -732,21 +732,32 @@ window.AdministracaoView = {
           let bg = 'transparent';
           let tagBadge = '';
 
-          if (item.is_error || item.conteudo.includes('ERROR') || item.conteudo.includes('CRITICAL')) {
+          const cat = item.categoria || (item.is_error ? 'ERROR' : item.is_security ? 'SEGURANCA' : item.is_audit ? 'AUDIT' : item.is_warning ? 'WARNING' : item.is_http ? 'HTTP' : 'INFO');
+
+          if (cat === 'ERROR') {
             cor = '#ffb4ab';
             bg = 'rgba(147, 0, 10, 0.2)';
             tagBadge = '<span style="background: #93000a; color: #ffdad6; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">ERROR</span>';
-          } else if (item.is_security || item.conteudo.includes('[SEGURANÇA]') || item.conteudo.includes('[SEGURANCA]') || item.conteudo.includes('Unauthorized') || item.conteudo.includes('Forbidden')) {
+          } else if (cat === 'SEGURANCA') {
             cor = '#c2c6d2';
             bg = 'rgba(100, 104, 114, 0.2)';
             tagBadge = '<span style="background: #2c3139; color: #e4e8f4; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">SEGURANÇA</span>';
-          } else if (item.is_audit || item.conteudo.includes('[AUDIT]') || item.conteudo.includes('[SOFT_DELETE]') || item.conteudo.includes('[RESTAURACAO]') || item.conteudo.includes('[CANCELAMENTO]') || item.conteudo.includes('[ESTORNO]')) {
+          } else if (cat === 'AUDIT') {
             cor = '#72cf88';
             bg = 'rgba(0, 77, 37, 0.15)';
             tagBadge = '<span style="background: #004d25; color: #b7f4c5; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">AUDIT</span>';
-          } else if (item.is_warning || item.conteudo.includes('WARNING')) {
+          } else if (cat === 'WARNING') {
             cor = '#ffb59c';
             tagBadge = '<span style="background: #5c1a00; color: #ffe2d9; padding: 1px 5px; font-size: 10px; font-weight: 700; margin-right: 6px;">WARN</span>';
+          } else if (cat === 'HTTP') {
+            cor = '#a5a9b4';
+            tagBadge = '<span style="background: #1c1b1b; border: 1px solid #44474e; color: #c4c7c5; padding: 0 4px; font-size: 10px; font-weight: 600; margin-right: 6px;">HTTP</span>';
+          } else if (cat === 'DEBUG') {
+            cor = '#8e9199';
+            tagBadge = '<span style="background: #131313; border: 1px solid #71797e; color: #a5a9b4; padding: 0 4px; font-size: 10px; font-weight: 600; margin-right: 6px;">DEBUG</span>';
+          } else {
+            cor = '#e4e2e1';
+            tagBadge = '<span style="background: #282a2d; color: #c4c7c5; padding: 1px 4px; font-size: 10px; font-weight: 600; margin-right: 6px;">INFO</span>';
           }
 
           linhasHtml += `
@@ -767,12 +778,13 @@ window.AdministracaoView = {
           <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background-color: var(--color-surface-container); padding: 10px; border: 1px solid var(--color-steel-gray);">
             <div style="display: flex; gap: 6px; align-items: center;">
               <label style="font-size: 12px; font-family: 'JetBrains Mono', monospace;">CATEGORIA / NÍVEL:</label>
-              <select id="log-modal-nivel" class="form-control" style="width: 230px; height: 32px; font-size: 12px; padding: 2px 8px;">
+              <select id="log-modal-nivel" class="form-control" style="width: 250px; height: 32px; font-size: 12px; padding: 2px 8px;">
                 <option value="TODOS" ${nivelFiltro === 'TODOS' ? 'selected' : ''}>TODOS OS EVENTOS</option>
                 <option value="AUDIT" ${nivelFiltro === 'AUDIT' ? 'selected' : ''}>[AUDIT] AUDITORIA E MUTAÇÕES</option>
                 <option value="SEGURANCA" ${nivelFiltro === 'SEGURANCA' || nivelFiltro === 'SEGURANÇA' ? 'selected' : ''}>[SEGURANÇA] ACESSOS E BLOQUEIOS</option>
                 <option value="ERROR" ${nivelFiltro === 'ERROR' ? 'selected' : ''}>[ERROR] ERROS E FALHAS</option>
                 <option value="WARNING" ${nivelFiltro === 'WARNING' ? 'selected' : ''}>[WARNING] AVISOS E ALERTAS</option>
+                <option value="HTTP" ${nivelFiltro === 'HTTP' ? 'selected' : ''}>[HTTP] TRÁFEGO DE REQUISIÇÕES WEB</option>
                 <option value="INFO" ${nivelFiltro === 'INFO' ? 'selected' : ''}>[INFO] OPERAÇÕES INFORMATIVAS</option>
                 <option value="DEBUG" ${nivelFiltro === 'DEBUG' ? 'selected' : ''}>[DEBUG] DETALHES TÉCNICOS</option>
               </select>

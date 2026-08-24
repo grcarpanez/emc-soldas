@@ -390,7 +390,7 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
     with open(caminho_absoluto, 'r', encoding='utf-8', errors='replace') as f:
         todas_linhas = f.readlines()
 
-    # Aplica filtros de nível e busca
+    # Aplica filtros de nível e busca com parser semântico
     linhas_processadas = []
     nivel_filtro = nivel.upper() if nivel else 'TODOS'
     termo_busca = busca.strip().lower() if busca and busca.strip() else None
@@ -400,33 +400,100 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
         if not texto:
             continue
 
-        # Filtro de Nível / Categoria
-        if nivel_filtro == 'AUDIT':
-            if "[AUDIT]" not in texto and "[SOFT_DELETE]" not in texto and "[RESTAURACAO]" not in texto and "[CANCELAMENTO]" not in texto and "[ESTORNO]" not in texto:
-                continue
-        elif nivel_filtro in ('SEGURANCA', 'SEGURANÇA', 'SECURITY'):
-            if "[SEGURANCA]" not in texto and "[SEGURANÇA]" not in texto and "[SECURITY]" not in texto and "401" not in texto and "403" not in texto and "Unauthorized" not in texto and "Forbidden" not in texto and "Too Many Requests" not in texto:
-                continue
-        elif nivel_filtro == 'ERROR':
-            if "[ERROR]" not in texto and "[CRITICAL]" not in texto and " ERROR " not in texto and " CRITICAL " not in texto:
-                continue
-        elif nivel_filtro != 'TODOS':
-            if f"[{nivel_filtro}]" not in texto and f" {nivel_filtro} " not in texto:
-                continue
+        # 1. Classificação Semântica Precisa da Linha
+        is_audit = (
+            "[AUDIT]" in texto or
+            "[SOFT_DELETE]" in texto or
+            "[RESTAURACAO]" in texto or
+            "[STATUS_USUÁRIO]" in texto or
+            "[STATUS_USUARIO]" in texto or
+            "[CANCELAMENTO]" in texto or
+            "[ESTORNO]" in texto or
+            "[PERMISSÕES]" in texto or
+            "[PERMISSOES]" in texto or
+            "[CONVITE]" in texto
+        )
 
-        # Filtro de Busca Textual
+        is_security = (
+            "[SEGURANÇA]" in texto or
+            "[SEGURANCA]" in texto or
+            "[SECURITY]" in texto or
+            "[BLOQUEIO]" in texto or
+            "Acesso não autorizado" in texto or
+            "Forbidden:" in texto or
+            "Unauthorized:" in texto or
+            "Too Many Requests:" in texto
+        )
+
+        is_http = (
+            "[django.server" in texto or
+            ('"GET /' in texto or '"POST /' in texto or '"PUT /' in texto or '"PATCH /' in texto or '"DELETE /' in texto)
+        ) and not is_security and not is_audit
+
+        # Validação estrita de nível de severidade no cabeçalho (ex: "[2026-08-24 ...] [ERROR]")
+        cabecalho = texto[:80]
+        is_error = ("[ERROR]" in cabecalho or "[CRITICAL]" in cabecalho) and not is_http
+        is_warning = ("[WARNING]" in cabecalho or "[WARN]" in cabecalho) and not is_security and not is_http
+        is_debug = "[DEBUG]" in cabecalho
+
+        # Categoria Primária Definitiva
+        if is_audit:
+            categoria = 'AUDIT'
+            tag_label = 'AUDIT'
+        elif is_security:
+            categoria = 'SEGURANCA'
+            tag_label = 'SEGURANÇA'
+        elif is_error:
+            categoria = 'ERROR'
+            tag_label = 'ERROR'
+        elif is_warning:
+            categoria = 'WARNING'
+            tag_label = 'WARN'
+        elif is_http:
+            categoria = 'HTTP'
+            tag_label = 'HTTP'
+        elif is_debug:
+            categoria = 'DEBUG'
+            tag_label = 'DEBUG'
+        else:
+            categoria = 'INFO'
+            tag_label = 'INFO'
+
+        # 2. Filtragem Precisa por Nível / Categoria
+        if nivel_filtro != 'TODOS':
+            if nivel_filtro == 'AUDIT' and categoria != 'AUDIT':
+                continue
+            elif nivel_filtro in ('SEGURANCA', 'SEGURANÇA', 'SECURITY') and categoria != 'SEGURANCA':
+                continue
+            elif nivel_filtro in ('ERROR', 'CRITICAL') and categoria != 'ERROR':
+                continue
+            elif nivel_filtro in ('WARNING', 'WARN') and categoria != 'WARNING':
+                continue
+            elif nivel_filtro in ('HTTP', 'API', 'REQUISICAO') and categoria != 'HTTP':
+                continue
+            elif nivel_filtro == 'INFO' and categoria != 'INFO':
+                continue
+            elif nivel_filtro == 'DEBUG' and categoria != 'DEBUG':
+                continue
+            elif nivel_filtro not in ('AUDIT', 'SEGURANCA', 'SEGURANÇA', 'SECURITY', 'ERROR', 'CRITICAL', 'WARNING', 'WARN', 'HTTP', 'API', 'REQUISICAO', 'INFO', 'DEBUG'):
+                if f"[{nivel_filtro}]" not in texto and f" {nivel_filtro} " not in texto:
+                    continue
+
+        # 3. Filtro de Busca Textual
         if termo_busca:
             if termo_busca not in texto.lower():
                 continue
 
-        is_security = "[SEGURANÇA]" in texto or "[SEGURANCA]" in texto or "[SECURITY]" in texto or "Unauthorized" in texto or "Forbidden" in texto
         linhas_processadas.append({
             "linha_numero": len(todas_linhas) - i,
             "conteudo": texto,
-            "is_error": "ERROR" in texto or "CRITICAL" in texto,
-            "is_warning": "WARNING" in texto,
-            "is_audit": "[AUDIT]" in texto or "[SOFT_DELETE]" in texto or "[RESTAURACAO]" in texto or "[CANCELAMENTO]" in texto or "[ESTORNO]" in texto,
-            "is_security": is_security
+            "categoria": categoria,
+            "tag_label": tag_label,
+            "is_error": categoria == 'ERROR',
+            "is_warning": categoria == 'WARNING',
+            "is_audit": categoria == 'AUDIT',
+            "is_security": categoria == 'SEGURANCA',
+            "is_http": categoria == 'HTTP'
         })
 
     total_filtradas = len(linhas_processadas)

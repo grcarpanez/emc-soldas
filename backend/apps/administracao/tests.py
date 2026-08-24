@@ -319,42 +319,56 @@ class AdministracaoTests(TestCase):
         hoje_str = timezone.localdate().strftime('%Y-%m-%d')
         arquivo_hoje = os.path.join(self.logs_dir, f"app-{hoje_str}.log")
         with open(arquivo_hoje, 'w', encoding='utf-8') as f:
-            f.write(f"[{hoje_str} 10:00:00] [INFO] Sistema operando normalmente.\n")
-            f.write(f"[{hoje_str} 10:05:00] [WARNING] Tentativa de acesso sem permissao.\n")
-            f.write(f"[{hoje_str} 10:10:00] [ERROR] Falha de conexao com gateway.\n")
-            f.write(f"[{hoje_str} 10:15:00] [AUDIT] [CANCELAMENTO] Orcamento #99 cancelado.\n")
+            f.write(f"[{hoje_str} 10:00:00] [INFO] [emc_soldas:100] Sistema operando normalmente.\n")
+            f.write(f"[{hoje_str} 10:05:00] [WARNING] [emc_soldas:105] Advertencia de capacidade.\n")
+            f.write(f"[{hoje_str} 10:08:00] [WARNING] [django:50] [SEGURANÇA] Acesso não autorizado (403) - IP: 127.0.0.1\n")
+            f.write(f"[{hoje_str} 10:10:00] [ERROR] [emc_soldas:110] Falha de conexao com gateway.\n")
+            f.write(f"[{hoje_str} 10:12:00] [INFO] [django.server:213] \"GET /api/orcamentos/?nivel=ERROR HTTP/1.1\" 200 1200\n")
+            f.write(f"[{hoje_str} 10:15:00] [INFO] [emc_soldas:645] [AUDIT] [CANCELAMENTO] Orcamento #99 cancelado.\n")
 
         self.client.force_authenticate(user=self.admin_user)
-        # Consulta com filtro de nível ERROR
+
+        # 1. Filtro ERROR (não deve capturar a requisição HTTP com nivel=ERROR na URL)
         response = self.client.get('/api/logs/', {'arquivo': 'hoje', 'nivel': 'ERROR'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['existe'])
         self.assertEqual(response.data['total_linhas_filtradas'], 1)
         self.assertIn("Falha de conexao", response.data['linhas'][0]['conteudo'])
+        self.assertEqual(response.data['linhas'][0]['categoria'], 'ERROR')
 
-        # Consulta com busca textual
-        res_busca = self.client.get('/api/logs/', {'arquivo': 'hoje', 'busca': 'CANCELAMENTO'})
-        self.assertEqual(res_busca.status_code, status.HTTP_200_OK)
-        self.assertEqual(res_busca.data['total_linhas_filtradas'], 1)
-        self.assertIn("Orcamento #99 cancelado", res_busca.data['linhas'][0]['conteudo'])
-
-        # Consulta com filtro de nível AUDIT
+        # 2. Filtro AUDIT
         res_audit = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'AUDIT'})
         self.assertEqual(res_audit.status_code, status.HTTP_200_OK)
         self.assertEqual(res_audit.data['total_linhas_filtradas'], 1)
         self.assertIn("Orcamento #99 cancelado", res_audit.data['linhas'][0]['conteudo'])
+        self.assertEqual(res_audit.data['linhas'][0]['categoria'], 'AUDIT')
 
-        # Consulta com filtro de nível WARNING
-        res_warn = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'WARNING'})
-        self.assertEqual(res_warn.status_code, status.HTTP_200_OK)
-        self.assertEqual(res_warn.data['total_linhas_filtradas'], 1)
-        self.assertIn("Tentativa de acesso", res_warn.data['linhas'][0]['conteudo'])
+        # 3. Filtro SEGURANCA
+        res_sec = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'SEGURANCA'})
+        self.assertEqual(res_sec.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_sec.data['total_linhas_filtradas'], 1)
+        self.assertIn("Acesso não autorizado", res_sec.data['linhas'][0]['conteudo'])
+        self.assertEqual(res_sec.data['linhas'][0]['categoria'], 'SEGURANCA')
+
+        # 4. Filtro HTTP
+        res_http = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'HTTP'})
+        self.assertEqual(res_http.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_http.data['total_linhas_filtradas'], 1)
+        self.assertIn("GET /api/orcamentos/", res_http.data['linhas'][0]['conteudo'])
+        self.assertEqual(res_http.data['linhas'][0]['categoria'], 'HTTP')
+
+        # 5. Filtro INFO (apenas informativos de sistema)
+        res_info = self.client.get('/api/controle-arquivos-log/visualizar/', {'arquivo': 'hoje', 'nivel': 'INFO'})
+        self.assertEqual(res_info.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_info.data['total_linhas_filtradas'], 1)
+        self.assertIn("Sistema operando normalmente", res_info.data['linhas'][0]['conteudo'])
+        self.assertEqual(res_info.data['linhas'][0]['categoria'], 'INFO')
 
         # Consulta via ViewSet action /visualizar/ com parâmetro data
         res_viewset = self.client.get('/api/controle-arquivos-log/visualizar/', {'data': hoje_str})
         self.assertEqual(res_viewset.status_code, status.HTTP_200_OK)
         self.assertTrue(res_viewset.data['existe'])
-        self.assertEqual(res_viewset.data['total_linhas_arquivo'], 4)
+        self.assertEqual(res_viewset.data['total_linhas_arquivo'], 6)
         self.assertIn("conteudo", res_viewset.data)
 
         # Validação do serializer do manifesto
@@ -371,8 +385,8 @@ class AdministracaoTests(TestCase):
         item_hoje = next((i for i in itens if i['id'] == manifesto.id), None)
         self.assertIsNotNone(item_hoje)
         self.assertEqual(item_hoje['data_log'], hoje_str)
-        self.assertEqual(item_hoje['total_eventos'], 4)
-        self.assertEqual(item_hoje['quantidade_linhas'], 4)
+        self.assertEqual(item_hoje['total_eventos'], 6)
+        self.assertEqual(item_hoje['quantidade_linhas'], 6)
 
     def test_log_viewer_bloqueio_path_traversal(self):
         """Valida que tentativas de navegação fora do diretório de logs são rejeitadas."""

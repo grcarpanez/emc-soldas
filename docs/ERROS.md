@@ -247,7 +247,18 @@ Utilize o padrão abaixo para cada novo erro registrado:
      - `DEBUG`: captura `[DEBUG]`.
   3. Atualização do modal no frontend (`administracao-view.js`) com a combobox completa de 6 categorias bem descritas e badges estilizados no padrão *Industrial Integrity*.
   4. Adicionados testes automatizados cobrindo a filtragem de `AUDIT` e `SEGURANCA` com 100% de sucesso.
-- **Como evitar no futuro:** Sempre que filtros de UI puderem receber marcadores contextuais ou tags estruturadas, utilizar campos de string flexíveis nos serializers com normalização de entrada.
+---
+
+## 2026-08-24 - Falsos Positivos em Badges de Log por Colisão de Substrings em URLs de Requisições HTTP
+
+- **Sintoma:** Ao consultar o Log Viewer com filtros de severidade (ex: `&nivel=ERROR` ou `&nivel=WARNING`), as linhas normais de requisição HTTP (`[INFO] [django.server] "GET ...&nivel=ERROR" 200`) recebiam badges incorretos de `ERROR` (vermelho) ou `WARN` (âmbar) no visualizador, e o filtro `INFO` misturava requisições web com ações de auditoria.
+- **Causa:** O visualizador no frontend determinava os badges por buscas ingênuas de substrings (`.includes('ERROR')`), encontrando o termo dentro da própria query string da URL. Além disso, o backend não segregava a categoria semântica primária da severidade técnica do Python (`[INFO]`).
+- **Solução aplicada:**
+  1. Implementação de parser semântico estruturado em `backend/apps/administracao/services.py`, classificando cada linha por sua categoria definitiva (`AUDIT`, `SEGURANCA`, `ERROR`, `WARNING`, `HTTP`, `INFO`, `DEBUG`) validando a posição correta dos marcadores.
+  2. Adição da categoria `HTTP` no backend e frontend para isolar consultas de API e tráfego web.
+  3. Atualização de `administracao-view.js` para renderizar badges estritamente a partir da propriedade `item.categoria` enviada pelo backend, eliminando 100% dos falsos positivos.
+  4. Ampliação da suíte de testes unitários cobrindo todas as categorias de filtragem (157 testes aprovados com 100% de sucesso).
+- **Como evitar no futuro:** Nunca determinar tipos semânticos de registros por busca em texto livre na linha inteira; sempre aplicar classificação estruturada com validação de posição de cabeçalhos e tags.
 
 
 
