@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-23 (Refinamento UI/UX: Escala Compacta e Alta Densidade Responsiva Mobile, Suporte a Acesso via Rede Local Wi-Fi e CORS/CSRF Dev)  
+**Última Atualização:** 2026-08-24 (Dinamização Reativa de CPF/CNPJ com Alternância de Rótulo Razão Social / Nome Completo e Visibilidade de Nome Fantasia no Cadastro de Clientes e Fornecedores)  
 **Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
 
@@ -212,6 +212,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Servidor Unificado no Django:** Roteamento de assets estáticos e SPA no `backend/config/urls.py`, permitindo execução unificada via `python backend/manage.py runserver 0.0.0.0:8000` (eliminando dependência do Live Server na porta 5500).
 - [x] **Conectividade Wi-Fi e Firewall:** Configuração de `ALLOWED_HOSTS = ['*']` e `CSRF_TRUSTED_ORIGINS` para IPs de rede local (`192.168.2.104:8000`) e documentação da regra do Windows Firewall (`netsh advfirewall firewall add rule name="EMC_Soldas_8000" dir=in action=allow protocol=TCP localport=8000`).
 - [x] **Assets PWA e Favicon:** Geração dos arquivos físicos `favicon.ico`, `icon-192.png` e `icon-512.png` eliminando requisições 404.
+- [x] **Dinamização Reativa CPF/CNPJ no Modal de Cadastro:** Inicialização do modal como Pessoa Física ("NOME COMPLETO *" e campo "NOME FANTASIA" oculto com grid de 1 coluna), transição em tempo real para Pessoa Jurídica ("RAZÃO SOCIAL *", reexibição de "NOME FANTASIA" e grid de 2 colunas) ao ultrapassar 11 dígitos, e reversão completa ao apagar dígitos.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

@@ -533,6 +533,10 @@ window.CadastrosView = {
     const isEdit = !!cliente;
     const title = isEdit ? `EDITAR CADASTRO #${cliente.id}` : 'NOVO CADASTRO COMPLETO (PF/PJ)';
 
+    // Determina se inicia como PJ (se o cliente tem mais de 11 dígitos ou tipo_pessoa === 'PJ')
+    const docInicial = window.EMCUtils.extrairApenasDigitos(cliente?.cnpj_cpf || '');
+    const isPJInicial = docInicial.length > 11 || cliente?.tipo_pessoa === 'PJ';
+
     window.EMCUtils.openModal({
       title: title,
       size: 'lg',
@@ -553,12 +557,12 @@ window.CadastrosView = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+          <div id="container-nome-fantasia" style="display: grid; grid-template-columns: ${isPJInicial ? '2fr 1fr' : '1fr'}; gap: 12px;">
             <div class="form-group">
-              <label class="form-label" for="comp-nome">Razão Social / Nome Completo *</label>
+              <label class="form-label" for="comp-nome" id="lbl-comp-nome">${isPJInicial ? 'Razão Social *' : 'Nome Completo *'}</label>
               <input type="text" id="comp-nome" class="form-control" value="${cliente?.nome_razao || ''}" required>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="group-comp-fantasia" style="${isPJInicial ? '' : 'display: none;'}">
               <label class="form-label" for="comp-fantasia">Nome Fantasia</label>
               <input type="text" id="comp-fantasia" class="form-control" value="${cliente?.nome_fantasia || ''}">
             </div>
@@ -639,7 +643,8 @@ window.CadastrosView = {
       `,
       onConfirm: async () => {
         const docLimpo = window.EMCUtils.extrairApenasDigitos(document.getElementById('comp-documento').value);
-        const tipoPessoa = docLimpo.length === 14 ? 'PJ' : 'PF';
+        const isPJ = docLimpo.length > 11;
+        const tipoPessoa = isPJ ? 'PJ' : 'PF';
 
         // Coleta os contatos da tabela dinâmica
         const rows = document.querySelectorAll('#lista-contatos-modal-tbody tr');
@@ -660,8 +665,10 @@ window.CadastrosView = {
           }
         });
 
-        if (!document.getElementById('comp-nome').value.trim()) {
-          window.EMCUtils.showToast('O Nome / Razão Social é obrigatório.', 'error');
+        const nomeRazaoVal = document.getElementById('comp-nome').value.trim();
+        if (!nomeRazaoVal) {
+          const msg = isPJ ? 'A Razão Social é obrigatória.' : 'O Nome Completo é obrigatório.';
+          window.EMCUtils.showToast(msg, 'error');
           return false;
         }
 
@@ -671,8 +678,8 @@ window.CadastrosView = {
         }
 
         const payload = {
-          nome_razao: document.getElementById('comp-nome').value.trim(),
-          nome_fantasia: document.getElementById('comp-fantasia').value.trim(),
+          nome_razao: nomeRazaoVal,
+          nome_fantasia: isPJ ? document.getElementById('comp-fantasia').value.trim() : '',
           tipo: document.getElementById('comp-tipo').value,
           tipo_pessoa: tipoPessoa,
           cnpj_cpf: docLimpo,
@@ -703,6 +710,30 @@ window.CadastrosView = {
         }
       }
     });
+
+    // Listener de alternância dinâmica entre modo CPF (Pessoa Física) e CNPJ (Pessoa Jurídica)
+    const docInput = document.getElementById('comp-documento');
+    const lblCompNome = document.getElementById('lbl-comp-nome');
+    const groupCompFantasia = document.getElementById('group-comp-fantasia');
+    const containerNomeFantasia = document.getElementById('container-nome-fantasia');
+
+    const atualizarModoDocumento = () => {
+      const digitos = window.EMCUtils.extrairApenasDigitos(docInput?.value || '');
+      const modoPJ = digitos.length > 11;
+
+      if (lblCompNome) {
+        lblCompNome.textContent = modoPJ ? 'Razão Social *' : 'Nome Completo *';
+      }
+      if (groupCompFantasia) {
+        groupCompFantasia.style.display = modoPJ ? '' : 'none';
+      }
+      if (containerNomeFantasia) {
+        containerNomeFantasia.style.gridTemplateColumns = modoPJ ? '2fr 1fr' : '1fr';
+      }
+    };
+
+    docInput?.addEventListener('input', atualizarModoDocumento);
+    docInput?.addEventListener('paste', () => setTimeout(atualizarModoDocumento, 0));
 
     // Função para adicionar linha de contato dinamicamente
     const adicionarLinhaContato = (nome = '', telefone = '', isWhatsapp = false) => {
@@ -747,7 +778,6 @@ window.CadastrosView = {
     }
 
     // Auto-consulta da Receita Federal e validação ao sair do campo (blur / exit)
-    const docInput = document.getElementById('comp-documento');
     const docSpinner = document.getElementById('doc-spinner');
     let ultimoDocConsultado = '';
 

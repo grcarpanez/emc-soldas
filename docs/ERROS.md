@@ -175,6 +175,15 @@ Utilize o padrão abaixo para cada novo erro registrado:
   3. Gerados os arquivos estáticos de ícone `favicon.ico`, `icon-192.png` e `icon-512.png` na paleta *Rust Orange* para eliminar requisições 404 de manifest e favicon.
 - **Como evitar no futuro:** Sempre declarar explicitamente o parâmetro `url_path='kebab-case'` em todos os métodos `@action` do DRF.
 
+---
+
+## 2026-08-24 - Prevenção de Redeclaração de Variável no Escopo de Modal (SyntaxError docInput)
+
+- **Sintoma:** Risco de `SyntaxError: Identifier 'docInput' has already been declared` no JavaScript ao instanciar múltiplos manipuladores no mesmo escopo de função de abertura do modal.
+- **Causa:** Ao adicionar a escuta do evento dinâmico de digitação no `abrirModalCadastroCompleto`, a variável `docInput` foi declarada no topo do bloco de listeners e novamente dentro do bloco de auto-consulta da Receita Federal.
+- **Solução aplicada:** Remoção da declaração duplicada, unificando o acesso ao elemento `docInput` no escopo superior da função do modal e validação de sintaxe estrita com `node -c`.
+- **Como evitar no futuro:** Sempre validar o arquivo modificado com verificador de sintaxe (`node -c arquivo.js`) e manter referências a elementos do DOM centralizadas no topo do bloco do modal.
+
 
 
 
