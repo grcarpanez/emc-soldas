@@ -202,6 +202,17 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Implementar Central Analítica (`relatorios-view.js`: Inadimplência, Dossiê do Cliente, Curvas ABC de Clientes/Itens, DRE Simplificado e Divergências de Conciliação com exportação PDF/CSV).
 - [x] Integrar 100% dos componentes e formulários ao Design System *Industrial Integrity* (0px border-radius, tipografia técnica, paleta Dark Iron, Steel Gray e Rust Orange, máscaras e toasts).
 
+### Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Concluída)
+- [x] **Comboboxes Pesquisáveis com Autocomplete:** Implementação do componente universal `window.EMCUtils.initSearchableSelect` no padrão *Industrial Integrity* (0px border-radius, tema dark, busca instantânea e navegação por teclado).
+- [x] **Segregação de Frota e Clientes:** Exclusão estrita de fornecedores puros (`tipo === 'FORNECEDOR'`) da seleção de proprietários de veículos e da exibição do botão `FROTA` na tabela.
+- [x] **Filtragem Dinâmica no Orçamento:** Combobox de equipamentos re-filtrada em tempo real ao selecionar o cliente no modal de orçamento.
+- [x] **Modal de Histórico Cronológico de Vínculos:** Endpoint `@action(detail=True, url_path='historico-proprietarios')` e modal frontend exibindo histórico de titularidade com precisão de timestamp (`DD/MM/AAAA às HH:MM:SS`), status atual/anterior e telefone de contato.
+- [x] **Vinculação Inteligente de Frota:** Modal de frota com busca de equipamentos existentes, autopreenchimento de campos e confirmação assistida de transferência de titularidade entre clientes.
+- [x] **Escala Compacta e Alta Densidade Mobile:** Calibração CSS (`industrial-integrity.css` e `layout.css`) com tipografia compacta (`13.5px` / `12.5px`), botões proporcionais (`min-height: 32px`), grids de formulários colapsando em coluna única e modais fluidos (`96vw`).
+- [x] **Servidor Unificado no Django:** Roteamento de assets estáticos e SPA no `backend/config/urls.py`, permitindo execução unificada via `python backend/manage.py runserver 0.0.0.0:8000` (eliminando dependência do Live Server na porta 5500).
+- [x] **Conectividade Wi-Fi e Firewall:** Configuração de `ALLOWED_HOSTS = ['*']` e `CSRF_TRUSTED_ORIGINS` para IPs de rede local (`192.168.2.104:8000`) e documentação da regra do Windows Firewall (`netsh advfirewall firewall add rule name="EMC_Soldas_8000" dir=in action=allow protocol=TCP localport=8000`).
+- [x] **Assets PWA e Favicon:** Geração dos arquivos físicos `favicon.ico`, `icon-192.png` e `icon-512.png` eliminando requisições 404.
+
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).
 - [ ] Executar Pentest Mandatório de Conclusão (6 testes: RBAC/IDOR, Brute-force, SQLi/XSS, Uploads, Sessão HttpOnly, Criptografia/Tracebacks).
@@ -213,5 +224,6 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 ## Próximo Passo Recomendado
 
 Iniciar a **Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy**, executando a suíte consolidada de testes de integração, os 6 testes mandatórios de pentest/segurança (RBAC/IDOR, Brute-force, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256), disponibilizando o gerador de chaves criptográficas seguras (`tools/generate_keys.py`) e o roteiro final de deploy em produção Cloud PaaS.
+
 
 
