@@ -105,6 +105,7 @@ class SoftDeleteModel(models.Model):
 
     class Meta:
         abstract = True
+        base_manager_name = 'all_objects'
 
     @property
     def is_deleted(self) -> bool:
@@ -143,3 +144,4 @@ class BaseModel(AuditableModel, SoftDeleteModel):
 
     class Meta:
         abstract = True
+        base_manager_name = 'all_objects'

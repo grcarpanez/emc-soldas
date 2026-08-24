@@ -147,6 +147,7 @@ window.CadastrosView = {
             <td style="text-align: right; white-space: nowrap;">
               ${btnFrota}
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarCliente(${item.id})">EDITAR</button>
+              <button class="btn btn-ghost btn-sm" style="color: var(--color-error);" onclick="window.CadastrosView.excluirCliente(${item.id}, '${window.EMCUtils.escapeHtml(item.nome_razao)}')">EXCLUIR</button>
             </td>
           </tr>
         `;
@@ -873,6 +874,36 @@ window.CadastrosView = {
     }
   },
 
+  async excluirCliente(id, nome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAÇÃO DE EXCLUSÃO',
+      size: 'sm',
+      confirmText: 'EXCLUIR / INATIVAR',
+      cancelText: 'CANCELAR',
+      content: `
+        <div style="margin-bottom: 12px;">
+          <p style="font-size: 14px; margin-bottom: 12px;">
+            Deseja realmente excluir/inativar o cadastro de <strong>${window.EMCUtils.escapeHtml(nome)} (#${id})</strong>?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+            <strong>[SOFT DELETE]</strong> O registro será ocultado das operações ativas e movido para a <strong>Lixeira</strong>. Orçamentos e faturas passadas permanecem 100% íntegros e o cadastro poderá ser restaurado pelo administrador a qualquer momento.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}${id}/`);
+          window.EMCUtils.showToast('Cadastro excluído com sucesso! Registro movido para a Lixeira.', 'success');
+          this.carregarListaClientes();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao excluir cadastro.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
   // ==========================================================================
   // 2. EQUIPAMENTOS E VEÍCULOS
   // ==========================================================================
@@ -938,6 +969,7 @@ window.CadastrosView = {
             <td style="text-align: right; white-space: nowrap;">
               <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">HISTÓRICO</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarEquipamento(${item.id})">EDITAR</button>
+              <button class="btn btn-ghost btn-sm" style="color: var(--color-error);" onclick="window.CadastrosView.excluirEquipamento(${item.id}, '${window.EMCUtils.escapeHtml(item.placa || item.identificacao || item.descricao)}')">EXCLUIR</button>
             </td>
           </tr>
         `;
@@ -1057,5 +1089,36 @@ window.CadastrosView = {
     } catch (err) {
       window.EMCUtils.showToast('Erro ao carregar dados do equipamento.', 'error');
     }
+  },
+
+  async excluirEquipamento(id, descricao) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAÇÃO DE EXCLUSÃO',
+      size: 'sm',
+      confirmText: 'EXCLUIR / INATIVAR',
+      cancelText: 'CANCELAR',
+      content: `
+        <div style="margin-bottom: 12px;">
+          <p style="font-size: 14px; margin-bottom: 12px;">
+            Deseja realmente excluir/inativar o equipamento <strong>${window.EMCUtils.escapeHtml(descricao)} (#${id})</strong>?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+            <strong>[SOFT DELETE]</strong> O equipamento será desvinculado de frotas ativas e movido para a <strong>Lixeira</strong>. Orçamentos passados permanecem 100% íntegros e o equipamento poderá ser restaurado pelo administrador a qualquer momento.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${id}/`);
+          window.EMCUtils.showToast('Equipamento excluído com sucesso! Registro movido para a Lixeira.', 'success');
+          this.carregarListaEquipamentos();
+          this.carregarListaClientes();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao excluir equipamento.', 'error');
+          return false;
+        }
+      }
+    });
   }
 };

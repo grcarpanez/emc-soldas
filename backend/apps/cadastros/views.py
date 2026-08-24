@@ -187,6 +187,8 @@ class ClienteFornecedorViewSet(viewsets.ModelViewSet):
         return queryset.order_by('nome_razao')
 
     def perform_destroy(self, instance):
+        # Inativa vínculos ativos de frota deste cliente mantendo histórico cronológico
+        ClienteEquipamento.objects.filter(cliente=instance, is_ativo=True).update(is_ativo=False)
         # Soft Delete mandatório
         instance.soft_delete(user=self.request.user)
 
@@ -285,6 +287,8 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
         return queryset.order_by('placa', 'identificacao')
 
     def perform_destroy(self, instance):
+        # Inativa vínculos com clientes mantendo histórico cronológico
+        ClienteEquipamento.objects.filter(equipamento=instance, is_ativo=True).update(is_ativo=False)
         instance.soft_delete(user=self.request.user)
 
     @action(detail=True, methods=['get'], url_path='historico-proprietarios')

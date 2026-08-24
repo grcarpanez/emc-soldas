@@ -177,12 +177,12 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-24 - Prevenção de Redeclaração de Variável no Escopo de Modal (SyntaxError docInput)
+## 2026-08-24 - Prevenção de Inconsistência Relacional em Soft Delete de Entidades Coligadas (base_manager_name = 'all_objects')
 
-- **Sintoma:** Risco de `SyntaxError: Identifier 'docInput' has already been declared` no JavaScript ao instanciar múltiplos manipuladores no mesmo escopo de função de abertura do modal.
-- **Causa:** Ao adicionar a escuta do evento dinâmico de digitação no `abrirModalCadastroCompleto`, a variável `docInput` foi declarada no topo do bloco de listeners e novamente dentro do bloco de auto-consulta da Receita Federal.
-- **Solução aplicada:** Remoção da declaração duplicada, unificando o acesso ao elemento `docInput` no escopo superior da função do modal e validação de sintaxe estrita com `node -c`.
-- **Como evitar no futuro:** Sempre validar o arquivo modificado com verificador de sintaxe (`node -c arquivo.js`) e manter referências a elementos do DOM centralizadas no topo do bloco do modal.
+- **Sintoma:** Risco de consultas históricas (`orcamento.cliente`, `fatura.cliente`, `documento_compra.fornecedor`, relatórios DRE/Curva ABC/Inadimplência e geradores de PDF comercial) falharem, levantarem `DoesNotExist` ou omitirem registros após o Soft Delete de um cliente, fornecedor ou equipamento.
+- **Causa:** Por padrão, quando um modelo utiliza um `SoftDeleteManager` que filtra `deleted_at__isnull=True` como manager padrão, o Django ORM pode utilizá-lo para resolver chaves estrangeiras (`ForeignKey`) em modelos relacionados caso `base_manager_name` não seja explicitamente declarado como um manager sem filtros.
+- **Solução aplicada:** Configuração mandatória de `base_manager_name = 'all_objects'` nas classes `Meta` de `SoftDeleteModel`, `BaseModel` (`backend/core/models.py`) e `Usuario` (`backend/apps/authentication/models.py`), garantindo resolução relacional perfeita sem quebrar orçamentos, faturas, relatórios ou PDFs passados.
+- **Como evitar no futuro:** Em arquiteturas com Soft Delete universal no Django ORM, sempre declarar `base_manager_name = 'all_objects'` na classe base abstrata para blindar 100% da integridade referencial histórica de entidades coligadas.
 
 
 

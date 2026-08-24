@@ -4,6 +4,7 @@ Cobre: Clientes, Fornecedores, Equipamentos, Vínculos com Transferência Histó
 """
 import io
 import json
+from decimal import Decimal
 from unittest.mock import patch
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -515,3 +516,122 @@ class UtilitariosConsultaAPITestCase(CadastrosBaseTestCase):
         self.assertEqual(response.data['data']['nome_razao'], 'EMPRESA DE TESTE MOCK LTDA')
         self.assertEqual(response.data['data']['cidade'], 'SAO PAULO')
         self.assertEqual(response.data['data']['uf'], 'SP')
+
+    def test_soft_delete_equipamento(self):
+        """Verifica que o soft delete inativa o equipamento e desativa vínculos ativos de frota."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao='CLIENTE PROPRIETARIO',
+            telefone='11988887777',
+            tipo='Cliente'
+        )
+        equip = Equipamento.objects.create(
+            placa='ABC-1234',
+            identificacao='FROTA 01',
+            descricao='ESCAVADEIRA 320D'
+        )
+        vinculo = ClienteEquipamento.objects.create(
+            cliente=cliente,
+            equipamento=equip,
+            is_ativo=True
+        )
+
+        response = self.client.delete(f'/api/equipamentos/{equip.id}/')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Equipamento inativado logicamente
+        equip_db = Equipamento.all_objects.get(pk=equip.id)
+        self.assertIsNotNone(equip_db.deleted_at)
+
+        # Vínculo ativo desativado
+        vinculo.refresh_from_db()
+        self.assertFalse(vinculo.is_ativo)
+
+        # Não deve constar na listagem da API de ativos
+        res_list = self.client.get('/api/equipamentos/')
+        self.assertEqual(res_list.data['count'], 0)
+
+    def test_integridade_historica_orcamentos_cliente_inativado(self):
+        """
+        Garante que com o soft delete de um cliente:
+        1. Seus orçamentos passados não ficam órfãos e permanecem com o nome do cliente.
+        2. A busca textual por cliente localiza o orçamento histórico.
+        3. O gerador de PDF comercial continua funcionando perfeitamente.
+        4. O cliente inativo é bloqueado para criação de novos orçamentos.
+        """
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.orcamentos.models import Orcamento, OrcamentoItem
+        from apps.orcamentos.pdf_service import gerar_pdf_orcamento
+
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        # 1. Cria cliente e equipamento
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao='MINERADORA VALE DO OURO',
+            cnpj_cpf='33000167000101',
+            telefone='31987654321',
+            tipo='Cliente'
+        )
+        equip = Equipamento.objects.create(
+            placa='XYZ-9876',
+            identificacao='TRATOR 09',
+            descricao='TRATOR DE ESTEIRA D6T'
+        )
+
+        # 2. Cria orçamento histórico vinculado
+        orcamento = Orcamento.objects.create(
+            cliente=cliente,
+            equipamento=equip,
+            data_validade=timezone.localdate() + timedelta(days=15),
+            status_operacional='APROVADO',
+            status_financeiro='A_FATURAR',
+            valor_bruto=Decimal('15000.00'),
+            valor_desconto_aplicado=Decimal('0.00')
+        )
+        OrcamentoItem.objects.create(
+            orcamento=orcamento,
+            descricao_livre='REFORMA ESTRUTURAL COMPLETA DA CACAMBA',
+            quantidade=Decimal('1.0000'),
+            custo_snapshot=Decimal('5000.00'),
+            valor_venda_snapshot=Decimal('15000.00')
+        )
+
+        # 3. Executa Soft Delete do cliente
+        resp_del = self.client.delete(f'/api/clientes-fornecedores/{cliente.id}/')
+        self.assertEqual(resp_del.status_code, status.HTTP_204_NO_CONTENT)
+
+        # 4. Verifica que o orçamento passado continua na listagem com dados íntegros
+        res_orc = self.client.get('/api/orcamentos/')
+        self.assertEqual(res_orc.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_orc.data['count'], 1)
+        orc_item = res_orc.data['results'][0]
+        self.assertEqual(orc_item['cliente_nome'], 'MINERADORA VALE DO OURO')
+        self.assertEqual(orc_item['equipamento_descricao'], 'TRATOR DE ESTEIRA D6T')
+
+        # 5. Verifica que a busca textual por cliente inativado encontra o orçamento
+        res_search = self.client.get('/api/orcamentos/?search=MINERADORA')
+        self.assertEqual(res_search.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_search.data['count'], 1)
+
+        # 6. Verifica que a geração do PDF comercial renderiza sem erros
+        pdf_buffer = gerar_pdf_orcamento(orcamento)
+        pdf_bytes = pdf_buffer.getvalue()
+        self.assertTrue(len(pdf_bytes) > 0)
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+        # 7. Verifica que tentar criar NOVO orçamento com o cliente inativado é rejeitado
+        novo_payload = {
+            "cliente": cliente.id,
+            "itens": [
+                {
+                    "descricao_livre": "SERVICO NOVO",
+                    "quantidade": "1.0000",
+                    "valor_venda_snapshot": "500.00"
+                }
+            ]
+        }
+        res_novo = self.client.post('/api/orcamentos/', novo_payload, format='json')
+        self.assertEqual(res_novo.status_code, status.HTTP_400_BAD_REQUEST)
+

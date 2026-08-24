@@ -98,6 +98,7 @@ class Usuario(BaseModel):
         verbose_name = 'Usuário'
         verbose_name_plural = 'Usuários'
         ordering = ['nome']
+        base_manager_name = 'all_objects'
 
     def __str__(self):
         return f"{self.nome} ({self.email}) - {self.role}"
