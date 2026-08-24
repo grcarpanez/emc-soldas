@@ -452,7 +452,10 @@ window.AdministracaoView = {
       <div class="card mb-16">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">ARQUIVOS DIÁRIOS DE LOG FÍSICO COM MANIFESTO TTL</p>
-          <button class="btn btn-danger btn-sm" id="btn-expurgar-logs">EXPURGAR LOGS EXPIRADOS (COM BACKUP)</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-sincronizar-logs">SINCRONIZAR MANIFESTO</button>
+            <button class="btn btn-danger btn-sm" id="btn-expurgar-logs">EXPURGAR LOGS EXPIRADOS (COM BACKUP)</button>
+          </div>
         </div>
       </div>
 
@@ -463,16 +466,27 @@ window.AdministracaoView = {
               <th>ID</th>
               <th>DATA DO LOG</th>
               <th>ARQUIVO FÍSICO</th>
+              <th>TAMANHO</th>
               <th>TOTAL DE EVENTOS</th>
               <th style="text-align: right;">AÇÕES</th>
             </tr>
           </thead>
           <tbody id="lista-logs-tbody">
-            <tr><td colspan="5" class="text-center"><div class="loader-spinner"></div></td></tr>
+            <tr><td colspan="6" class="text-center"><div class="loader-spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
     `;
+
+    document.getElementById('btn-sincronizar-logs')?.addEventListener('click', async () => {
+      try {
+        const res = await window.api.post(`${window.CONFIG.ENDPOINTS.ADMINISTRACAO.CONTROLE_LOGS}sincronizar/`, {});
+        window.EMCUtils.showToast(`Manifesto sincronizado! Total: ${res.total_arquivos} arquivo(s).`, 'success');
+        this.renderLogViewer(container);
+      } catch (err) {
+        window.EMCUtils.showToast(err.message || 'Erro ao sincronizar manifesto.', 'error');
+      }
+    });
 
     document.getElementById('btn-expurgar-logs')?.addEventListener('click', async () => {
       if (!confirm('Deseja executar a rotina de expurgo TTL com envio prévio de backup por e-mail?')) return;
@@ -491,47 +505,127 @@ window.AdministracaoView = {
       const tbody = document.getElementById('lista-logs-tbody');
 
       if (!logs.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px;">Nenhum arquivo de log diário catalogado no momento.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="padding: 24px;">Nenhum arquivo de log diário catalogado no momento.</td></tr>';
         return;
       }
 
       let html = '';
       logs.forEach((l) => {
+        const dataValida = l.data_criacao || l.data_log || '';
+        const totalLinhas = l.total_eventos ?? l.quantidade_linhas ?? 0;
+        const tamanhoStr = l.tamanho_formatado || (l.tamanho_bytes ? `${l.tamanho_bytes} B` : '-');
+        const nomeArquivo = (l.caminho_arquivo_fisico || '').split('/').pop().split('\\').pop();
+
         html += `
           <tr>
             <td class="mono-text">#${l.id}</td>
-            <td class="mono-text">${window.EMCUtils.formatarDataPtBr(l.data_log)}</td>
-            <td class="mono-text" style="font-size: 12px;">${window.EMCUtils.escapeHtml(l.caminho_arquivo_fisico)}</td>
-            <td class="mono-text">${l.quantidade_linhas || 0}</td>
+            <td class="mono-text">${window.EMCUtils.formatarDataPtBr(dataValida)}</td>
+            <td class="mono-text" style="font-size: 12px;"><strong>${window.EMCUtils.escapeHtml(l.caminho_arquivo_fisico)}</strong></td>
+            <td class="mono-text" style="font-size: 12px;">${tamanhoStr}</td>
+            <td class="mono-text"><span class="status-chip ${totalLinhas > 0 ? 'info' : 'secondary'}">${totalLinhas} evento(s)</span></td>
             <td style="text-align: right;">
-              <button class="btn btn-secondary btn-sm" onclick="window.AdministracaoView.visualizarLog('${l.data_log}')">VER LOG</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.AdministracaoView.visualizarLog('${dataValida}', '${nomeArquivo}')">VER LOG</button>
             </td>
           </tr>
         `;
       });
       tbody.innerHTML = html;
     } catch (err) {
-      document.getElementById('lista-logs-tbody').innerHTML = `<tr><td colspan="5" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      document.getElementById('lista-logs-tbody').innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   },
 
-  async visualizarLog(dataLog) {
+  async visualizarLog(dataLog, nomeArquivo, nivelFiltro = 'TODOS', buscaFiltro = '') {
+    const ident = nomeArquivo || dataLog || 'hoje';
     try {
-      const endpoint = `${window.CONFIG.ENDPOINTS.ADMINISTRACAO.LOG_VIEWER}?data=${dataLog}`;
+      const queryParams = new URLSearchParams({
+        arquivo: ident,
+        nivel: nivelFiltro,
+        limit: '300'
+      });
+      if (buscaFiltro) queryParams.set('busca', buscaFiltro);
+
+      const endpoint = `${window.CONFIG.ENDPOINTS.ADMINISTRACAO.LOG_VIEWER}?${queryParams.toString()}`;
       const res = await window.api.get(endpoint);
 
+      const totalArquivo = res.total_linhas_arquivo ?? (res.linhas ? res.linhas.length : 0);
+      const totalFiltradas = res.total_linhas_filtradas ?? totalArquivo;
+      const linhas = res.linhas || [];
+
+      let linhasHtml = '';
+      if (linhas.length === 0) {
+        linhasHtml = `<div style="padding: 20px; text-align: center; color: var(--color-steel-gray);">Nenhum evento registrado para os filtros selecionados.</div>`;
+      } else {
+        linhas.forEach((item) => {
+          let cor = '#e4e2e1'; // Padrão
+          let bg = 'transparent';
+          let tagBadge = '';
+
+          if (item.is_error || item.conteudo.includes('ERROR') || item.conteudo.includes('CRITICAL')) {
+            cor = '#ffb4ab';
+            bg = 'rgba(147, 0, 10, 0.2)';
+            tagBadge = '<span style="background: #93000a; color: #ffdad6; padding: 1px 4px; font-size: 10px; margin-right: 6px;">ERROR</span>';
+          } else if (item.is_warning || item.conteudo.includes('WARNING')) {
+            cor = '#ffb59c';
+            tagBadge = '<span style="background: #5c1a00; color: #ffe2d9; padding: 1px 4px; font-size: 10px; margin-right: 6px;">WARN</span>';
+          } else if (item.is_audit || item.conteudo.includes('[AUDIT]')) {
+            cor = '#72cf88';
+            tagBadge = '<span style="background: #004d25; color: #b7f4c5; padding: 1px 4px; font-size: 10px; margin-right: 6px;">AUDIT</span>';
+          }
+
+          linhasHtml += `
+            <div style="background-color: ${bg}; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; line-height: 1.5; font-family: 'JetBrains Mono', monospace; word-break: break-all;">
+              <span style="color: var(--color-steel-gray); margin-right: 8px; user-select: none;">#${item.linha_numero || ''}</span>
+              ${tagBadge}
+              <span style="color: ${cor};">${window.EMCUtils.escapeHtml(item.conteudo)}</span>
+            </div>
+          `;
+        });
+      }
+
       window.EMCUtils.openModal({
-        title: `LOG DO SERVIDOR - ${dataLog}`,
+        title: `LOG DO SERVIDOR - ${ident.toUpperCase()} (${totalFiltradas} de ${totalArquivo} eventos)`,
         size: 'xl',
         hideFooter: true,
         content: `
-          <pre class="mono-text" style="background-color: var(--color-surface-container-lowest); color: #72cf88; padding: 16px; border: 1px solid var(--color-steel-gray); max-height: 500px; overflow-y: auto; font-size: 12px; white-space: pre-wrap;">
-${window.EMCUtils.escapeHtml(res.conteudo || 'Arquivo de log vazio.')}
-          </pre>
+          <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background-color: var(--color-surface-container); padding: 10px; border: 1px solid var(--color-steel-gray);">
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <label style="font-size: 12px; font-family: 'JetBrains Mono', monospace;">NÍVEL:</label>
+              <select id="log-modal-nivel" class="form-control" style="width: 130px; height: 32px; font-size: 12px; padding: 2px 8px;">
+                <option value="TODOS" ${nivelFiltro === 'TODOS' ? 'selected' : ''}>TODOS</option>
+                <option value="AUDIT" ${nivelFiltro === 'AUDIT' ? 'selected' : ''}>[AUDIT]</option>
+                <option value="ERROR" ${nivelFiltro === 'ERROR' ? 'selected' : ''}>ERROR / CRITICAL</option>
+                <option value="WARNING" ${nivelFiltro === 'WARNING' ? 'selected' : ''}>WARNING</option>
+                <option value="INFO" ${nivelFiltro === 'INFO' ? 'selected' : ''}>INFO / DEBUG</option>
+              </select>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <input type="text" id="log-modal-busca" class="form-control" placeholder="Filtrar por texto, usuário, entidade ou IP..." value="${window.EMCUtils.escapeHtml(buscaFiltro)}" style="height: 32px; font-size: 12px;">
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-filtrar-log-modal" style="height: 32px;">FILTRAR</button>
+          </div>
+
+          <div id="log-modal-linhas-container" style="background-color: var(--color-surface-container-lowest); padding: 8px; border: 1px solid var(--color-steel-gray); max-height: 520px; overflow-y: auto;">
+            ${linhasHtml}
+          </div>
         `
       });
+
+      document.getElementById('btn-filtrar-log-modal')?.addEventListener('click', () => {
+        const novoNivel = document.getElementById('log-modal-nivel')?.value || 'TODOS';
+        const novaBusca = document.getElementById('log-modal-busca')?.value || '';
+        this.visualizarLog(dataLog, nomeArquivo, novoNivel, novaBusca);
+      });
+
+      document.getElementById('log-modal-busca')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          const novoNivel = document.getElementById('log-modal-nivel')?.value || 'TODOS';
+          const novaBusca = document.getElementById('log-modal-busca')?.value || '';
+          this.visualizarLog(dataLog, nomeArquivo, novoNivel, novaBusca);
+        }
+      });
     } catch (e) {
-      window.EMCUtils.showToast('Erro ao abrir arquivo de log.', 'error');
+      window.EMCUtils.showToast(e.message || 'Erro ao abrir arquivo de log.', 'error');
     }
   },
 

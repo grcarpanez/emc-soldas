@@ -104,7 +104,7 @@ const CONFIG = {
       TESTAR_SMTP: '/configuracoes-globais/testar-smtp/',
       CONTROLE_LOGS: '/controle-arquivos-log/',
       EXPURGAR_LOGS: '/controle-arquivos-log/expurgar/',
-      LOG_VIEWER: '/controle-arquivos-log/visualizar-log/',
+      LOG_VIEWER: '/controle-arquivos-log/visualizar/',
       DOWNLOAD_LOG: '/controle-arquivos-log/download-log/',
       LIXEIRA: '/lixeira/',
       RESTAURAR_LIXEIRA: '/lixeira/{entidade}/{id}/restaurar/'
