@@ -163,13 +163,14 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-23 - Rejeição de Validação por Incompatibilidade de Case em ChoiceField (CLIENTE vs Cliente)
+## 2026-08-23 - Falha de Filtragem no Modal de Frota por Variação de Nome de Parâmetro (cliente vs cliente_id)
 
-- **Sintoma:** Ao cadastrar cliente/fornecedor pelo modal completo do frontend, a API retornava erro `400 Bad Request` com o toast genérico `[ERRO] Falha na validação da requisição.`
-- **Causa:** O `<select>` do frontend enviava `tipo: "CLIENTE"` (em maiúsculas), enquanto o Django ORM definia as choices como `('Cliente', 'Fornecedor', 'Ambos')` (TitleCase). Como o serializer não possuía normalização prévia em `to_internal_value`, o DRF rejeitava com `'CLIENTE' não é uma escolha válida`. Além disso, o manipulador de requisições HTTP do frontend não extraía as mensagens específicas contidas em `details`, exibindo apenas a mensagem genérica.
+- **Sintoma:** Ao abrir o modal de Frota de qualquer cliente, eram listados todos os equipamentos com vínculo ativo no sistema, em vez de filtrar apenas os equipamentos daquele cliente específico.
+- **Causa:** O endpoint `ClienteEquipamentoViewSet` no backend lia estritamente `request.query_params.get('cliente_id')`, enquanto a requisição do frontend enviava `?cliente=${clienteId}&is_ativo=true`. Como o parâmetro `cliente` era ignorado, o queryset não aplicava o filtro pelo ID do cliente.
 - **Solução aplicada:**
-  1. Implementado método `to_internal_value` no `ClienteFornecedorSerializer` para normalizar `tipo` de forma case-insensitive (`CLIENTE` -> `'Cliente'`, `FORNECEDOR` -> `'Fornecedor'`, `AMBOS` -> `'Ambos'`), `tipo_pessoa` (`PJ`/`PF`) e converter strings de e-mail vazias (`""`) para `None`.
-  2. Aprimorado `ApiClient.request` no frontend (`api.js`) para extrair os erros detalhados de cada campo (`details`) e exibi-los de forma clara nos Toasts de notificação.
-- **Como evitar no futuro:** Sempre implementar `to_internal_value` tolerante a variações de maiúsculas/minúsculas em campos `ChoiceField` e extrair mensagens específicas de `details` no cliente HTTP.
+  1. Atualizado `get_queryset` em `ClienteEquipamentoViewSet` para aceitar flexivelmente tanto `cliente` quanto `cliente_id`, além de `equipamento` e `equipamento_id`, garantindo cast seguro para inteiro e exclusão de registros com soft delete.
+  2. Implementado componente universal de Combobox Pesquisável (`EMCUtils.initSearchableSelect`) com autocomplete e filtragem estrita de equipamentos vinculados ao cliente no módulo de orçamentos.
+- **Como evitar no futuro:** Padronizar a leitura de query params no backend aceitando tanto o nome do campo relacional quanto o sufixo `_id`.
+
 
 

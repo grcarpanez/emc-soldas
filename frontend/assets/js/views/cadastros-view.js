@@ -132,6 +132,9 @@ window.CadastrosView = {
         }
 
         const qtdEquip = item.quantidade_equipamentos_ativos || 0;
+        const btnFrota = item.tipo !== 'FORNECEDOR' 
+          ? `<button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalFrotaCliente(${item.id})">FROTA (${qtdEquip})</button>` 
+          : '';
 
         html += `
           <tr>
@@ -142,7 +145,7 @@ window.CadastrosView = {
             <td>${telDisplay}</td>
             <td>${window.EMCUtils.escapeHtml(item.cidade || '-')}${item.uf ? ' / ' + item.uf : ''}</td>
             <td style="text-align: right; white-space: nowrap;">
-              <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalFrotaCliente(${item.id})">FROTA (${qtdEquip})</button>
+              ${btnFrota}
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarCliente(${item.id})">EDITAR</button>
             </td>
           </tr>
@@ -682,8 +685,9 @@ window.CadastrosView = {
 
     let clientes = [];
     try {
-      const resCli = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=500`);
-      clientes = resCli.results || resCli || [];
+      const resCli = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=1000`);
+      const todos = resCli.results || resCli || [];
+      clientes = todos.filter(c => c.tipo !== 'FORNECEDOR');
     } catch (e) {
       console.warn('Erro ao carregar lista de clientes para vinculo:', e);
     }
@@ -766,6 +770,16 @@ window.CadastrosView = {
         }
       }
     });
+
+    // Inicializa a Combobox Pesquisável com Autocomplete
+    setTimeout(() => {
+      const selectEl = document.getElementById('equip-cliente');
+      if (selectEl) {
+        window.EMCUtils.initSearchableSelect(selectEl, {
+          placeholder: 'SELECIONE OU DIGITE O NOME DO CLIENTE...'
+        });
+      }
+    }, 50);
   },
 
   async editarEquipamento(id) {

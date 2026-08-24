@@ -369,19 +369,28 @@ class ClienteEquipamentoViewSet(viewsets.ModelViewSet):
     permission_classes = [HasComercialAccess]
 
     def get_queryset(self):
-        queryset = ClienteEquipamento.objects.select_related('cliente', 'equipamento')
+        queryset = ClienteEquipamento.objects.filter(
+            cliente__deleted_at__isnull=True,
+            equipamento__deleted_at__isnull=True
+        ).select_related('cliente', 'equipamento')
         
-        cliente_id = self.request.query_params.get('cliente_id')
+        cliente_id = self.request.query_params.get('cliente_id') or self.request.query_params.get('cliente')
         if cliente_id:
-            queryset = queryset.filter(cliente_id=cliente_id)
+            try:
+                queryset = queryset.filter(cliente_id=int(cliente_id))
+            except (ValueError, TypeError):
+                pass
 
-        equipamento_id = self.request.query_params.get('equipamento_id')
+        equipamento_id = self.request.query_params.get('equipamento_id') or self.request.query_params.get('equipamento')
         if equipamento_id:
-            queryset = queryset.filter(equipamento_id=equipamento_id)
+            try:
+                queryset = queryset.filter(equipamento_id=int(equipamento_id))
+            except (ValueError, TypeError):
+                pass
 
         is_ativo = self.request.query_params.get('is_ativo')
         if is_ativo is not None:
-            queryset = queryset.filter(is_ativo=is_ativo.lower() in ['true', '1'])
+            queryset = queryset.filter(is_ativo=str(is_ativo).lower() in ['true', '1', 't'])
 
         return queryset.order_by('-data_vinculo')
 

@@ -575,6 +575,239 @@ document.addEventListener('paste', (event) => {
   }
 });
 
+// ============================================================================
+// 12. COMBOBOX AUTOCOMPLETE PESQUISÁVEL INDUSTRIAL
+// ============================================================================
+
+/**
+ * Transforma um <select> nativo em uma combobox pesquisável com autocomplete,
+ * pesquisa rápida de alta performance, navegação por teclado e sem cantos arredondados.
+ * @param {HTMLSelectElement} selectEl 
+ * @param {Object} opts 
+ * @returns {Object} Instância com método refresh() e destroy()
+ */
+function initSearchableSelect(selectEl, opts = {}) {
+  if (!selectEl) return null;
+  if (selectEl._emcCombobox) {
+    selectEl._emcCombobox.refresh();
+    return selectEl._emcCombobox;
+  }
+
+  const placeholder = opts.placeholder || selectEl.getAttribute('placeholder') || 'SELECIONE OU PESQUISE...';
+
+  // Cria estrutura da Combobox
+  const container = document.createElement('div');
+  container.className = 'emc-combobox';
+  if (selectEl.id) container.dataset.for = selectEl.id;
+
+  const trigger = document.createElement('div');
+  trigger.className = 'emc-combobox-trigger';
+  trigger.tabIndex = 0;
+
+  const triggerText = document.createElement('span');
+  triggerText.className = 'emc-combobox-trigger-text';
+  
+  const triggerArrow = document.createElement('span');
+  triggerArrow.className = 'emc-combobox-trigger-arrow';
+  triggerArrow.textContent = '▼';
+
+  trigger.appendChild(triggerText);
+  trigger.appendChild(triggerArrow);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'emc-combobox-dropdown';
+
+  const searchWrapper = document.createElement('div');
+  searchWrapper.className = 'emc-combobox-search-wrapper';
+
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.className = 'emc-combobox-search';
+  searchInput.placeholder = 'DIGITE PARA FILTRAR...';
+  searchWrapper.appendChild(searchInput);
+
+  const optionsList = document.createElement('ul');
+  optionsList.className = 'emc-combobox-options';
+
+  dropdown.appendChild(searchWrapper);
+  dropdown.appendChild(optionsList);
+
+  // Insere container antes do select nativo e oculta o select
+  selectEl.style.display = 'none';
+  selectEl.parentNode.insertBefore(container, selectEl);
+  container.appendChild(trigger);
+  container.appendChild(dropdown);
+
+  let itens = [];
+  let itemAtivoIndex = -1;
+
+  function extrairOpcoes() {
+    itens = [];
+    const options = selectEl.querySelectorAll('option');
+    options.forEach((opt, idx) => {
+      itens.push({
+        index: idx,
+        value: opt.value,
+        text: opt.textContent.trim(),
+        selected: opt.selected,
+        disabled: opt.disabled
+      });
+    });
+  }
+
+  function atualizarTriggerText() {
+    const selOpt = selectEl.options[selectEl.selectedIndex];
+    if (selOpt && selOpt.value !== '') {
+      triggerText.textContent = selOpt.textContent.trim();
+      triggerText.style.color = 'var(--color-on-surface)';
+    } else {
+      triggerText.textContent = selOpt ? selOpt.textContent.trim() : placeholder;
+      triggerText.style.color = 'var(--color-on-surface-variant)';
+    }
+  }
+
+  function renderizarOpcoes(filtro = '') {
+    optionsList.innerHTML = '';
+    const filtroUpper = sanitizarTextoEmTempoReal(filtro);
+    let encontrados = 0;
+
+    itens.forEach((it, idx) => {
+      const textUpper = sanitizarTextoEmTempoReal(it.text);
+      if (!filtroUpper || textUpper.includes(filtroUpper)) {
+        encontrados++;
+        const li = document.createElement('li');
+        li.className = 'emc-combobox-item';
+        if (it.selected) li.classList.add('selected');
+        li.textContent = it.text;
+        li.dataset.index = idx;
+        li.dataset.value = it.value;
+
+        li.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selecionarItem(it.value);
+        });
+
+        optionsList.appendChild(li);
+      }
+    });
+
+    if (encontrados === 0) {
+      const noRes = document.createElement('li');
+      noRes.className = 'emc-combobox-no-results';
+      noRes.textContent = 'NENHUM RESULTADO ENCONTRADO';
+      optionsList.appendChild(noRes);
+    }
+  }
+
+  function selecionarItem(val) {
+    selectEl.value = val;
+    extrairOpcoes();
+    atualizarTriggerText();
+    fecharDropdown();
+    // Dispara evento change no select nativo
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function abrirDropdown() {
+    document.querySelectorAll('.emc-combobox.open').forEach(c => {
+      if (c !== container) c.classList.remove('open');
+    });
+
+    container.classList.add('open');
+    searchInput.value = '';
+    renderizarOpcoes();
+    setTimeout(() => searchInput.focus(), 50);
+  }
+
+  function fecharDropdown() {
+    container.classList.remove('open');
+    itemAtivoIndex = -1;
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (container.classList.contains('open')) {
+      fecharDropdown();
+    } else {
+      abrirDropdown();
+    }
+  });
+
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      abrirDropdown();
+    }
+  });
+
+  searchInput.addEventListener('input', (e) => {
+    renderizarOpcoes(e.target.value);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    const listItems = optionsList.querySelectorAll('.emc-combobox-item');
+    if (e.key === 'Escape') {
+      fecharDropdown();
+      trigger.focus();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (listItems.length > 0) {
+        itemAtivoIndex = (itemAtivoIndex + 1) % listItems.length;
+        destacarItem(listItems);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (listItems.length > 0) {
+        itemAtivoIndex = (itemAtivoIndex - 1 + listItems.length) % listItems.length;
+        destacarItem(listItems);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (itemAtivoIndex >= 0 && listItems[itemAtivoIndex]) {
+        listItems[itemAtivoIndex].click();
+      } else if (listItems.length === 1) {
+        listItems[0].click();
+      }
+    }
+  });
+
+  function destacarItem(listItems) {
+    listItems.forEach((li, i) => {
+      li.classList.toggle('active', i === itemAtivoIndex);
+      if (i === itemAtivoIndex) {
+        li.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  }
+
+  // Fecha ao clicar fora
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      fecharDropdown();
+    }
+  });
+
+  // Inicializa dados
+  extrairOpcoes();
+  atualizarTriggerText();
+
+  const instancia = {
+    refresh() {
+      extrairOpcoes();
+      atualizarTriggerText();
+      renderizarOpcoes(searchInput.value);
+    },
+    destroy() {
+      container.remove();
+      selectEl.style.display = '';
+      delete selectEl._emcCombobox;
+    }
+  };
+
+  selectEl._emcCombobox = instancia;
+  return instancia;
+}
+
 // Disponibilização no escopo global para consumo da SPA
 window.EMCUtils = {
   sanitizarTextoEmTempoReal,
@@ -598,5 +831,6 @@ window.EMCUtils = {
   escapeHtml,
   showToast,
   openModal,
-  closeModal
+  closeModal,
+  initSearchableSelect
 };

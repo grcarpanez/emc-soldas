@@ -125,27 +125,45 @@ window.OrcamentosView = {
   async abrirModalNovoOrcamento() {
     // Carrega clientes, equipamentos, produtos e itens para a montagem
     const [clientes, equipamentos, produtos, itens] = await Promise.all([
-      window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES),
-      window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS),
-      window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS),
-      window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS)
+      window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=1000`),
+      window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}?page_size=1000`),
+      window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}?page_size=1000`),
+      window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}?page_size=1000`)
     ]);
 
-    const listaClientes = clientes.results || clientes || [];
+    const todosClientes = clientes.results || clientes || [];
+    // Filtra apenas clientes (exclui fornecedores puros)
+    const listaClientes = todosClientes.filter(c => c.tipo !== 'FORNECEDOR');
     const listaEquip = equipamentos.results || equipamentos || [];
     const listaProd = produtos.results || produtos || [];
     const listaItens = itens.results || itens || [];
 
     let optionsCli = '<option value="">SELECIONE O CLIENTE...</option>';
     listaClientes.forEach((c) => {
-      optionsCli += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome_razao)}</option>`;
+      const doc = c.cnpj_cpf ? ` (${window.EMCUtils.formatarCpfCnpjDinamico(c.cnpj_cpf)})` : '';
+      optionsCli += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome_razao)}${doc}</option>`;
     });
 
-    let optionsEq = '<option value="">SEM EQUIPAMENTO ESPECÍFICO (OFICINA GERAL)</option>';
-    listaEquip.forEach((e) => {
-      const placa = e.placa ? ` [${e.placa}]` : '';
-      optionsEq += `<option value="${e.id}">${window.EMCUtils.escapeHtml(e.descricao)}${placa}</option>`;
-    });
+    const montarOptionsEquip = (clienteIdFiltro = null) => {
+      let opts = '<option value="">SEM EQUIPAMENTO ESPECÍFICO (OFICINA GERAL)</option>';
+      let equipsFiltrados = listaEquip;
+
+      if (clienteIdFiltro) {
+        equipsFiltrados = listaEquip.filter(e => e.cliente_atual?.id == Number(clienteIdFiltro));
+      }
+
+      if (equipsFiltrados.length === 0 && clienteIdFiltro) {
+        opts += '<option value="" disabled>-- NENHUM VEÍCULO VINCULADO A ESTE CLIENTE --</option>';
+      } else {
+        equipsFiltrados.forEach((e) => {
+          const placa = e.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
+          const ident = e.identificacao ? ` - ${e.identificacao}` : '';
+          const dono = (!clienteIdFiltro && e.cliente_atual?.nome_razao) ? ` (Proprietário: ${e.cliente_atual.nome_razao})` : '';
+          opts += `<option value="${e.id}">${window.EMCUtils.escapeHtml(e.descricao)}${placa}${ident}${dono}</option>`;
+        });
+      }
+      return opts;
+    };
 
     let optionsProd = '<option value="">SELECIONE UM PRODUTO BOM...</option>';
     listaProd.forEach((p) => {
@@ -173,7 +191,7 @@ window.OrcamentosView = {
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="orc-equipamento">Equipamento / Máquina</label>
-              <select id="orc-equipamento" class="form-control">${optionsEq}</select>
+              <select id="orc-equipamento" class="form-control">${montarOptionsEquip()}</select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="orc-validade-dias">Validade (Dias)</label>
@@ -344,6 +362,46 @@ window.OrcamentosView = {
         }
       }
     });
+
+    // Inicializa Comboboxes com Autocomplete Pesquisável
+    setTimeout(() => {
+      const selCli = document.getElementById('orc-cliente');
+      const selEq = document.getElementById('orc-equipamento');
+      const selProd = document.getElementById('sel-produto-id');
+      const selItem = document.getElementById('sel-item-id');
+
+      if (selCli) window.EMCUtils.initSearchableSelect(selCli, { placeholder: 'SELECIONE OU BUSQUE O CLIENTE...' });
+      if (selEq) window.EMCUtils.initSearchableSelect(selEq, { placeholder: 'TODOS OU PESQUISE O VEÍCULO...' });
+      if (selProd) window.EMCUtils.initSearchableSelect(selProd, { placeholder: 'PESQUISE UM PRODUTO BOM...' });
+      if (selItem) window.EMCUtils.initSearchableSelect(selItem, { placeholder: 'PESQUISE UM INSUMO...' });
+
+      // Ao trocar de cliente, re-filtra dinamicamente a combobox de equipamentos
+      selCli?.addEventListener('change', async (e) => {
+        const clienteId = e.target.value;
+        if (selEq) {
+          selEq.innerHTML = montarOptionsEquip(clienteId || null);
+          if (selEq._emcCombobox) {
+            selEq._emcCombobox.refresh();
+          }
+        }
+
+        // Checagem de inadimplência preventiva
+        if (clienteId) {
+          try {
+            const analise = await window.api.get(`${window.CONFIG.ENDPOINTS.RELATORIOS.INADIMPLENCIA}?cliente_id=${clienteId}`);
+            const alertaBox = document.getElementById('inadimplencia-alerta-box');
+            if (analise && analise.tem_pendencias && alertaBox) {
+              alertaBox.style.display = 'block';
+              alertaBox.innerHTML = `<strong>[ALERTA DE RISCO]</strong> Este cliente possui títulos vencidos no total de ${window.EMCUtils.formatarMoeda(analise.valor_total_vencido)}.`;
+            } else if (alertaBox) {
+              alertaBox.style.display = 'none';
+            }
+          } catch (err) {
+            // Silencioso
+          }
+        }
+      });
+    }, 50);
 
     // Controle dos radio buttons de seleção de tipo
     document.querySelectorAll('input[name="tipo_item_radio"]').forEach((r) => {

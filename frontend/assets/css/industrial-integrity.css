@@ -720,3 +720,134 @@ p, span, label, input, textarea, select {
 .mb-16 { margin-bottom: 16px; }
 .w-100 { width: 100%; }
 
+/* ==========================================================================
+   COMBOBOX AUTOCOMPLETE PESQUISÁVEL - INDUSTRIAL INTEGRITY
+   ========================================================================== */
+.emc-combobox {
+  position: relative;
+  width: 100%;
+}
+
+.emc-combobox-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-steel-gray);
+  padding: 10px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.emc-combobox.open .emc-combobox-trigger,
+.emc-combobox-trigger:focus {
+  border-color: var(--color-rust-orange);
+  background-color: var(--color-surface-container);
+  outline: none;
+}
+
+.emc-combobox-trigger-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.emc-combobox-trigger-arrow {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--color-on-surface-variant);
+  transition: transform 0.2s ease;
+}
+
+.emc-combobox.open .emc-combobox-trigger-arrow {
+  transform: rotate(180deg);
+  color: var(--color-rust-orange);
+}
+
+.emc-combobox-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  width: 100%;
+  max-height: 280px;
+  background-color: var(--color-surface-container-high);
+  border: 1px solid var(--color-rust-orange);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 100050;
+  border-radius: 0px;
+  flex-direction: column;
+}
+
+.emc-combobox.open .emc-combobox-dropdown {
+  display: flex;
+}
+
+.emc-combobox-search-wrapper {
+  padding: 8px;
+  background-color: var(--color-surface-container-highest);
+  border-bottom: 1px solid var(--color-steel-gray);
+}
+
+.emc-combobox-search {
+  width: 100%;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-steel-gray);
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+  border-radius: 0px;
+}
+
+.emc-combobox-search:focus {
+  border-color: var(--color-rust-orange);
+}
+
+.emc-combobox-options {
+  overflow-y: auto;
+  max-height: 220px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.emc-combobox-item {
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.emc-combobox-item:last-child {
+  border-bottom: none;
+}
+
+.emc-combobox-item:hover,
+.emc-combobox-item.active {
+  background-color: rgba(183, 65, 14, 0.2);
+  color: var(--color-rust-orange-bright);
+}
+
+.emc-combobox-item.selected {
+  background-color: var(--color-rust-orange);
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.emc-combobox-no-results {
+  padding: 14px;
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
