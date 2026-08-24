@@ -338,6 +338,30 @@ class AdministracaoTests(TestCase):
         self.assertEqual(res_busca.data['total_linhas_filtradas'], 1)
         self.assertIn("Orcamento #99 cancelado", res_busca.data['linhas'][0]['conteudo'])
 
+        # Consulta via ViewSet action /visualizar/ com parâmetro data
+        res_viewset = self.client.get('/api/controle-arquivos-log/visualizar/', {'data': hoje_str})
+        self.assertEqual(res_viewset.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_viewset.data['existe'])
+        self.assertEqual(res_viewset.data['total_linhas_arquivo'], 4)
+        self.assertIn("conteudo", res_viewset.data)
+
+        # Validação do serializer do manifesto
+        manifesto, _ = ControleArquivoLog.objects.get_or_create(
+            caminho_arquivo_fisico=os.path.join('logs', f"app-{hoje_str}.log").replace('\\', '/'),
+            defaults={
+                'data_criacao': timezone.localdate(),
+                'data_expurgo_planejada': timezone.localdate() + datetime.timedelta(days=30)
+            }
+        )
+        res_manifesto = self.client.get('/api/controle-arquivos-log/')
+        self.assertEqual(res_manifesto.status_code, status.HTTP_200_OK)
+        itens = res_manifesto.data.get('results', res_manifesto.data)
+        item_hoje = next((i for i in itens if i['id'] == manifesto.id), None)
+        self.assertIsNotNone(item_hoje)
+        self.assertEqual(item_hoje['data_log'], hoje_str)
+        self.assertEqual(item_hoje['total_eventos'], 4)
+        self.assertEqual(item_hoje['quantidade_linhas'], 4)
+
     def test_log_viewer_bloqueio_path_traversal(self):
         """Valida que tentativas de navegação fora do diretório de logs são rejeitadas."""
         self.client.force_authenticate(user=self.admin_user)

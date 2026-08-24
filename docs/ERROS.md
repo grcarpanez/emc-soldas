@@ -193,6 +193,29 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Atualização do parser no frontend para `const lista = res.itens || res.results || (Array.isArray(res) ? res : []);`, adição da opção `TODAS AS ENTIDADES (HISTÓRICO COMPLETO)` como padrão, inclusão de `EQUIPAMENTOS / VEÍCULOS` e de todas as 16 entidades mapeadas, com novo campo de busca textual e coluna de tipo/entidade na tabela.
 - **Como evitar no futuro:** Padronizar a extração de listas de endpoints REST que encapsulam arrays em chaves personalizadas (`res.itens`), sempre utilizando `res.itens || res.results || (Array.isArray(res) ? res : [])`.
 
+---
+
+## 2026-08-24 - Bloqueio de Arquivo no Windows (PermissionError WinError 32) na Rotação de Logs Diários
+
+- **Sintoma:** Ao executar testes ou em rotação diária de logs, o Python lançava `PermissionError: [WinError 32] O arquivo já está sendo usado por outro processo: '...\\logs\\app.log' -> '...\\logs\\app.log.2026-08-23'`.
+- **Causa:** O handler padrão `TimedRotatingFileHandler` tenta renomear o arquivo `app.log` à meia-noite via `os.rename()`, o que é bloqueado pelo sistema de arquivos do Windows se houver qualquer thread ou processo mantendo o handle do arquivo aberto.
+- **Solução aplicada:** Criação da classe personalizada `DailyDateFileHandler` em `backend/core/logging_handlers.py`, que grava diretamente nos arquivos diários imutáveis `app-YYYY-MM-DD.log` sem nunca necessitar renomear arquivos em disco (cumprindo 100% da arquitetura definida em `docs/FSD.md` - Seção 19).
+- **Como evitar no futuro:** Em ambientes Windows ou sistemas com arquivos imutáveis por data, utilizar handlers de log que resolvem o nome do arquivo dinamicamente por data em vez de aplicar renomeações em tempo de execução.
+
+---
+
+## 2026-08-24 - Divergência de Nomes de Campos no Manifesto de Logs e Rota 404 no Log Viewer
+
+- **Sintoma:** O Log Viewer da Central Administrativa exibia "Total de Eventos = 0" e ao clicar em "VER LOG", exibia a notificação Toast `[ERRO] Erro ao abrir arquivo de log.`.
+- **Causa:** O serializer `ControleArquivoLogSerializer` retornava o campo `data_criacao`, enquanto o JavaScript esperava `l.data_log` e `l.quantidade_linhas`. Com valores `undefined`, o frontend requisitava o endpoint com rota incorreta `/controle-arquivos-log/visualizar-log/?data=undefined` (resultando em 404). Além disso, o serializer não computava a contagem de linhas/eventos do arquivo físico.
+- **Solução aplicada:**
+  1. Inclusão dos campos computados `data_log`, `total_eventos` e `quantidade_linhas` no `ControleArquivoLogSerializer`.
+  2. Ajuste do endpoint para `/controle-arquivos-log/visualizar/` em `config.js`.
+  3. Enriquecimento do modal do Log Viewer com contagem de eventos, filtro dinâmico por nível (`[AUDIT]`, `ERROR`, `WARNING`, `INFO`), busca textual e coloração semântica industrial.
+  4. Integração universal de emissão de logs de auditoria `[AUDIT] [SOFT_DELETE]` e `[AUDIT] [RESTAURACAO]` em `SoftDeleteModel` para que todas as exclusões de clientes, equipamentos e registros de negócio constem nos logs do servidor.
+- **Como evitar no futuro:** Garantir alinhamento bidirecional de contratos de dados e rotas entre frontend e serializers do DRF e cobrir serializers com testes automatizados dedicados.
+
+
 
 
 
