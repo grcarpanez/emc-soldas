@@ -383,7 +383,7 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         self.assertEqual(res_eq_novo.data['cliente_atual']['id'], cliente_b.id)
 
         # 4. Histórico completo de proprietários contém 2 registros
-        res_hist = self.client.get(f'/api/equipamentos/{equipamento.id}/historico_proprietarios/')
+        res_hist = self.client.get(f'/api/equipamentos/{equipamento.id}/historico-proprietarios/')
         self.assertEqual(res_hist.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res_hist.data), 2)
         self.assertEqual(res_hist.data[0]['cliente_id'], cliente_b.id)

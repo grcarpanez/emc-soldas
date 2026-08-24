@@ -455,7 +455,8 @@ window.CadastrosView = {
         `
       });
     } catch (err) {
-      window.EMCUtils.showToast('Erro ao carregar histórico de proprietários.', 'error');
+      console.error('Erro ao carregar histórico de proprietários:', err);
+      window.EMCUtils.showToast(err.message || 'Erro ao carregar histórico de proprietários.', 'error');
     }
   },
 

@@ -163,14 +163,18 @@ Utilize o padrão abaixo para cada novo erro registrado:
 
 ---
 
-## 2026-08-23 - Falha de Filtragem no Modal de Frota por Variação de Nome de Parâmetro (cliente vs cliente_id)
+---
 
-- **Sintoma:** Ao abrir o modal de Frota de qualquer cliente, eram listados todos os equipamentos com vínculo ativo no sistema, em vez de filtrar apenas os equipamentos daquele cliente específico.
-- **Causa:** O endpoint `ClienteEquipamentoViewSet` no backend lia estritamente `request.query_params.get('cliente_id')`, enquanto a requisição do frontend enviava `?cliente=${clienteId}&is_ativo=true`. Como o parâmetro `cliente` era ignorado, o queryset não aplicava o filtro pelo ID do cliente.
+## 2026-08-23 - Erro 404 no Botão de Histórico por Padrão de Rota do DRF Router (url_path)
+
+- **Sintoma:** Ao clicar no botão `HISTÓRICO` de qualquer equipamento (na tabela ou na frota), a requisição falhava e exibia a notificação de erro.
+- **Causa:** O método `@action(detail=True, methods=['get']) def historico_proprietarios` no `EquipamentoViewSet` gerava automaticamente a rota com o nome do método Python (`/api/equipamentos/{id}/historico_proprietarios/`, com sublinhado), enquanto a convenção de rotas da API REST do projeto e a chamada do frontend utilizam kebab-case (`/api/equipamentos/{id}/historico-proprietarios/`). A rota retornava erro HTTP `404 Not Found`.
 - **Solução aplicada:**
-  1. Atualizado `get_queryset` em `ClienteEquipamentoViewSet` para aceitar flexivelmente tanto `cliente` quanto `cliente_id`, além de `equipamento` e `equipamento_id`, garantindo cast seguro para inteiro e exclusão de registros com soft delete.
-  2. Implementado componente universal de Combobox Pesquisável (`EMCUtils.initSearchableSelect`) com autocomplete e filtragem estrita de equipamentos vinculados ao cliente no módulo de orçamentos.
-- **Como evitar no futuro:** Padronizar a leitura de query params no backend aceitando tanto o nome do campo relacional quanto o sufixo `_id`.
+  1. Declarado explicitamente `url_path='historico-proprietarios'` no decorator `@action` do `EquipamentoViewSet` em `backend/apps/cadastros/views.py`.
+  2. Ajustado o teste unitário em `backend/apps/cadastros/tests.py` para validar a rota em kebab-case.
+  3. Gerados os arquivos estáticos de ícone `favicon.ico`, `icon-192.png` e `icon-512.png` na paleta *Rust Orange* para eliminar requisições 404 de manifest e favicon.
+- **Como evitar no futuro:** Sempre declarar explicitamente o parâmetro `url_path='kebab-case'` em todos os métodos `@action` do DRF.
+
 
 
 

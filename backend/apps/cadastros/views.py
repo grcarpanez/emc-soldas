@@ -287,7 +287,7 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         instance.soft_delete(user=self.request.user)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], url_path='historico-proprietarios')
     def historico_proprietarios(self, request, pk=None):
         """Retorna o histórico cronológico de todos os proprietários deste equipamento."""
         equipamento = self.get_object()
