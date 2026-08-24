@@ -230,6 +230,23 @@ Utilize o padrão abaixo para cada novo erro registrado:
   6. Criação de 7 novos testes automatizados dedicados no `apps.authentication.tests` cobrindo 100% dos novos cenários e travas de segurança (157 testes aprovados).
 - **Como evitar no futuro:** Sempre validar os contratos de rotas de actions de ViewSets no DRF com testes unitários de integração e alinhar os endpoints mapeados no `config.js` do frontend.
 
+---
+
+## 2026-08-24 - Erro 400 ao Filtrar Nível AUDIT no Log Viewer e Exibição de Log de Ontem sem Sincronização Manual
+
+- **Sintoma:** O usuário executou mutações de colaboradores (desativação, ativação e alteração de permissões RBAC) que foram gravadas corretamente no arquivo físico do dia (`app-2026-08-24.log`), porém ao abrir a tela do Log Viewer, visualizava o arquivo do dia anterior (`app-2026-08-23.log`) e ao tentar filtrar por `[AUDIT]`, a API retornava `400 Bad Request`.
+- **Causa:**
+  1. No `LogViewerFilterSerializer`, o campo `nivel` continha `choices=['TODOS', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']`, sem incluir a opção `'AUDIT'` enviada pelo frontend.
+  2. Em `ler_arquivo_log_seguro`, a filtragem de nível buscava `[NIVEL]` nos colchetes de severidade do logging do Python (onde a linha é registrada como `[INFO]`), não encontrando a tag de conteúdo `[AUDIT]`.
+  3. A lista de arquivos do manifesto (`ControleArquivoLog`) só era atualizada com o arquivo físico de hoje se o usuário clicasse manualmente no botão "SINCRONIZAR MANIFESTO". Sem clicar, a tabela exibia como primeiro registro o arquivo de ontem.
+- **Solução aplicada:**
+  1. Adicionada a opção `'AUDIT'` nas `choices` do `LogViewerFilterSerializer`.
+  2. Ajustada a função `ler_arquivo_log_seguro` para filtrar especificamente pela tag `[AUDIT]` no corpo do texto quando `nivel_filtro == 'AUDIT'`.
+  3. Sobrescrito o método `list` no `ControleArquivoLogViewSet` para executar `sincronizar_manifesto_logs()` automaticamente antes de renderizar a lista, garantindo que o arquivo do dia atual esteja sempre indexado e exibido no topo.
+  4. Adicionados testes automatizados cobrindo a filtragem de `AUDIT` e auto-sincronização (157 testes aprovados com 100% de sucesso).
+- **Como evitar no futuro:** Sempre incluir todas as opções da UI nos `ChoiceField` dos serializers do backend e acoplar a atualização de estado em tempo real no carregamento das views.
+
+
 
 
 
