@@ -3,7 +3,7 @@ Views e ViewSets para Autenticação, Gestão de PIN/Soft Lock, Onboarding e RBA
 Em conformidade com docs/FSD.md - Seções 6, 8, 8.1, 8.2 e 11.
 """
 import logging
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -23,6 +23,8 @@ from .serializers import (
     ConvidarUsuarioSerializer,
     ActivateAccountSerializer,
     AtualizarPermissoesSerializer,
+    AlterarPerfilUsuarioSerializer,
+    PermissaoSerializer,
 )
 from .services import (
     gerar_tokens_usuario,
@@ -378,6 +380,33 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     serializer_class = UsuarioSerializer
     permission_classes = [IsAuthenticated, HasGestaoEquipeAccess]
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Sobrescreve a exclusão lógica com blindagem e resposta JSON 400 amigável:
+        - Impede auto-exclusão do usuário logado.
+        - Impede exclusão do único Administrador ativo do sistema.
+        """
+        instance = self.get_object()
+        if request.user.id == instance.id:
+            return Response({
+                'status': 'error',
+                'message': 'Operação não permitida: Você não pode excluir sua própria conta de usuário.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if instance.role == 'Admin':
+            outros_admins = Usuario.objects.filter(role='Admin', is_ativo=True, deleted_at__isnull=True).exclude(id=instance.id).count()
+            if outros_admins == 0:
+                return Response({
+                    'status': 'error',
+                    'message': 'Operação não permitida: Não é possível excluir o único Administrador ativo do sistema.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        self.perform_destroy(instance)
+        return Response({
+            'status': 'success',
+            'message': f'Usuário {instance.nome} ({instance.email}) excluído com sucesso.'
+        }, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['post'], url_path='convidar')
     def convidar(self, request):
         """
@@ -441,6 +470,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         token = gerar_token_convite_onboarding(usuario)
         enviar_email_convite_colaborador(usuario, token)
 
+        logger.info(
+            f"[AUDIT] [CONVITE_ONBOARDING] Autor: {request.user.email} (ID: {request.user.id}) | "
+            f"Convidado: {usuario.email} | Perfil: {usuario.role} | Data/Hora: {timezone.localtime().strftime('%d/%m/%Y %H:%M:%S')}"
+        )
+
         return Response({
             'status': 'success',
             'message': f'Convite enviado com sucesso para {usuario.email}.',
@@ -455,18 +489,35 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         """
         usuario = self.get_object()
         usuario.resetar_falhas_login()
+
+        logger.info(
+            f"[AUDIT] [DESBLOQUEIO_CONTA] Autor: {request.user.email} (ID: {request.user.id}) | "
+            f"Usuário Desbloqueado: {usuario.email} (ID: {usuario.id}) | Data/Hora: {timezone.localtime().strftime('%d/%m/%Y %H:%M:%S')}"
+        )
+
         return Response({
             'status': 'success',
             'message': f'Usuário {usuario.nome} ({usuario.email}) foi desbloqueado com sucesso.'
         }, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['patch', 'put'], url_path='permissoes')
-    def atualizar_permissoes(self, request, pk=None):
+    @action(detail=True, methods=['get', 'patch', 'put'], url_path='permissoes')
+    def gerenciar_permissoes(self, request, pk=None):
         """
-        Atualiza os 10 toggles dinâmicos da permissão do colaborador.
+        Consulta (GET) ou atualiza (PATCH/PUT) os 10 toggles dinâmicos da permissão do colaborador.
         """
         usuario = self.get_object()
         permissoes, _ = Permissao.objects.get_or_create(usuario=usuario)
+
+        if request.method == 'GET':
+            return Response({
+                'status': 'success',
+                'usuario_id': usuario.id,
+                'usuario_nome': usuario.nome,
+                'usuario_email': usuario.email,
+                'role': usuario.role,
+                'is_ativo': usuario.is_ativo,
+                'permissoes': PermissaoSerializer(permissoes).data
+            }, status=status.HTTP_200_OK)
 
         serializer = AtualizarPermissoesSerializer(permissoes, data=request.data, partial=True)
         if not serializer.is_valid():
@@ -476,9 +527,154 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 'errors': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Mapeia diferenças para log de auditoria
+        campos_alterados = []
+        for campo, novo_val in serializer.validated_data.items():
+            val_antigo = getattr(permissoes, campo, None)
+            if val_antigo != novo_val:
+                campos_alterados.append(f"{campo}: {val_antigo} -> {novo_val}")
+
         serializer.save()
+
+        if campos_alterados:
+            diff_str = ", ".join(campos_alterados)
+            logger.info(
+                f"[AUDIT] [PERMISSÕES_RBAC] Autor: {request.user.email} (ID: {request.user.id}) | "
+                f"Usuário Alvo: {usuario.email} (ID: {usuario.id}) | Alterações: [{diff_str}] | Data/Hora: {timezone.localtime().strftime('%d/%m/%Y %H:%M:%S')}"
+            )
+
         return Response({
             'status': 'success',
             'message': f'Permissões de {usuario.nome} atualizadas com sucesso.',
             'permissoes': serializer.data
         }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post', 'patch'], url_path='alterar-perfil')
+    def alterar_perfil(self, request, pk=None):
+        """
+        Promove (Operador -> Admin) ou Rebaixa (Admin -> Operador) o perfil base do colaborador.
+        Com blindagem mandatória impedindo o rebaixamento do único Administrador ativo.
+        """
+        usuario = self.get_object()
+        serializer = AlterarPerfilUsuarioSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'status': 'error',
+                'message': 'Dados de perfil inválidos.',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        novo_role = serializer.validated_data['role']
+        role_antigo = usuario.role
+
+        if novo_role == role_antigo:
+            return Response({
+                'status': 'success',
+                'message': f'O colaborador já possui o perfil {novo_role}.',
+                'user': UsuarioSerializer(usuario).data
+            }, status=status.HTTP_200_OK)
+
+        # Se for rebaixar de Admin para Operador, valida se há outros Admins ativos
+        if role_antigo == 'Admin' and novo_role == 'Operador':
+            outros_admins = Usuario.objects.filter(role='Admin', is_ativo=True, deleted_at__isnull=True).exclude(id=usuario.id).count()
+            if outros_admins == 0:
+                return Response({
+                    'status': 'error',
+                    'message': 'Operação não permitida: Não é possível rebaixar o único Administrador ativo do sistema.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        usuario.role = novo_role
+        usuario.save(update_fields=['role', 'updated_at'])
+
+        # Se promovido a Admin, garante que todos os 10 toggles fiquem habilitados por padrão
+        permissoes, _ = Permissao.objects.get_or_create(usuario=usuario)
+        if novo_role == 'Admin':
+            permissoes.acesso_comercial = True
+            permissoes.acesso_tesouraria = True
+            permissoes.acesso_compras = True
+            permissoes.gestao_catalogo = True
+            permissoes.visao_relatorios = True
+            permissoes.cadastros_financeiros = True
+            permissoes.gestao_dicionario_uom = True
+            permissoes.configuracoes_globais = True
+            permissoes.gestao_equipe = True
+            permissoes.auditoria_logs_recovery = True
+            permissoes.save()
+
+        tag_audit = 'PROMOÇÃO_USUÁRIO' if novo_role == 'Admin' else 'REBAIXAMENTO_USUÁRIO'
+        logger.info(
+            f"[AUDIT] [{tag_audit}] Autor: {request.user.email} (ID: {request.user.id}) | "
+            f"Usuário Alvo: {usuario.email} (ID: {usuario.id}) | Perfil: {role_antigo} -> {novo_role} | Data/Hora: {timezone.localtime().strftime('%d/%m/%Y %H:%M:%S')}"
+        )
+
+        return Response({
+            'status': 'success',
+            'message': f'Perfil de {usuario.nome} alterado com sucesso para {novo_role}.',
+            'user': UsuarioSerializer(usuario).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='alternar-status')
+    def alternar_status(self, request, pk=None):
+        """
+        Alterna o status de ativação (is_ativo) do colaborador.
+        Com blindagem contra auto-desativação e desativação do único Administrador ativo.
+        """
+        usuario = self.get_object()
+        novo_status = not usuario.is_ativo
+
+        # 1. Bloqueio de auto-desativação
+        if request.user.id == usuario.id and not novo_status:
+            return Response({
+                'status': 'error',
+                'message': 'Operação não permitida: Você não pode desativar sua própria conta de usuário.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Bloqueio de desativação do único Administrador ativo
+        if usuario.role == 'Admin' and not novo_status:
+            outros_admins = Usuario.objects.filter(role='Admin', is_ativo=True, deleted_at__isnull=True).exclude(id=usuario.id).count()
+            if outros_admins == 0:
+                return Response({
+                    'status': 'error',
+                    'message': 'Operação não permitida: Não é possível desativar o único Administrador ativo do sistema.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        usuario.is_ativo = novo_status
+        usuario.save(update_fields=['is_ativo', 'updated_at'])
+
+        acao_str = 'ATIVADO' if usuario.is_ativo else 'DESATIVADO'
+        logger.info(
+            f"[AUDIT] [STATUS_USUÁRIO] Autor: {request.user.email} (ID: {request.user.id}) | "
+            f"Usuário Alvo: {usuario.email} (ID: {usuario.id}) | Ação: {acao_str} (is_ativo={usuario.is_ativo}) | Data/Hora: {timezone.localtime().strftime('%d/%m/%Y %H:%M:%S')}"
+        )
+
+        return Response({
+            'status': 'success',
+            'message': f'Usuário {usuario.nome} foi {acao_str.lower()} com sucesso.',
+            'is_ativo': usuario.is_ativo,
+            'user': UsuarioSerializer(usuario).data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='desativar')
+    def desativar(self, request, pk=None):
+        """Desativa explicitamente o acesso do usuário."""
+        usuario = self.get_object()
+        if not usuario.is_ativo:
+            return Response({
+                'status': 'success',
+                'message': f'O usuário {usuario.nome} já está desativado.',
+                'is_ativo': False
+            }, status=status.HTTP_200_OK)
+        return self.alternar_status(request, pk=pk)
+
+    @action(detail=True, methods=['post'], url_path='ativar')
+    def ativar(self, request, pk=None):
+        """Reativa explicitamente o acesso do usuário."""
+        usuario = self.get_object()
+        if usuario.is_ativo:
+            return Response({
+                'status': 'success',
+                'message': f'O usuário {usuario.nome} já está ativo.',
+                'is_ativo': True
+            }, status=status.HTTP_200_OK)
+        return self.alternar_status(request, pk=pk)
+

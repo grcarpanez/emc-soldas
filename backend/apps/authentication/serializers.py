@@ -147,3 +147,17 @@ class AtualizarPermissoesSerializer(serializers.ModelSerializer):
             'gestao_equipe',
             'auditoria_logs_recovery',
         ]
+
+
+class AlterarPerfilUsuarioSerializer(serializers.Serializer):
+    """Validação para promoção ou rebaixamento de colaborador."""
+    role = serializers.CharField(required=True)
+
+    def validate_role(self, value):
+        role_norm = str(value).strip()
+        if role_norm.upper() in ('ADMIN', 'ADMINISTRADOR'):
+            return 'Admin'
+        elif role_norm.upper() in ('OPERADOR', 'OPERATOR'):
+            return 'Operador'
+        raise serializers.ValidationError("Perfil inválido. Escolha 'Admin' ou 'Operador'.")
+
