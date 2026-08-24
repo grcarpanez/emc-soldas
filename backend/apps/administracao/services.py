@@ -353,15 +353,16 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
         os.makedirs(logs_dir, exist_ok=True)
 
     # Resolve o nome do arquivo seguro
-    if not identificador_arquivo or identificador_arquivo == 'hoje':
+    ident = str(identificador_arquivo).strip() if identificador_arquivo else ''
+    if not ident or ident in ('hoje', 'undefined', 'null'):
         nome_arquivo = f"app-{timezone.localdate().strftime('%Y-%m-%d')}.log"
-    elif identificador_arquivo.startswith('app-') and identificador_arquivo.endswith('.log'):
-        nome_arquivo = os.path.basename(identificador_arquivo)
-    elif len(identificador_arquivo) == 10 and identificador_arquivo.count('-') == 2:
+    elif ident.startswith('app-') and ident.endswith('.log'):
+        nome_arquivo = os.path.basename(ident)
+    elif len(ident) == 10 and ident.count('-') == 2:
         # Formato YYYY-MM-DD
-        nome_arquivo = f"app-{identificador_arquivo}.log"
+        nome_arquivo = f"app-{ident}.log"
     else:
-        nome_arquivo = os.path.basename(identificador_arquivo)
+        nome_arquivo = os.path.basename(ident)
         if not nome_arquivo.endswith('.log'):
             nome_arquivo = f"{nome_arquivo}.log"
 
@@ -377,8 +378,10 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
         return {
             "arquivo": nome_seguro,
             "existe": False,
+            "conteudo": "Arquivo de log ainda não possui registros.",
             "total_linhas": 0,
-            "linhas_filtradas": 0,
+            "total_linhas_arquivo": 0,
+            "total_linhas_filtradas": 0,
             "linhas": [],
             "arquivos_disponiveis": listar_arquivos_log_disponiveis()
         }
@@ -417,6 +420,7 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
 
     total_filtradas = len(linhas_processadas)
     linhas_paginadas = linhas_processadas[offset: offset + limit]
+    conteudo_texto = "\n".join(item["conteudo"] for item in linhas_paginadas)
 
     return {
         "arquivo": nome_seguro,
@@ -426,6 +430,7 @@ def ler_arquivo_log_seguro(identificador_arquivo: str = 'hoje', nivel: str = 'TO
         "total_linhas_filtradas": total_filtradas,
         "limit": limit,
         "offset": offset,
+        "conteudo": conteudo_texto or "Nenhum evento registrado com os filtros informados.",
         "linhas": linhas_paginadas,
         "arquivos_disponiveis": listar_arquivos_log_disponiveis()
     }

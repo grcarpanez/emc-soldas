@@ -135,6 +135,9 @@ class TesteSmtpSerializer(serializers.Serializer):
 
 class ControleArquivoLogSerializer(serializers.ModelSerializer):
     """Serializer para visualização e auditoria do Manifesto de Logs Rotativos."""
+    data_log = serializers.SerializerMethodField(read_only=True)
+    total_eventos = serializers.SerializerMethodField(read_only=True)
+    quantidade_linhas = serializers.SerializerMethodField(read_only=True)
     dias_restantes = serializers.SerializerMethodField(read_only=True)
     tamanho_bytes = serializers.SerializerMethodField(read_only=True)
     tamanho_formatado = serializers.SerializerMethodField(read_only=True)
@@ -146,6 +149,9 @@ class ControleArquivoLogSerializer(serializers.ModelSerializer):
             'id',
             'caminho_arquivo_fisico',
             'data_criacao',
+            'data_log',
+            'total_eventos',
+            'quantidade_linhas',
             'data_expurgo_planejada',
             'dias_restantes',
             'tamanho_bytes',
@@ -154,6 +160,27 @@ class ControleArquivoLogSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+
+    def get_data_log(self, obj) -> str:
+        return obj.data_criacao.strftime('%Y-%m-%d') if obj.data_criacao else ''
+
+    def get_total_eventos(self, obj) -> int:
+        import os
+        from django.conf import settings
+        caminho_completo = os.path.join(settings.BASE_DIR, obj.caminho_arquivo_fisico)
+        if not os.path.exists(caminho_completo):
+            logs_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
+            caminho_completo = os.path.join(logs_dir, os.path.basename(obj.caminho_arquivo_fisico))
+        if os.path.exists(caminho_completo):
+            try:
+                with open(caminho_completo, 'r', encoding='utf-8', errors='replace') as f:
+                    return sum(1 for line in f if line.strip())
+            except Exception:
+                return 0
+        return 0
+
+    def get_quantidade_linhas(self, obj) -> int:
+        return self.get_total_eventos(obj)
 
     def get_dias_restantes(self, obj) -> int:
         hoje = timezone.localdate()
@@ -167,6 +194,9 @@ class ControleArquivoLogSerializer(serializers.ModelSerializer):
         import os
         from django.conf import settings
         caminho_completo = os.path.join(settings.BASE_DIR, obj.caminho_arquivo_fisico)
+        if not os.path.exists(caminho_completo):
+            logs_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
+            caminho_completo = os.path.join(logs_dir, os.path.basename(obj.caminho_arquivo_fisico))
         if os.path.exists(caminho_completo):
             return os.path.getsize(caminho_completo)
         return 0
@@ -187,6 +217,11 @@ class LogViewerFilterSerializer(serializers.Serializer):
         required=False,
         default='hoje',
         help_text="Nome do arquivo (ex: app-2026-08-23.log) ou data YYYY-MM-DD ou 'hoje'"
+    )
+    data = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Data do log no formato YYYY-MM-DD"
     )
     nivel = serializers.ChoiceField(
         choices=['TODOS', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],

@@ -138,9 +138,10 @@ class ControleArquivoLogViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         params = serializer.validated_data
+        identificador = params.get('data') or params.get('arquivo', 'hoje')
         try:
             resultado = ler_arquivo_log_seguro(
-                identificador_arquivo=params.get('arquivo', 'hoje'),
+                identificador_arquivo=identificador,
                 nivel=params.get('nivel', 'TODOS'),
                 busca=params.get('busca'),
                 limit=params.get('limit', 100),
@@ -177,9 +178,10 @@ class LogViewerView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         params = serializer.validated_data
+        identificador = params.get('data') or params.get('arquivo', 'hoje')
         try:
             resultado = ler_arquivo_log_seguro(
-                identificador_arquivo=params.get('arquivo', 'hoje'),
+                identificador_arquivo=identificador,
                 nivel=params.get('nivel', 'TODOS'),
                 busca=params.get('busca'),
                 limit=params.get('limit', 100),
