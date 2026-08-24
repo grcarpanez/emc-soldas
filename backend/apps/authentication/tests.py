@@ -354,3 +354,129 @@ class AuthenticationPhase3Tests(APITestCase):
         url = '/api/usuarios/'
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # -------------------------------------------------------------------------
+    # 6. Testes de Gestão de Equipe (Permissões GET/PATCH, Status e Perfis)
+    # -------------------------------------------------------------------------
+
+    def test_get_permissoes_usuario(self):
+        """Valida que GET /api/usuarios/{id}/permissoes/ retorna a matriz de 10 toggles."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        url = f'/api/usuarios/{self.operador.id}/permissoes/'
+        response = self.client.get(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertEqual(response.data['usuario_id'], self.operador.id)
+        self.assertTrue(response.data['permissoes']['acesso_comercial'])
+        self.assertFalse(response.data['permissoes']['acesso_tesouraria'])
+
+    def test_alterar_perfil_promocao_operador_para_admin(self):
+        """Valida promoção de Operador para Admin e liberação automática de todos os 10 toggles."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        url = f'/api/usuarios/{self.operador.id}/alterar-perfil/'
+        response = self.client.post(url, {'role': 'Admin'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user']['role'], 'Admin')
+
+        self.operador.refresh_from_db()
+        self.assertEqual(self.operador.role, 'Admin')
+        self.assertTrue(self.operador.permissoes.acesso_tesouraria)
+        self.assertTrue(self.operador.permissoes.gestao_equipe)
+        self.assertTrue(self.operador.permissoes.auditoria_logs_recovery)
+
+    def test_bloqueio_rebaixamento_unico_admin(self):
+        """Valida bloqueio 400 ao tentar rebaixar o único Administrador ativo do sistema."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        url = f'/api/usuarios/{self.admin.id}/alterar-perfil/'
+        response = self.client.post(url, {'role': 'Operador'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('único Administrador ativo', response.data['message'])
+
+        self.admin.refresh_from_db()
+        self.assertEqual(self.admin.role, 'Admin')
+
+    def test_desativar_e_ativar_colaborador(self):
+        """Valida fluxo de desativação e posterior ativação de colaborador."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        # Desativa o operador
+        url_desativar = f'/api/usuarios/{self.operador.id}/desativar/'
+        resp_desativar = self.client.post(url_desativar, format='json')
+        self.assertEqual(resp_desativar.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp_desativar.data['is_ativo'])
+
+        self.operador.refresh_from_db()
+        self.assertFalse(self.operador.is_ativo)
+
+        # Login barrado para usuário desativado
+        url_login = reverse('authentication:login')
+        resp_login = self.client.post(url_login, {
+            'email': self.operador.email,
+            'password': 'SenhaOperadorSegura123!'
+        }, format='json')
+        self.assertEqual(resp_login.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('desativada', resp_login.data['message'])
+
+        # Reativa o operador
+        url_ativar = f'/api/usuarios/{self.operador.id}/ativar/'
+        resp_ativar = self.client.post(url_ativar, format='json')
+        self.assertEqual(resp_ativar.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp_ativar.data['is_ativo'])
+
+        self.operador.refresh_from_db()
+        self.assertTrue(self.operador.is_ativo)
+
+    def test_bloqueio_auto_desativacao(self):
+        """Valida bloqueio 400 ao tentar desativar o próprio usuário autenticado."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        url = f'/api/usuarios/{self.admin.id}/desativar/'
+        response = self.client.post(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('não pode desativar sua própria conta', response.data['message'])
+
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_ativo)
+
+    def test_bloqueio_desativacao_unico_admin(self):
+        """Valida bloqueio 400 ao tentar desativar o único Administrador ativo (mesmo por outro usuário com gestão_equipe)."""
+        # Concede permissão de gestão_equipe ao operador
+        self.operador.permissoes.gestao_equipe = True
+        self.operador.permissoes.save()
+
+        tokens_operador = gerar_tokens_usuario(self.operador)
+        self.client.cookies['emc_access_token'] = tokens_operador['access']
+
+        url = f'/api/usuarios/{self.admin.id}/desativar/'
+        response = self.client.post(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('único Administrador ativo', response.data['message'])
+
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_ativo)
+
+    def test_bloqueio_auto_exclusao_logica(self):
+        """Valida bloqueio 400 ao tentar deletar o próprio usuário autenticado."""
+        tokens_admin = gerar_tokens_usuario(self.admin)
+        self.client.cookies['emc_access_token'] = tokens_admin['access']
+
+        url = f'/api/usuarios/{self.admin.id}/'
+        response = self.client.delete(url, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin.refresh_from_db()
+        self.assertIsNone(self.admin.deleted_at)
+
