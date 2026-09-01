@@ -270,6 +270,30 @@ Utilize o padrão abaixo para cada novo erro registrado:
   3. Varredura completa na suíte garantindo que nenhum teste manipule arquivos diários reais do dia corrente.
 - **Como evitar no futuro:** Testes unitários e de integração que manipulam arquivos físicos em disco devem sempre utilizar diretórios temporários (`tempfile.mkdtemp()`) ou datas fictícias isoladas com limpeza obrigatória no encerramento do teste.
 
+---
+
+## 2026-09-01 - Reconfiguração do Ambiente Operacional Local após Formatação do Computador
+
+- **Sintoma:** 1. `git status` retornava `fatal: detected dubious ownership in repository at 'D:/gestao_orcamentos_2.0'`. 2. `python.exe` do venv falhava com `did not find executable at 'C:\Users\Gusta\AppData\Local\Programs\Python\Python314\python.exe'`. 3. Conexão ao MySQL falhava com ausência da base de dados `emc_soldas` na nova instalação do MariaDB/MySQL local.
+- **Causa:** O computador foi formatado pelo usuário, alterando o SID do usuário do Windows, a pasta de instalação nativa do Python 3.14 (agora em `C:\Users\Gusta\AppData\Local\Python\pythoncore-3.14-64`) e resetando os bancos de dados do MySQL local (porta 3306).
+- **Solução aplicada:**
+  1. Executado `git config --global --add safe.directory D:/gestao_orcamentos_2.0`.
+  2. Atualizado `venv/pyvenv.cfg` apontando para o novo executável do Python 3.14.7, preservando 100% dos pacotes já instalados em `site-packages`.
+  3. Criado o banco de dados `emc_soldas` via script PyMySQL (`CREATE DATABASE IF NOT EXISTS emc_soldas CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`).
+  4. Executadas todas as migrações do Django (`call_command('migrate')`).
+  5. Executado o seeder inicial de dados estruturais (`call_command('seed_initial_data')`), recriando o usuário Administrador Master (`admin@emcsoldas.com.br`) e todos os dicionários.
+- **Como evitar no futuro:** Manter documentado o checklist de restauração rápida em `AGENTS.md` e `STATUS.md`.
+
+---
+
+## 2026-09-01 - Incompatibilidade de Lookup __date__range em Campos DateTimeField (AssertionError: 0 != 1)
+
+- **Sintoma:** O teste unitário `test_divergencias_conciliacao` falhou com `AssertionError: 0 != 1` na asserção `self.assertEqual(dados['total_sobras_erp'], 1)`.
+- **Causa:** O filtro de período em `backend/apps/relatorios/services.py` utilizava `data_pagamento__date__range=(data_inicio, data_fim)` sobre o campo `DateTimeField` `data_pagamento`. No SQLite (usado nos testes in-memory), a transformação `__date` gera `django_datetime_cast_date`, comparando strings ISO com inteiros não-cotados (`BETWEEN 2026-09-01 AND 2026-09-01` avaliado como `2016`), retornando 0 registros. Além disso, no MySQL essa transformação impede o uso de índices (não-SARGable) e depende da tabela `mysql.time_zone_name`.
+- **Solução aplicada:** Implementação da função utilitária `converter_periodo_para_datetime_range(data_inicio, data_fim)` gerando um range timezone-aware cobrindo de `00:00:00` a `23:59:59.999999` (`America/Sao_Paulo`), e substituição de `data_pagamento__date__range` por `data_pagamento__range=(dt_inicio, dt_fim)` em `DashboardService`, `DREService` e `DivergenciasConciliacaoService`. A suíte de 157 testes automatizados passou com 100% de aprovação.
+- **Como evitar no futuro:** Sempre que filtrar intervalos de datas sobre campos `DateTimeField`, converter o período em range datetime timezone-aware em vez de utilizar o lookup de data `__date__range`.
+
+
 
 
 

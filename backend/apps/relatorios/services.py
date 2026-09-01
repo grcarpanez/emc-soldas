@@ -3,7 +3,7 @@ Camada de serviços analíticos e inteligência de negócios para o sistema EMC 
 Implementa agregações para o Dashboard Principal e os 6 Relatórios Estratégicos do ERP.
 """
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from django.db.models import Sum, Count, Q, F, Avg
 from django.utils import timezone
 
@@ -17,6 +17,16 @@ from apps.cadastros.models import ClienteFornecedor, Equipamento, ClienteEquipam
 from apps.catalogo.models import Item, Produto, FichaTecnica
 from apps.compras.models import DocumentoFiscalCompra, NotaCompraItem
 from core.utils import sanitizar_texto_maiusculo
+
+
+def converter_periodo_para_datetime_range(data_inicio, data_fim):
+    """
+    Converte datas (datetime.date) em range timezone-aware cobrindo 00:00:00 ate 23:59:59.999999.
+    Garante consultas compativeis, performaticas e indexaveis (SARGable) em campos DateTimeField.
+    """
+    dt_inicio = timezone.make_aware(datetime.combine(data_inicio, time.min))
+    dt_fim = timezone.make_aware(datetime.combine(data_fim, time.max))
+    return dt_inicio, dt_fim
 
 
 def normalizar_datas(data_inicio=None, data_fim=None):
@@ -137,11 +147,12 @@ class DashboardService:
         # 3. CARD: RECEITA (REAL VS PROJETADO)
         # ==========================================
         # Receita Real: baixas efetivadas de entrada com status PAGO
+        dt_ini_receita, dt_fim_receita = converter_periodo_para_datetime_range(data_inicio, data_fim)
         receita_real = LancamentoFinanceiro.objects.filter(
             deleted_at__isnull=True,
             tipo_lancamento='ENTRADA',
             status_pagamento='PAGO',
-            data_pagamento__date__range=(data_inicio, data_fim)
+            data_pagamento__range=(dt_ini_receita, dt_fim_receita)
         ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
         # Receita Projetada: todas as previsões a receber com vencimento no período
@@ -760,18 +771,19 @@ class DREService:
 
         if regime == 'caixa':
             # Regime de Caixa: baseado em baixas de data_pagamento com status PAGO
+            dt_inicio_caixa, dt_fim_caixa = converter_periodo_para_datetime_range(data_inicio, data_fim)
             receita_bruta_total = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='ENTRADA',
                 status_pagamento='PAGO',
-                data_pagamento__date__range=(data_inicio, data_fim)
+                data_pagamento__range=(dt_inicio_caixa, dt_fim_caixa)
             ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
             despesas_qs = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='SAIDA',
                 status_pagamento='PAGO',
-                data_pagamento__date__range=(data_inicio, data_fim)
+                data_pagamento__range=(dt_inicio_caixa, dt_fim_caixa)
             )
         else:
             # Regime de Competência: baseado em Faturas emitidas e Lançamentos por data_vencimento
@@ -891,13 +903,14 @@ class DivergenciasConciliacaoService:
         - Aba 2: Sobras do ERP (Lançamentos com status PAGO não conciliados)
         """
         data_inicio, data_fim = normalizar_datas(data_inicio, data_fim)
+        dt_inicio, dt_fim = converter_periodo_para_datetime_range(data_inicio, data_fim)
 
         conta_nome = "TODAS AS CONTAS"
         erp_qs = LancamentoFinanceiro.objects.filter(
             deleted_at__isnull=True,
             status_pagamento='PAGO',
             is_conciliado=False,
-            data_pagamento__date__range=(data_inicio, data_fim)
+            data_pagamento__range=(dt_inicio, dt_fim)
         ).select_related('conta', 'categoria', 'meio_pagamento')
 
         if conta_id:

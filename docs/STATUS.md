@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-08-24 (Aprimoramento da Lixeira com Histórico Completo Unificado, Suporte a Equipamentos, Busca em Tempo Real e Correção de Parser)  
-**Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pronta para início)  
-**Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy  
+**Última Atualização:** 2026-09-01 (Restauração do Ambiente Pós-Formatação, Recriação da Base MySQL, Otimização de Range Temporal em Relatórios e 157 Testes 100% Aprovados)  
+**Fase Atual:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Em andamento)  
+**Próxima Fase:** Conclusão do Projeto e Deploy em Produção Cloud PaaS  
 
 ---
 
@@ -227,16 +227,18 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Blindagem e Isolamento Estrito de Logs em Testes Unitários (Test Isolation):** Refatoração da suíte de testes de administração para utilizar arquivos isolados com data fictícia (`app-2099-12-31.log`) e limpeza em bloco `try/finally`, eliminando qualquer risco de sobrescrita ou truncamento do arquivo real de log do dia atual (`app-YYYY-MM-DD.log`) durante execuções de testes.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
-- [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).
+- [x] Reconfiguração e validação completa do ambiente de desenvolvimento local após formatação (`git safe.directory`, `pyvenv.cfg`, MySQL `emc_soldas`, migrations e seeders).
+- [x] Executar suíte consolidada de testes automatizados unitários e de integração no backend (`manage.py test` - 157 testes com 100% de sucesso).
+- [x] Otimização e correção de robustez temporal para ranges em `DateTimeField` no serviço de relatórios (`converter_periodo_para_datetime_range`).
+- [x] Disponibilizar script gerador de chaves criptográficas de 64 caracteres (`tools/generate_keys.py`).
 - [ ] Executar Pentest Mandatório de Conclusão (6 testes: RBAC/IDOR, Brute-force, SQLi/XSS, Uploads, Sessão HttpOnly, Criptografia/Tracebacks).
-- [ ] Disponibilizar script gerador de chaves criptográficas de 64 caracteres (`tools/generate_keys.py`).
 - [ ] Elaborar guia de implantação em produção Cloud PaaS.
 
 ---
 
 ## Próximo Passo Recomendado
 
-Iniciar a **Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy**, executando a suíte consolidada de testes de integração (157 testes automatizados), os 6 testes mandatórios de pentest/segurança (RBAC/IDOR, Brute-force, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256), disponibilizando o gerador de chaves criptográficas seguras (`tools/generate_keys.py`) e o roteiro final de deploy em produção Cloud PaaS.
+Prosseguir com a execução do **Pentest Mandatório de Conclusão** da **Fase 15** (validando os 6 vetores de segurança exigidos pelo `docs/FSD.md`: RBAC/IDOR, Anti-Bruteforce/Throttling, SQLi/XSS, Validação profunda de uploads, Sessão HttpOnly e Criptografia AES-256/Tracebacks) e elaboração do guia final de deploy assistido em produção Cloud PaaS.
 
 
 
