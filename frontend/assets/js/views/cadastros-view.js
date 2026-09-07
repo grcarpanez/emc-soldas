@@ -53,12 +53,11 @@ window.CadastrosView = {
       <div class="card mb-16">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <div style="display: flex; gap: 8px; flex: 1; min-width: 280px;">
-            <input type="text" id="filtro-cliente-busca" class="form-control" placeholder="BUSCAR POR NOME, CNPJ/CPF OU CIDADE..." style="flex: 1;">
-            <select id="filtro-cliente-tipo" class="form-control" style="width: 160px;">
-              <option value="">TODOS OS TIPOS</option>
+            <input type="text" id="filtro-cliente-busca" class="form-control" placeholder="BUSCAR POR NOME, CNPJ/CPF OU CIDADE..." style="flex: 1; max-width: 380px;">
+            <select id="filtro-cliente-tipo" class="form-control" style="width: 180px; min-width: 180px;">
+              <option value="">TODOS</option>
               <option value="CLIENTE">CLIENTES</option>
               <option value="FORNECEDOR">FORNECEDORES</option>
-              <option value="AMBOS">AMBOS</option>
             </select>
           </div>
 
