@@ -286,6 +286,11 @@ window.CadastrosView = {
               return false;
             }
 
+            if (placa && !window.EMCUtils.validarPlacaVeiculo(placa)) {
+              window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23).', 'error');
+              return false;
+            }
+
             try {
               await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS, {
                 placa: window.EMCUtils.sanitizarTextoEmTempoReal(placa),
@@ -1043,6 +1048,11 @@ window.CadastrosView = {
 
         if (!descricao) {
           window.EMCUtils.showToast('A descrição é obrigatória.', 'error');
+          return false;
+        }
+
+        if (placa && !window.EMCUtils.validarPlacaVeiculo(placa)) {
+          window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23).', 'error');
           return false;
         }
 

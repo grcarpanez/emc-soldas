@@ -155,3 +155,20 @@ def formatar_moeda(valor: float) -> str:
         return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except (ValueError, TypeError):
         return "R$ 0,00"
+
+
+def validar_placa(valor: str) -> bool:
+    """
+    Valida se uma placa atende ao padrão brasileiro (Antigo AAA-0000 ou Mercosul AAA0A00):
+    - 3 primeiros dígitos são letras (A-Z)
+    - 4º dígito é número (0-9)
+    - 5º dígito é letra ou número (A-Z ou 0-9)
+    - 6º e 7º dígitos são números (0-9)
+    """
+    if not valor:
+        return True
+    limpo = re.sub(r'[^A-Za-z0-9]', '', str(valor)).upper()
+    if len(limpo) != 7:
+        return False
+    return bool(re.match(r'^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$', limpo))
+

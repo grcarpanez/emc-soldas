@@ -336,6 +336,25 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         self.assertEqual(res_2.status_code, status.HTTP_201_CREATED)
         self.assertEqual(res_2.data['placa'], 'BRA2E19')
 
+        # Placas inválidas rejeitadas com 400 Bad Request
+        placas_invalidas = [
+            "123ABCD",   # Começa com números
+            "ABCD123",   # 4º dígito é letra
+            "ABC12D4",   # 6º dígito é letra
+            "ABC123D",   # 7º dígito é letra
+            "AB1234",    # Curta demais (6 caracteres)
+            "ABC12345",  # Longa demais (8 caracteres)
+        ]
+        for placa_inv in placas_invalidas:
+            payload_inv = {
+                "placa": placa_inv,
+                "identificacao": f"Teste {placa_inv}",
+                "descricao": "Teste de rejeição de placa inválida"
+            }
+            res_inv = self.client.post('/api/equipamentos/', payload_inv, format='json')
+            self.assertEqual(res_inv.status_code, status.HTTP_400_BAD_REQUEST, f"Placa {placa_inv} deveria ter sido rejeitada.")
+            self.assertIn('placa', res_inv.data)
+
     def test_transferencia_historica_de_equipamento(self):
         """
         Valida que a transferência de um equipamento para um novo cliente desativa o vínculo

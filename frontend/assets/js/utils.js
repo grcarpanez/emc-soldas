@@ -145,22 +145,66 @@ function formatarCep(valor) {
 }
 
 /**
- * Formata Placa de Veículo (Antiga AAA-0000 ou Mercosul AAA0A00) em Uppercase.
+ * Valida se a placa atende estritamente ao Padrão Antigo (AAA-0000) ou Mercosul (AAA0A00):
+ * - 3 primeiros dígitos são letras (A-Z)
+ * - 4º dígito é número (0-9)
+ * - 5º dígito é letra ou número (A-Z ou 0-9)
+ * - 6º e 7º dígitos são números (0-9)
+ * @param {string} valor 
+ * @returns {boolean}
+ */
+function validarPlacaVeiculo(valor) {
+  if (!valor || !valor.trim()) return true;
+  const limpo = valor.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (limpo.length !== 7) return false;
+  return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(limpo);
+}
+
+/**
+ * Formata e filtra Placa de Veículo em tempo real aceitando apenas os padrões Antigo e Mercosul:
+ * - 1º, 2º e 3º dígitos: Letras (A-Z)
+ * - 4º dígito: Número (0-9)
+ * - 5º dígito: Letra ou Número (A-Z ou 0-9)
+ * - 6º e 7º dígitos: Números (0-9)
+ * Padrão Antigo é formatado como AAA-0000; Mercosul como AAA0A00.
  * @param {string} valor 
  * @returns {string}
  */
 function formatarPlacaVeiculo(valor) {
   if (!valor) return '';
-  const limpo = sanitizarTextoEmTempoReal(valor).replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  const bruto = sanitizarTextoEmTempoReal(valor).replace(/[^A-Z0-9]/g, '');
+  let resultado = '';
 
-  if (limpo.length > 3) {
-    // Se o 5º caractere for número (padrão antigo AAA-0000), insere hífen
-    const quintoChar = limpo[4];
-    if (quintoChar && /\d/.test(quintoChar)) {
-      return limpo.slice(0, 3) + '-' + limpo.slice(3);
+  for (let i = 0; i < bruto.length && resultado.length < 7; i++) {
+    const char = bruto[i];
+    const pos = resultado.length; // índice de 0 a 6
+    if (pos >= 0 && pos <= 2) {
+      if (/[A-Z]/.test(char)) {
+        resultado += char;
+      }
+    } else if (pos === 3) {
+      if (/\d/.test(char)) {
+        resultado += char;
+      }
+    } else if (pos === 4) {
+      if (/[A-Z0-9]/.test(char)) {
+        resultado += char;
+      }
+    } else if (pos === 5 || pos === 6) {
+      if (/\d/.test(char)) {
+        resultado += char;
+      }
     }
   }
-  return limpo;
+
+  // Se o 5º caractere for número (padrão antigo AAA-0000), insere hífen
+  if (resultado.length > 4) {
+    const quintoChar = resultado[4];
+    if (/\d/.test(quintoChar)) {
+      return resultado.slice(0, 3) + '-' + resultado.slice(3);
+    }
+  }
+  return resultado;
 }
 
 /**
@@ -814,6 +858,7 @@ window.EMCUtils = {
   extrairApenasDigitos,
   validarCpf,
   validarCnpj,
+  validarPlacaVeiculo,
   formatarCentavosParaMoedaATM,
   converterMoedaATMParaFloat,
   aplicarMascaraMoedaATM,

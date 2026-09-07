@@ -7,7 +7,8 @@ from core.utils import (
     sanitizar_texto_maiusculo,
     limpar_apenas_digitos,
     validar_cpf,
-    validar_cnpj
+    validar_cnpj,
+    validar_placa
 )
 from apps.cadastros.models import (
     ClienteFornecedor,
@@ -287,8 +288,11 @@ class EquipamentoSerializer(serializers.ModelSerializer):
     def validate_placa(self, value):
         if value:
             placa_limpa = sanitizar_texto_maiusculo(value).replace("-", "").replace(" ", "")
-            if len(placa_limpa) != 7:
-                raise serializers.ValidationError("Placa inválida. Deve conter 7 caracteres alfanuméricos (ex: ABC-1234 ou ABC1D23).")
+            if not validar_placa(placa_limpa):
+                raise serializers.ValidationError(
+                    "Placa inválida. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23): "
+                    "3 letras iniciais, 4º dígito numérico, 5º dígito letra ou número e 2 dígitos finais numéricos."
+                )
             return placa_limpa
         return value
 
