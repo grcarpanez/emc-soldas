@@ -133,7 +133,7 @@ window.OrcamentosView = {
 
     const todosClientes = clientes.results || clientes || [];
     // Filtra apenas clientes (exclui fornecedores puros)
-    const listaClientes = todosClientes.filter(c => c.tipo !== 'FORNECEDOR');
+    const listaClientes = todosClientes.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
     const listaEquip = equipamentos.results || equipamentos || [];
     const listaProd = produtos.results || produtos || [];
     const listaItens = itens.results || itens || [];

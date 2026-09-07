@@ -115,7 +115,8 @@ window.CadastrosView = {
 
       let html = '';
       lista.forEach((item) => {
-        const badgeTipo = item.tipo === 'CLIENTE' ? 'info' : (item.tipo === 'FORNECEDOR' ? 'warning' : 'success');
+        const itemTipoUpper = (item.tipo || '').toUpperCase();
+        const badgeTipo = itemTipoUpper === 'CLIENTE' ? 'info' : (itemTipoUpper === 'FORNECEDOR' ? 'warning' : 'success');
         
         let telDisplay = '-';
         if (item.contatos && item.contatos.length > 0) {
@@ -128,7 +129,7 @@ window.CadastrosView = {
         }
 
         const qtdEquip = item.quantidade_equipamentos_ativos || 0;
-        const btnFrota = item.tipo !== 'FORNECEDOR' 
+        const btnFrota = itemTipoUpper !== 'FORNECEDOR' 
           ? `<button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalFrotaCliente(${item.id})">FROTA (${qtdEquip})</button>` 
           : '';
 
@@ -538,6 +539,7 @@ window.CadastrosView = {
     // Determina se inicia como PJ (se o cliente tem mais de 11 dígitos ou tipo_pessoa === 'PJ')
     const docInicial = window.EMCUtils.extrairApenasDigitos(cliente?.cnpj_cpf || '');
     const isPJInicial = docInicial.length > 11 || cliente?.tipo_pessoa === 'PJ';
+    const tipoAtual = (cliente?.tipo || 'CLIENTE').toUpperCase();
 
     window.EMCUtils.openModal({
       title: title,
@@ -574,9 +576,9 @@ window.CadastrosView = {
             <div class="form-group">
               <label class="form-label" for="comp-tipo">Tipo de Cadastro</label>
               <select id="comp-tipo" class="form-control">
-                <option value="CLIENTE" ${cliente?.tipo === 'CLIENTE' ? 'selected' : ''}>CLIENTE</option>
-                <option value="FORNECEDOR" ${cliente?.tipo === 'FORNECEDOR' ? 'selected' : ''}>FORNECEDOR</option>
-                <option value="AMBOS" ${cliente?.tipo === 'AMBOS' ? 'selected' : ''}>AMBOS</option>
+                <option value="CLIENTE" ${tipoAtual === 'CLIENTE' ? 'selected' : ''}>CLIENTE</option>
+                <option value="FORNECEDOR" ${tipoAtual === 'FORNECEDOR' ? 'selected' : ''}>FORNECEDOR</option>
+                <option value="AMBOS" ${tipoAtual === 'AMBOS' ? 'selected' : ''}>AMBOS</option>
               </select>
             </div>
             <div class="form-group">
@@ -988,7 +990,7 @@ window.CadastrosView = {
     try {
       const resCli = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=1000`);
       const todos = resCli.results || resCli || [];
-      clientes = todos.filter(c => c.tipo !== 'FORNECEDOR');
+      clientes = todos.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
     } catch (e) {
       console.warn('Erro ao carregar lista de clientes para vinculo:', e);
     }

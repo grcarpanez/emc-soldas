@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-07 (Inclusão Semântica do Tipo 'Ambos' nos Filtros de Clientes/Fornecedores, Barra Anti-Esmagamento e Governança de Planejamento)  
+**Última Atualização:** 2026-09-07 (Correção da Edição de Tipo de Clientes/Fornecedores, PWA v3.1 e Inclusão Semântica de 'Ambos')  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
 
@@ -245,6 +245,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Normalização no backend (`ClienteFornecedorViewSet.get_queryset` em `apps/cadastros/views.py`) com `.strip().upper()`, tornando o filtro de tipo robusto contra variações maiúsculas/minúsculas (`CLIENTE`, `CLIENTES`, `Cliente`, `FORNECEDOR`, `FORNECEDORES`, `Fornecedor`).
   - Implementação semântica no ORM: parceiros cadastrados com o tipo `Ambos` (dupla atribuição) são incluídos automaticamente tanto nas buscas/filtros de Clientes (`tipo__in=['Cliente', 'Ambos']`) quanto de Fornecedores (`tipo__in=['Fornecedor', 'Ambos']`).
   - Suíte de testes automatizados unitários enriquecida (`test_filtro_tipo_clientes_e_fornecedores_inclui_ambos` em `cadastros/tests.py`), alcançando 17 testes específicos e 158 testes globais aprovados com 100% de sucesso.
+- [x] **Correção da Seleção do Tipo de Cadastro na Edição de Clientes/Fornecedores e Versionamento PWA v3.1:**
+  - Diagnóstico e correção no modal de edição (`abrirModalCadastroCompleto` em `cadastros-view.js`): resolução de incompatibilidade de casing entre API (`'Cliente'`, `'Fornecedor'`, `'Ambos'`) e atributos HTML dos options, garantindo pré-seleção correta do tipo real ao editar e eliminando o risco de sobrescrever fornecedores como clientes por engano.
+  - Normalização preventiva em badges de listagem, botão de frota e filtros de clientes para orçamentos e frotas (`orcamentos-view.js`).
+  - Cumprimento rigoroso da Regra 12 de Versionamento PWA: incremento do `CACHE_NAME` para `'emc-soldas-v3.1'` em `frontend/sw.js` e atualização dos sufixos de cache-busting `?v=3.1` em todas as tags `<script>` e `<link>` do `frontend/index.html`.
+
 
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
