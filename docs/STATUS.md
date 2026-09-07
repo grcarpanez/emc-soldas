@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-01 (Validações de Usabilidade e Verificações no Frontend PWA)  
+**Última Atualização:** 2026-09-07 (Validações de Usabilidade, Validação Estrita de Placas e Governança de Planejamento)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
 
@@ -225,6 +225,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Interface do frontend PWA atualizada na aba Gestão de Equipe com modal unificado de perfil e matriz de 10 toggles dinâmicos, botões diretos de ativação/desativação e tag de auto-identificação `[VOCÊ]` com botão desabilitado para o usuário da sessão (157 testes automatizados aprovados com 100% de sucesso).
   - **Sincronização em Tempo Real, Parser Estruturado e Segregação Estrita no Log Viewer:** Auto-sincronização do manifesto no método `list` de `ControleArquivoLogViewSet` garantindo exibição instantânea do arquivo do dia atual no topo da tabela, implementação de parser semântico estruturado em `backend/apps/administracao/services.py` com classificação primária definitiva (`AUDIT`, `SEGURANCA`, `ERROR`, `WARNING`, `HTTP`, `INFO`, `DEBUG`), eliminação de falsos positivos em badges causados por termos em query strings de URLs, e enriquecimento do modal com seletor completo de 7 categorias e badges semânticos (*Industrial Integrity*) precisos (157 testes automatizados aprovados com 100% de sucesso).
   - **Blindagem e Isolamento Estrito de Logs em Testes Unitários (Test Isolation):** Refatoração da suíte de testes de administração para utilizar arquivos isolados com data fictícia (`app-2099-12-31.log`) e limpeza em bloco `try/finally`, eliminando qualquer risco de sobrescrita ou truncamento do arquivo real de log do dia atual (`app-YYYY-MM-DD.log`) durante execuções de testes.
+- [x] **Validação Estrita e Máscara Universal de Placas (Padrões Antigo e Mercosul com Formato ###-####):**
+  - Implementação de máscara universal automática com hífen `###-####` tanto para o padrão antigo (`AAA-0000`) quanto Mercosul (`AAA-0A00`): o hífen é inserido **100% automaticamente** após a 3ª letra sem exigir que o operador digite `-`.
+  - Backend: Função utilitária `validar_placa(valor)` em `backend/core/utils.py` com sanitização e regex rigorosa (`^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$`), validação defensiva em `apps/cadastros/serializers.py` (`validate_placa`) normalizando e gravando sempre com hífen `###-####`, retornando `400 Bad Request` semântico para entradas inválidas, e testes unitários automatizados cobrindo placas válidas e inválidas (16 testes de cadastros e 157 testes globais aprovados com 100% de sucesso).
+  - Frontend: Função utilitária `formatarPlacaVeiculo` com restrição dinâmica caractere a caractere no evento `input` (dígitos 0-2: letras; dígito 3: número; dígito 4: letra ou número; dígitos 5-6: números; máximo de 8 caracteres formatados com `-`), validação em tempo real e bloqueio de envio com Toast industrial nos modais de equipamento e frota em `cadastros-view.js`.
+- [x] **Instituição da Governança de Planejamento Mandatória e Histórico Perpétuo (`Planejamento/`):**
+  - Atualização do `AGENTS.md` com Regra de Ouro inegociável: proibição terminante de qualquer alteração de código ou configuração sem a prévia elaboração de *Implementation Plan* estruturado e aprovação formal explícita (`Proceed`) do usuário.
+  - Criação da pasta `Planejamento/` na raiz do sistema para versionamento perpétuo de todos os planos de implementação, contendo contexto, decisões arquiteturais, checklist de arquivos, testes e transcrição da aprovação do usuário (`Planejamento/YYYY-MM-DD_NN_nome_da_tarefa.md`).
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

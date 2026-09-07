@@ -260,7 +260,7 @@ window.CadastrosView = {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-group">
                 <label class="form-label" for="frota-equip-placa">Placa (Antiga / Mercosul)</label>
-                <input type="text" id="frota-equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC1D23">
+                <input type="text" id="frota-equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC-1D23">
               </div>
               <div class="form-group">
                 <label class="form-label" for="frota-equip-identificacao">Identificação / Chassi / Frota</label>
@@ -287,7 +287,7 @@ window.CadastrosView = {
             }
 
             if (placa && !window.EMCUtils.validarPlacaVeiculo(placa)) {
-              window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23).', 'error');
+              window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23).', 'error');
               return false;
             }
 
@@ -1015,7 +1015,7 @@ window.CadastrosView = {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="equip-placa">Placa (Antiga / Mercosul)</label>
-              <input type="text" id="equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC1D23" value="${equip?.placa || ''}">
+              <input type="text" id="equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC-1D23" value="${equip?.placa || ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="equip-identificacao">Identificação / Chassi / Frota</label>
@@ -1052,7 +1052,7 @@ window.CadastrosView = {
         }
 
         if (placa && !window.EMCUtils.validarPlacaVeiculo(placa)) {
-          window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23).', 'error');
+          window.EMCUtils.showToast('Placa inválida. O formato deve ser Padrão Antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23).', 'error');
           return false;
         }
 

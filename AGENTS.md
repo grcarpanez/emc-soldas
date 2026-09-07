@@ -44,6 +44,7 @@ Este arquivo estabelece o contexto arquitetural, regras de segurança, padrões 
 / (raiz do projeto)
 ├── AGENTS.md                  # Contexto operacional e protocolo para IA
 ├── .gitignore                 # Arquivos e pastas ignorados pelo controle de versão
+├── Planejamento/              # Planos de implementação e registros de aprovação (Proceed)
 ├── docs/                      # Documentação de especificação e arquivos vivos
 │   ├── FSD.md                 # Documento de Especificação Funcional completo
 │   ├── DESIGN.md              # Guia do Design System (Industrial Integrity)
@@ -159,25 +160,68 @@ Este arquivo estabelece o contexto arquitetural, regras de segurança, padrões 
 
 ---
 
-## 7. Protocolo dos Arquivos Vivos
+## 7. Protocolo de Governança, Planejamento Mandatório e Arquivos Vivos
 
-Todo trabalho neste repositório deve seguir rigorosamente o seguinte ciclo:
+### 7.1 REGRA DE OURO MANDATÓRIA (INEGOCIÁVEL): CRIAÇÃO PRÉVIA DE IMPLEMENTATION PLAN
+> [!IMPORTANT]
+> **É EXPRESSAMENTE E TERMINANTEMENTE PROIBIDO alterar qualquer linha de código, arquivo de configuração, script ou banco de dados sem antes:**
+> 1. Elaborar um **Implementation Plan** completo, estruturado e minucioso.
+> 2. Apresentar o plano ao usuário e **aguardar sua aprovação explícita (`Proceed`)**.
+> 3. Salvar o plano aprovado na pasta `Planejamento/` na raiz do repositório.
+>
+> **Nenhuma modificação pode ser executada sem a autorização prévia e inequívoca do usuário.**
 
-### Antes de iniciar qualquer trabalho:
-1. Ler `docs/FSD.md`.
-2. Ler `docs/DESIGN.md`.
-3. Ler `docs/INSUMOS.md`.
-4. Ler `docs/PLANO.md`.
-5. Ler `docs/STATUS.md`.
-6. Ler `docs/ERROS.md`.
+---
+
+### 7.2 Rotina de Salvamento de Planos e Aprovações (`Planejamento/`)
+Todos os planos de implementação, contendo o escopo, arquivos afetados, decisões arquiteturais, checklist de testes e o registro formal de aprovação do usuário (`Proceed`), devem ser salvos e mantidos permanentemente no diretório `Planejamento/`:
+- **Padrão de nomenclatura obrigatório:** `Planejamento/YYYY-MM-DD_NN_nome_da_tarefa.md`
+  - Exemplo: `Planejamento/2026-09-07_01_validacao_placas_e_governanca.md`
+- **Conteúdo mínimo obrigatório de cada arquivo de planejamento:**
+  1. **Metadados:** Data, Autor, Status (`Pendente`, `Em Andamento`, `Concluído`) e Registro do Proceed do Usuário (data/hora e transcrição da mensagem de aprovação).
+  2. **Contexto e Objetivos:** O que motivou a demanda e qual o objetivo de negócio/técnico.
+  3. **Decisões Técnicas e Arquiteturais:** Modelagem, segurança, endpoints, componentes frontend e contratos de dados.
+  4. **Arquivos a Modificar / Criar:** Lista completa dos arquivos que serão tocados.
+  5. **Plano de Verificação e Testes:** Testes unitários, testes manuais e validações esperadas.
+  6. **Relatório de Execução (Pós-conclusão):** Resumo do que foi executado e evidências de validação.
+
+---
+
+### 7.3 Ciclo de Trabalho Operacional (Passo a Passo)
+
+Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
+
+#### FASE 1: Análise e Planejamento Prévio (Sem Alterar Código)
+1. Ler os arquivos de contexto e especificação na pasta `docs/`:
+   - `docs/FSD.md` (Especificação Funcional)
+   - `docs/DESIGN.md` (Design System Industrial Integrity)
+   - `docs/INSUMOS.md` (Inventário de Insumos)
+   - `docs/PLANO.md` (Plano Master de Fases)
+   - `docs/STATUS.md` (Arquivo vivo de status atual)
+   - `docs/ERROS.md` (Arquivo vivo de histórico de erros)
+2. Elaborar o **Implementation Plan** detalhado.
+3. Submeter o plano para revisão do usuário e **PARAR**.
+4. **Aguardar a aprovação explícita do usuário (`Proceed`)**. Não avançar para codificação sem essa confirmação.
+5. Arquivar o plano com status aprovado em `Planejamento/YYYY-MM-DD_NN_nome_da_tarefa.md`.
+
+#### FASE 2: Execução e Verificação Técnica
+1. Executar as modificações de código e configurações estritamente alinhadas ao plano aprovado.
+2. Executar a suíte de testes automatizados (`python backend/manage.py test backend/`) e garantir 100% de aprovação.
+3. Validar a integridade visual e funcional conforme `docs/DESIGN.md` e regras de segurança.
+
+#### FASE 3: Conclusão, Documentação Viva e Reporte
+1. **Atualizar `docs/STATUS.md`:**
+   - Registrar as novas funcionalidades e ajustes no checklist da respectiva fase.
+   - Atualizar a data de última modificação e o status do progresso.
+2. **Atualizar `docs/ERROS.md` (se houver incidentes):**
+   - Registrar qualquer erro, regressão ou lição técnica identificada (sintoma, causa raiz, solução aplicada e como evitar).
+3. **Atualizar o registro em `Planejamento/`:**
+   - Marcar o plano como `Concluído` e registrar os resultados obtidos.
+4. **Informar detalhadamente ao usuário:**
+   - O que foi construído e alterado.
+   - Roteiro prático com comandos e ações para testar/validar a entrega.
 
 > **Atenção:** Use sempre caminhos relativos à raiz do projeto. Não transformar estes caminhos em links absolutos. Não usar links `file:///`. Não registrar caminhos locais da máquina atual dentro do `AGENTS.md` ou nos arquivos de documentação.
-
-### Ao terminar qualquer trabalho:
-1. Atualizar `docs/STATUS.md` com o progresso real da fase e checklist.
-2. Registrar erros encontrados e soluções aplicadas em `docs/ERROS.md`, se houver.
-3. Informar ao usuário detalhadamente o que foi construído.
-4. Informar como testar ou validar a entrega com comandos claros e roteiro prático.
 
 ---
 

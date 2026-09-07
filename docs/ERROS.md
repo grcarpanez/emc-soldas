@@ -293,6 +293,20 @@ Utilize o padrão abaixo para cada novo erro registrado:
 - **Solução aplicada:** Implementação da função utilitária `converter_periodo_para_datetime_range(data_inicio, data_fim)` gerando um range timezone-aware cobrindo de `00:00:00` a `23:59:59.999999` (`America/Sao_Paulo`), e substituição de `data_pagamento__date__range` por `data_pagamento__range=(dt_inicio, dt_fim)` em `DashboardService`, `DREService` e `DivergenciasConciliacaoService`. A suíte de 157 testes automatizados passou com 100% de aprovação.
 - **Como evitar no futuro:** Sempre que filtrar intervalos de datas sobre campos `DateTimeField`, converter o período em range datetime timezone-aware em vez de utilizar o lookup de data `__date__range`.
 
+---
+
+## 2026-09-07 - Inconsistência de Formatos Livres e Risco de Entrada de Placas Inválidas
+
+- **Sintoma:** O campo `placa` no cadastro de equipamentos/veículos aceitava strings arbitrárias sem restrição estrutural de caracteres, permitindo a gravação de placas incompletas ou com formatos fora do padrão veicular brasileiro.
+- **Causa:** Ausência de validação específica de regex no serializer de equipamentos e de máscara restritiva no frontend para o formato veicular brasileiro (padrão antigo `AAA-0000` e padrão Mercosul `AAA0A00`).
+- **Solução aplicada:**
+  1. Criação da função utilitária `validar_placa(valor)` em `backend/core/utils.py` com sanitização para maiúsculas e validação regex estrita: `^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$`.
+  2. Implementação de validação defensiva em `apps/cadastros/serializers.py` (`validate_placa`) retornando `400 Bad Request` semântico.
+  3. Adição de máscara de digitação em tempo real no frontend (`frontend/assets/js/utils.js`: `formatarPlacaVeiculo`) com restrição posicional estrita: posições 0-2 exclusivamente letras, posição 3 número, posição 4 letra ou número, e posições 5-6 números.
+  4. Validação e disparo de toast industrial no submit dos modais de cadastro de equipamento e frota em `cadastros-view.js`.
+- **Como evitar no futuro:** Campos opcionais com padrões normativos (como placas, documentos, CEP, CNPJ/CPF) devem sempre ter validação simétrica em duas camadas: máscara reativa no frontend para guiar o operador e validação estrita no backend REST para garantir a integridade dos dados.
+
+
 
 
 

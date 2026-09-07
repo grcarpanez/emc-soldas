@@ -323,7 +323,7 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         }
         res_1 = self.client.post('/api/equipamentos/', payload_1, format='json')
         self.assertEqual(res_1.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res_1.data['placa'], 'ABC1234')
+        self.assertEqual(res_1.data['placa'], 'ABC-1234')
         self.assertEqual(res_1.data['identificacao'], 'CAMINHAO PIPA MERCEDES 1620')
 
         # Placa Mercosul
@@ -334,7 +334,7 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         }
         res_2 = self.client.post('/api/equipamentos/', payload_2, format='json')
         self.assertEqual(res_2.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res_2.data['placa'], 'BRA2E19')
+        self.assertEqual(res_2.data['placa'], 'BRA-2E19')
 
         # Placas inválidas rejeitadas com 400 Bad Request
         placas_invalidas = [
@@ -353,7 +353,8 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
             }
             res_inv = self.client.post('/api/equipamentos/', payload_inv, format='json')
             self.assertEqual(res_inv.status_code, status.HTTP_400_BAD_REQUEST, f"Placa {placa_inv} deveria ter sido rejeitada.")
-            self.assertIn('placa', res_inv.data)
+            detalhes = res_inv.data.get('details', res_inv.data)
+            self.assertIn('placa', detalhes)
 
     def test_transferencia_historica_de_equipamento(self):
         """

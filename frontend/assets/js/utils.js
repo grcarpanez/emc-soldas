@@ -166,7 +166,8 @@ function validarPlacaVeiculo(valor) {
  * - 4º dígito: Número (0-9)
  * - 5º dígito: Letra ou Número (A-Z ou 0-9)
  * - 6º e 7º dígitos: Números (0-9)
- * Padrão Antigo é formatado como AAA-0000; Mercosul como AAA0A00.
+ * Máscara universal automática com hífen (###-####): Antigo AAA-0000 e Mercosul AAA-0A00.
+ * O hífen é inserido automaticamente após a 3ª letra sem exigir que o usuário digite '-'.
  * @param {string} valor 
  * @returns {string}
  */
@@ -197,12 +198,9 @@ function formatarPlacaVeiculo(valor) {
     }
   }
 
-  // Se o 5º caractere for número (padrão antigo AAA-0000), insere hífen
-  if (resultado.length > 4) {
-    const quintoChar = resultado[4];
-    if (/\d/.test(quintoChar)) {
-      return resultado.slice(0, 3) + '-' + resultado.slice(3);
-    }
+  // Insere hífen automaticamente após as 3 primeiras letras (padrão universal ###-####)
+  if (resultado.length > 3) {
+    return resultado.slice(0, 3) + '-' + resultado.slice(3);
   }
   return resultado;
 }

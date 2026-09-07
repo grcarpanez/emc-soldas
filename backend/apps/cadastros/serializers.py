@@ -290,10 +290,10 @@ class EquipamentoSerializer(serializers.ModelSerializer):
             placa_limpa = sanitizar_texto_maiusculo(value).replace("-", "").replace(" ", "")
             if not validar_placa(placa_limpa):
                 raise serializers.ValidationError(
-                    "Placa inválida. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC1D23): "
+                    "Placa inválida. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23): "
                     "3 letras iniciais, 4º dígito numérico, 5º dígito letra ou número e 2 dígitos finais numéricos."
                 )
-            return placa_limpa
+            return f"{placa_limpa[:3]}-{placa_limpa[3:]}"
         return value
 
     def validate_identificacao(self, value):
