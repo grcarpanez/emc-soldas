@@ -45,6 +45,27 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 # Hosts Permitidos (Aceita qualquer IP local em modo DEBUG/Dev)
 ALLOWED_HOSTS = ['*'] if DEBUG else os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
+# Origens Confiáveis para CSRF (Suporte a acesso via rede local / Wi-Fi no notebook/mobile)
+CSRF_TRUSTED_ORIGINS = [
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+]
+if DEBUG:
+    import socket
+    try:
+        host_ips = socket.gethostbyname_ex(socket.gethostname())[2]
+        for ip in host_ips:
+            origin = f'http://{ip}:8000'
+            if origin not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(origin)
+    except Exception:
+        pass
+    if 'http://192.168.2.138:8000' not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append('http://192.168.2.138:8000')
+
+CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
+CORS_ALLOW_CREDENTIALS = True
+
 # Definição das Aplicações Instaladas
 INSTALLED_APPS = [
     # Django Core
