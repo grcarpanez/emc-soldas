@@ -252,6 +252,8 @@ class EquipamentoSerializer(serializers.ModelSerializer):
     cliente_atual = serializers.SerializerMethodField()
     cliente_atual_nome = serializers.SerializerMethodField()
     cliente_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    em_patio = serializers.SerializerMethodField()
+    orcamento_em_execucao = serializers.SerializerMethodField()
 
     class Meta:
         model = Equipamento
@@ -263,6 +265,8 @@ class EquipamentoSerializer(serializers.ModelSerializer):
             'cliente_atual',
             'cliente_atual_nome',
             'cliente_id',
+            'em_patio',
+            'orcamento_em_execucao',
             'created_at',
             'updated_at',
             'created_by_id',
@@ -284,6 +288,24 @@ class EquipamentoSerializer(serializers.ModelSerializer):
     def get_cliente_atual_nome(self, obj):
         vinculo_ativo = obj.historico_clientes.filter(is_ativo=True).select_related('cliente').first()
         return vinculo_ativo.cliente.nome_razao if vinculo_ativo else None
+
+    def get_em_patio(self, obj):
+        return obj.orcamentos.filter(
+            status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+            deleted_at__isnull=True
+        ).exists()
+
+    def get_orcamento_em_execucao(self, obj):
+        orc = obj.orcamentos.filter(
+            status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+            deleted_at__isnull=True
+        ).order_by('-id').first()
+        if orc:
+            return {
+                "id": orc.id,
+                "status_operacional": orc.status_operacional
+            }
+        return None
 
     def validate_placa(self, value):
         if value:

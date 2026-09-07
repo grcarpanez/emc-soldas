@@ -486,6 +486,133 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         self.assertEqual(res_hist.data[1]['cliente_id'], cliente_a.id)
         self.assertFalse(res_hist.data[1]['is_ativo'])
 
+    def test_filtro_equipamentos_por_proprietario_e_nao_vinculados(self):
+        """Valida filtragem de equipamentos por cliente_id numérico e por sem_proprietario."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        cliente_x = ClienteFornecedor.objects.create(
+            nome_razao="MINERADORA X LTDA",
+            telefone="31988881111"
+        )
+        cliente_y = ClienteFornecedor.objects.create(
+            nome_razao="TRANSPORTADORA Y LTDA",
+            telefone="31988882222"
+        )
+
+        eq_x = Equipamento.objects.create(
+            placa="EQX-1111",
+            identificacao="CARRETA X",
+            descricao="Carreta Basculante"
+        )
+        ClienteEquipamento.objects.create(
+            cliente=cliente_x,
+            equipamento=eq_x,
+            is_ativo=True
+        )
+
+        eq_y = Equipamento.objects.create(
+            placa="EQY-2222",
+            identificacao="CAMINHAO Y",
+            descricao="Caminhão Traçado"
+        )
+        ClienteEquipamento.objects.create(
+            cliente=cliente_y,
+            equipamento=eq_y,
+            is_ativo=True
+        )
+
+        eq_avulso = Equipamento.objects.create(
+            placa="AVU-3333",
+            identificacao="GERADOR AVULSO",
+            descricao="Gerador Oficina"
+        )
+
+        # 1. Filtro por cliente_x
+        res_x = self.client.get(f'/api/equipamentos/?cliente_id={cliente_x.id}')
+        self.assertEqual(res_x.status_code, status.HTTP_200_OK)
+        ids_x = [e['id'] for e in res_x.data['results']]
+        self.assertIn(eq_x.id, ids_x)
+        self.assertNotIn(eq_y.id, ids_x)
+        self.assertNotIn(eq_avulso.id, ids_x)
+
+        # 2. Filtro por sem_proprietario
+        res_sem = self.client.get('/api/equipamentos/?cliente_id=sem_proprietario')
+        self.assertEqual(res_sem.status_code, status.HTTP_200_OK)
+        ids_sem = [e['id'] for e in res_sem.data['results']]
+        self.assertIn(eq_avulso.id, ids_sem)
+        self.assertNotIn(eq_x.id, ids_sem)
+        self.assertNotIn(eq_y.id, ids_sem)
+
+    def test_filtro_equipamentos_no_patio_com_orcamento_em_execucao(self):
+        """Valida que no_patio=true retorna apenas equipamentos com orçamento ativo na oficina."""
+        from apps.orcamentos.models import Orcamento
+
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao="VALE MINERACOES S.A.",
+            telefone="31977776666"
+        )
+
+        eq_em_patio = Equipamento.objects.create(
+            placa="PAT-1010",
+            identificacao="TRATOR EM PATIO",
+            descricao="Reforma de Esteira"
+        )
+        ClienteEquipamento.objects.create(
+            cliente=cliente,
+            equipamento=eq_em_patio,
+            is_ativo=True
+        )
+
+        eq_fora = Equipamento.objects.create(
+            placa="FOR-2020",
+            identificacao="TRATOR ENTREGUE",
+            descricao="Serviço Concluído"
+        )
+        ClienteEquipamento.objects.create(
+            cliente=cliente,
+            equipamento=eq_fora,
+            is_ativo=True
+        )
+
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.orcamentos.models import Orcamento
+
+        # Orçamento ativo para eq_em_patio
+        orc_ativo = Orcamento.objects.create(
+            cliente=cliente,
+            equipamento=eq_em_patio,
+            data_validade=timezone.localdate() + timedelta(days=15),
+            status_operacional='EM_EXECUCAO',
+            status_financeiro='A_FATURAR',
+            created_by_id=self.operador_comercial.id
+        )
+
+        # Orçamento concluído para eq_fora
+        orc_concluido = Orcamento.objects.create(
+            cliente=cliente,
+            equipamento=eq_fora,
+            data_validade=timezone.localdate() + timedelta(days=15),
+            status_operacional='CONCLUIDO',
+            status_financeiro='FATURADO',
+            created_by_id=self.operador_comercial.id
+        )
+
+        # Filtro ?no_patio=true
+        res = self.client.get('/api/equipamentos/?no_patio=true')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        ids = [e['id'] for e in res.data['results']]
+        self.assertIn(eq_em_patio.id, ids)
+        self.assertNotIn(eq_fora.id, ids)
+
+        # Verifica dados de serialização de pátio
+        item_patio = next(e for e in res.data['results'] if e['id'] == eq_em_patio.id)
+        self.assertTrue(item_patio['em_patio'])
+        self.assertIsNotNone(item_patio['orcamento_em_execucao'])
+        self.assertEqual(item_patio['orcamento_em_execucao']['id'], orc_ativo.id)
+
 
 class AnexoGeralClienteAPITestCase(CadastrosBaseTestCase):
     """Testes de Upload e Download Seguro de Anexos de Clientes."""

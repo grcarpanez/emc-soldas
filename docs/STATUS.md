@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-07 (Correção da Edição de Tipo de Clientes/Fornecedores, PWA v3.1 e Inclusão Semântica de 'Ambos')  
+**Última Atualização:** 2026-09-07 (Painel de Pátio e Frota de Equipamentos, Filtro por Proprietário e PWA v3.2)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
 
@@ -249,6 +249,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Diagnóstico e correção no modal de edição (`abrirModalCadastroCompleto` em `cadastros-view.js`): resolução de incompatibilidade de casing entre API (`'Cliente'`, `'Fornecedor'`, `'Ambos'`) e atributos HTML dos options, garantindo pré-seleção correta do tipo real ao editar e eliminando o risco de sobrescrever fornecedores como clientes por engano.
   - Normalização preventiva em badges de listagem, botão de frota e filtros de clientes para orçamentos e frotas (`orcamentos-view.js`).
   - Cumprimento rigoroso da Regra 12 de Versionamento PWA: incremento do `CACHE_NAME` para `'emc-soldas-v3.1'` em `frontend/sw.js` e atualização dos sufixos de cache-busting `?v=3.1` em todas as tags `<script>` e `<link>` do `frontend/index.html`.
+- [x] **Painel Operacional de Frota e Pátio (Filtro por Proprietário, Flag 'No Pátio' e PWA v3.2):**
+  - Transformação da aba de Equipamentos em um painel completo de controle de frota e oficina, com barra integrada de 4 elementos: busca textual expansiva (`flex: 1; min-width: 220px;`), combobox dinâmica de proprietários (ordenada alfabeticamente com opção de não vinculados), toggle industrial `NO PÁTIO` e botão de novo cadastro.
+  - Backend (`EquipamentoViewSet` e `EquipamentoSerializer`): suporte a `cliente_id` (com `sem_proprietario`), filtro `no_patio` cruzando com orçamentos ativos (`status_operacional__in=['APROVADO', 'EM_EXECUCAO']`), e campos computados `em_patio` e `orcamento_em_execucao`.
+  - Frontend: badge visual de destaque `[NO PÁTIO (#X)]` na coluna de Proprietário da tabela.
+  - Testes unitários dedicados em `apps/cadastros/tests.py` (19 testes de cadastros e 160 testes globais aprovados com 100% de sucesso).
+  - Versionamento PWA: cache sincronizado para `emc-soldas-v3.2` em `frontend/sw.js` e tags atualizadas com `?v=3.2` em `frontend/index.html`.
+
 
 
 

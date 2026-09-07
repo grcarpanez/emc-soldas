@@ -913,9 +913,17 @@ window.CadastrosView = {
   async renderEquipamentos(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-equip-busca" class="form-control" placeholder="BUSCAR POR PLACA, IDENTIFICAÇÃO OU DESCRIÇÃO..." style="max-width: 400px;">
-          <button class="btn btn-primary" id="btn-novo-equipamento">+ NOVO EQUIPAMENTO / MÁQUINA</button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-equip-busca" class="form-control" placeholder="BUSCAR POR PLACA, IDENTIFICAÇÃO OU DESCRIÇÃO..." style="flex: 1; min-width: 220px;">
+          <select id="filtro-equip-proprietario" class="form-control" style="width: 250px; min-width: 220px; flex-shrink: 0;">
+            <option value="">TODOS OS PROPRIETÁRIOS</option>
+            <option value="sem_proprietario">NÃO VINCULADOS</option>
+          </select>
+          <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 7px 12px; background: var(--color-surface-container-high); border: 1px solid var(--color-outline-variant); flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; text-transform: uppercase; user-select: none;">
+            <input type="checkbox" id="filtro-equip-no-patio" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-rust-orange);">
+            NO PÁTIO
+          </label>
+          <button class="btn btn-primary" id="btn-novo-equipamento" style="white-space: nowrap; flex-shrink: 0;">+ NOVO EQUIPAMENTO / MÁQUINA</button>
         </div>
       </div>
 
@@ -940,8 +948,29 @@ window.CadastrosView = {
 
     document.getElementById('btn-novo-equipamento')?.addEventListener('click', () => this.abrirModalEquipamento());
     document.getElementById('filtro-equip-busca')?.addEventListener('input', () => this.carregarListaEquipamentos());
+    document.getElementById('filtro-equip-proprietario')?.addEventListener('change', () => this.carregarListaEquipamentos());
+    document.getElementById('filtro-equip-no-patio')?.addEventListener('change', () => this.carregarListaEquipamentos());
 
+    this.carregarSelectProprietariosEquip();
     await this.carregarListaEquipamentos();
+  },
+
+  async carregarSelectProprietariosEquip() {
+    const select = document.getElementById('filtro-equip-proprietario');
+    if (!select) return;
+    try {
+      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=1000`);
+      const clientes = res.results || res || [];
+      clientes.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+      clientes.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nome_razao;
+        select.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('Erro ao carregar proprietários para filtro de equipamentos:', e);
+    }
   },
 
   async carregarListaEquipamentos() {
@@ -949,26 +978,40 @@ window.CadastrosView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-equip-busca')?.value.trim() || '';
+    const proprietario = document.getElementById('filtro-equip-proprietario')?.value || '';
+    const noPatio = document.getElementById('filtro-equip-no-patio')?.checked;
 
     try {
-      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}?search=${encodeURIComponent(busca)}`);
+      const query = new URLSearchParams();
+      if (busca) query.append('search', busca);
+      if (proprietario) query.append('cliente_id', proprietario);
+      if (noPatio) query.append('no_patio', 'true');
+
+      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}?${query.toString()}`);
       const lista = res.results || res || [];
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum equipamento cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum equipamento encontrado para os filtros selecionados.</td></tr>';
         return;
       }
 
       let html = '';
       lista.forEach((item) => {
         const dono = item.cliente_atual_nome || 'NÃO VINCULADO';
+        const chipPatio = item.em_patio && item.orcamento_em_execucao
+          ? ` <span class="status-chip warning" style="font-size: 10px; padding: 2px 5px; font-weight: 700;" title="Orçamento em Execução">NO PÁTIO (#${item.orcamento_em_execucao.id})</span>`
+          : '';
+
         html += `
           <tr>
             <td class="mono-text">#${item.id}</td>
             <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(item.placa ? window.EMCUtils.formatarPlacaVeiculo(item.placa) : '-')}</strong></td>
             <td class="mono-text">${window.EMCUtils.escapeHtml(item.identificacao || '-')}</td>
             <td>${window.EMCUtils.escapeHtml(item.descricao)}</td>
-            <td><span class="status-chip ${item.cliente_atual_nome ? 'info' : 'warning'}">${window.EMCUtils.escapeHtml(dono)}</span></td>
+            <td>
+              <span class="status-chip ${item.cliente_atual_nome ? 'info' : 'warning'}">${window.EMCUtils.escapeHtml(dono)}</span>
+              ${chipPatio}
+            </td>
             <td style="text-align: right; white-space: nowrap;">
               <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">HISTÓRICO</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarEquipamento(${item.id})">EDITAR</button>

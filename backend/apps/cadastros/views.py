@@ -282,10 +282,29 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
 
         cliente_id = self.request.query_params.get('cliente_id')
         if cliente_id:
-            queryset = queryset.filter(
-                historico_clientes__cliente_id=cliente_id,
-                historico_clientes__is_ativo=True
-            )
+            cliente_id_str = str(cliente_id).strip().lower()
+            if cliente_id_str in ('sem_proprietario', 'nao_vinculado', 'nao_vinculados', 'sem_dono', 'null', 'none'):
+                # Equipamentos que NÃO possuem nenhum vínculo ativo de proprietário
+                queryset = queryset.exclude(historico_clientes__is_ativo=True)
+            else:
+                try:
+                    cid = int(cliente_id_str)
+                    queryset = queryset.filter(
+                        historico_clientes__cliente_id=cid,
+                        historico_clientes__is_ativo=True
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+        no_patio = self.request.query_params.get('no_patio')
+        if no_patio in ('true', '1', 'True', True):
+            from apps.orcamentos.models import Orcamento
+            ids_no_patio = Orcamento.objects.filter(
+                equipamento__isnull=False,
+                status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+                deleted_at__isnull=True
+            ).values_list('equipamento_id', flat=True)
+            queryset = queryset.filter(id__in=ids_no_patio)
 
         return queryset.order_by('placa', 'identificacao')
 
