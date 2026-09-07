@@ -232,6 +232,9 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Instituição da Governança de Planejamento Mandatória e Histórico Perpétuo (`Planejamento/`):**
   - Atualização do `AGENTS.md` com Regra de Ouro inegociável: proibição terminante de qualquer alteração de código ou configuração sem a prévia elaboração de *Implementation Plan* estruturado e aprovação formal explícita (`Proceed`) do usuário.
   - Criação da pasta `Planejamento/` na raiz do sistema para versionamento perpétuo de todos os planos de implementação, contendo contexto, decisões arquiteturais, checklist de arquivos, testes e transcrição da aprovação do usuário (`Planejamento/YYYY-MM-DD_NN_nome_da_tarefa.md`).
+- [x] **Governança Perpétua de Cache PWA e Versionamento Sincronizado de Assets (`v2.8`):**
+  - Instituição da Regra Mandatória 12 no `AGENTS.md` e registro de lição técnica em `docs/ERROS.md`: toda e qualquer alteração em JS/CSS obriga a sincronização do `CACHE_NAME` no `frontend/sw.js` e a atualização dos sufixos de query string `?v=X.Y` em todas as tags `<script>` e `<link>` do `frontend/index.html`.
+  - Execução imediata da versão `v2.8` em `sw.js` e `index.html`, eliminando retenção de código desatualizado por caches stale no navegador do usuário e assegurando a atualização imediata da máscara universal de placas.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

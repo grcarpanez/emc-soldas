@@ -306,6 +306,19 @@ Utilize o padrão abaixo para cada novo erro registrado:
   4. Validação e disparo de toast industrial no submit dos modais de cadastro de equipamento e frota em `cadastros-view.js`.
 - **Como evitar no futuro:** Campos opcionais com padrões normativos (como placas, documentos, CEP, CNPJ/CPF) devem sempre ter validação simétrica em duas camadas: máscara reativa no frontend para guiar o operador e validação estrita no backend REST para garantir a integridade dos dados.
 
+---
+
+## 2026-09-07 - Retenção de Scripts Antigos no Navegador por Cache Estático Stale do Service Worker (PWA)
+
+- **Sintoma:** Após implementar melhorias na máscara de placas no arquivo `utils.js`, o navegador do usuário continuava executando a função legada (permitindo digitar strings exclusivamente com letras sem colocar hífen e adicionando hífen em números), ignorando o novo código disponível no servidor.
+- **Causa:** O Service Worker (`frontend/sw.js`) utiliza estratégia de cache estático com `caches.match()` prioritário sob a versão estática `emc-soldas-v2.7`. Como o `CACHE_NAME` não havia sido incrementado e o arquivo `index.html` não possuía sufixos de versionamento nas tags `<script>`, o navegador utilizava os arquivos JS desatualizados gravados no Cache Storage local.
+- **Solução aplicada:**
+  1. Incremento de versão em `frontend/sw.js` para `CACHE_NAME = 'emc-soldas-v2.8'` com purga imediata de versões anteriores no evento `activate`.
+  2. Implementação de cache-busting em `frontend/index.html`, sufixando todas as tags `<script src="...?v=2.8">` e folhas de estilo `<link rel="stylesheet" href="...?v=2.8">`.
+  3. Instituição de regra mandatória na Seção 6 e 7 do `AGENTS.md` tornando obrigatório o incremento de versão no `sw.js` e `index.html` em toda alteração de frontend, acompanhado de instrução de reload forçado (`Ctrl + Shift + R`).
+- **Como evitar no futuro:** Nunca alterar arquivos JS/CSS em PWAs com Service Worker sem simultaneamente incrementar a versão em `sw.js` e atualizar os sufixos `?v=X.Y` no `index.html`.
+
+
 
 
 

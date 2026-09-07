@@ -157,6 +157,13 @@ Este arquivo estabelece o contexto arquitetural, regras de segurança, padrões 
 11. **Logs Físicos Seguros e Não-Vazamento de Tracebacks:**
     - Erros e falhas graves são gravados exclusivamente em arquivos físicos diários (`backend/logs/app-YYYY-MM-DD.log`), gerenciados pela tabela de manifesto `ControleArquivoLog`.
     - Respostas de erro 500 da API REST devolvem apenas JSON amigável e padronizado (`{ "status": "error", "message": "Ocorreu um erro interno. Tente novamente." }`), sem vazar o Traceback técnico do Python para o cliente.
+12. **Política Mandatória de Versionamento de Assets Frontend e Cache do Service Worker (PWA):**
+    - O sistema opera como Progressive Web App (PWA) client-side com cache de assets estáticos offline via Service Worker (`frontend/sw.js`).
+    - Toda e qualquer alteração realizada em arquivos JavaScript (`frontend/assets/js/`) ou folhas de estilo CSS (`frontend/assets/css/`) exige **obrigatoriamente**:
+      1. **Incremento de Versão no Service Worker:** Atualizar a constante `CACHE_NAME` no `frontend/sw.js` (ex: de `'emc-soldas-v2.7'` para `'emc-soldas-v2.8'`), garantindo que o evento `activate` expurgue caches obsoletos.
+      2. **Cache-Busting no Shell SPA:** Atualizar o sufixo de query string (`?v=X.Y`) em todas as tags `<script src="...">` e `<link rel="stylesheet" href="...">` no arquivo `frontend/index.html`.
+      3. **Instrução de Reload ao Usuário:** Orientar explicitamente o usuário a realizar um recarregamento forçado (`Ctrl + Shift + R` ou `Ctrl + F5`) no navegador para ativação imediata dos novos bundles.
+    - É terminantemente proibido entregar modificações em JS/CSS sem sincronizar a versão do `sw.js` e do `index.html`.
 
 ---
 
@@ -206,8 +213,11 @@ Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
 
 #### FASE 2: Execução e Verificação Técnica
 1. Executar as modificações de código e configurações estritamente alinhadas ao plano aprovado.
-2. Executar a suíte de testes automatizados (`python backend/manage.py test backend/`) e garantir 100% de aprovação.
-3. Validar a integridade visual e funcional conforme `docs/DESIGN.md` e regras de segurança.
+2. Se houver qualquer modificação em arquivos JavaScript (`frontend/assets/js/`) ou CSS (`frontend/assets/css/`), **obrigatoriamente**:
+   - Incrementar a versão `CACHE_NAME` em `frontend/sw.js` (ex: `v2.7` -> `v2.8`).
+   - Atualizar os sufixos de versão `?v=X.Y` no `frontend/index.html`.
+3. Executar a suíte de testes automatizados (`python backend/manage.py test backend/`) e garantir 100% de aprovação.
+4. Validar a integridade visual e funcional conforme `docs/DESIGN.md` e regras de segurança.
 
 #### FASE 3: Conclusão, Documentação Viva e Reporte
 1. **Atualizar `docs/STATUS.md`:**
@@ -219,7 +229,7 @@ Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
    - Marcar o plano como `Concluído` e registrar os resultados obtidos.
 4. **Informar detalhadamente ao usuário:**
    - O que foi construído e alterado.
-   - Roteiro prático com comandos e ações para testar/validar a entrega.
+   - Roteiro prático com comandos e ações para testar/validar a entrega (incluindo instrução de `Ctrl + Shift + R` caso o frontend tenha sido alterado).
 
 > **Atenção:** Use sempre caminhos relativos à raiz do projeto. Não transformar estes caminhos em links absolutos. Não usar links `file:///`. Não registrar caminhos locais da máquina atual dentro do `AGENTS.md` ou nos arquivos de documentação.
 
