@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-07 (Painel de Pátio e Frota de Equipamentos, Filtro por Proprietário e PWA v3.2)  
+**Última Atualização:** 2026-09-07 (Combobox Pesquisável de Proprietários, Painel de Pátio/Frota e PWA v3.3)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
 
@@ -255,6 +255,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Frontend: badge visual de destaque `[NO PÁTIO (#X)]` na coluna de Proprietário da tabela.
   - Testes unitários dedicados em `apps/cadastros/tests.py` (19 testes de cadastros e 160 testes globais aprovados com 100% de sucesso).
   - Versionamento PWA: cache sincronizado para `emc-soldas-v3.2` em `frontend/sw.js` e tags atualizadas com `?v=3.2` em `frontend/index.html`.
+- [x] **Combobox Pesquisável com Autocomplete Industrial para Proprietários (PWA v3.3):**
+  - Integração da combobox de proprietários com `window.EMCUtils.initSearchableSelect`, transformando o select estático em um componente pesquisável com digitação e autocomplete em tempo real (*Industrial Integrity*).
+  - Suporte a digitação imediata (`DIGITE PARA FILTRAR...`), navegação por teclado (`↑`, `↓`, `Enter`, `Esc`) e sincronização reativa ao selecionar qualquer cliente ou as opções de topo (`TODOS OS PROPRIETÁRIOS` e `NÃO VINCULADOS`), eliminando a rolagem manual em listas extensas de parceiros.
+  - Versionamento PWA: cache elevado para `emc-soldas-v3.3` no `sw.js` e tags de scripts/estilos atualizadas com `?v=3.3` no `index.html`.
+
 
 
 

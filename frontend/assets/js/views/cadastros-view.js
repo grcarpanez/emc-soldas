@@ -915,10 +915,12 @@ window.CadastrosView = {
       <div class="card mb-16">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
           <input type="text" id="filtro-equip-busca" class="form-control" placeholder="BUSCAR POR PLACA, IDENTIFICAÇÃO OU DESCRIÇÃO..." style="flex: 1; min-width: 220px;">
-          <select id="filtro-equip-proprietario" class="form-control" style="width: 250px; min-width: 220px; flex-shrink: 0;">
-            <option value="">TODOS OS PROPRIETÁRIOS</option>
-            <option value="sem_proprietario">NÃO VINCULADOS</option>
-          </select>
+          <div style="width: 270px; min-width: 230px; flex-shrink: 0;" id="wrapper-filtro-proprietario">
+            <select id="filtro-equip-proprietario" class="form-control">
+              <option value="">TODOS OS PROPRIETÁRIOS</option>
+              <option value="sem_proprietario">NÃO VINCULADOS</option>
+            </select>
+          </div>
           <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 7px 12px; background: var(--color-surface-container-high); border: 1px solid var(--color-outline-variant); flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; text-transform: uppercase; user-select: none;">
             <input type="checkbox" id="filtro-equip-no-patio" style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-rust-orange);">
             NO PÁTIO
@@ -951,7 +953,7 @@ window.CadastrosView = {
     document.getElementById('filtro-equip-proprietario')?.addEventListener('change', () => this.carregarListaEquipamentos());
     document.getElementById('filtro-equip-no-patio')?.addEventListener('change', () => this.carregarListaEquipamentos());
 
-    this.carregarSelectProprietariosEquip();
+    await this.carregarSelectProprietariosEquip();
     await this.carregarListaEquipamentos();
   },
 
@@ -968,8 +970,15 @@ window.CadastrosView = {
         opt.textContent = c.nome_razao;
         select.appendChild(opt);
       });
+
+      window.EMCUtils.initSearchableSelect(select, {
+        placeholder: 'TODOS OS PROPRIETÁRIOS'
+      });
     } catch (e) {
       console.warn('Erro ao carregar proprietários para filtro de equipamentos:', e);
+      window.EMCUtils.initSearchableSelect(select, {
+        placeholder: 'TODOS OS PROPRIETÁRIOS'
+      });
     }
   },
 
