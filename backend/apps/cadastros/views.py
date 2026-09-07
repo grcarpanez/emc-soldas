@@ -152,13 +152,16 @@ class ClienteFornecedorViewSet(viewsets.ModelViewSet):
         # Apenas registros não deletados logicamente
         queryset = ClienteFornecedor.objects.filter(deleted_at__isnull=True)
 
-        # Filtro por tipo (Cliente, Fornecedor, Ambos)
+        # Filtro por tipo (Cliente, Fornecedor, Ambos) com inclusão semântica de 'Ambos'
         tipo = self.request.query_params.get('tipo')
         if tipo:
-            if tipo == 'Cliente':
-                queryset = queryset.filter(Q(tipo='Cliente') | Q(tipo='Ambos'))
-            elif tipo == 'Fornecedor':
-                queryset = queryset.filter(Q(tipo='Fornecedor') | Q(tipo='Ambos'))
+            tipo_upper = tipo.strip().upper()
+            if tipo_upper in ('CLIENTE', 'CLIENTES'):
+                queryset = queryset.filter(tipo__in=['Cliente', 'Ambos'])
+            elif tipo_upper in ('FORNECEDOR', 'FORNECEDORES'):
+                queryset = queryset.filter(tipo__in=['Fornecedor', 'Ambos'])
+            elif tipo_upper in ('AMBOS', 'CLIENTE/FORNECEDOR', 'CLIENTE_FORNECEDOR'):
+                queryset = queryset.filter(tipo='Ambos')
             else:
                 queryset = queryset.filter(tipo=tipo)
 

@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-07 (Validações de Usabilidade, Validação Estrita de Placas e Governança de Planejamento)  
+**Última Atualização:** 2026-09-07 (Inclusão Semântica do Tipo 'Ambos' nos Filtros de Clientes/Fornecedores, Barra Anti-Esmagamento e Governança de Planejamento)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
 
@@ -241,6 +241,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Unificação da barra em container flex único com `gap: 10px` contínuo entre todos os 4 elementos, eliminando o buraco vazio central e fazendo com que a busca expansiva (`flex: 1`) e os demais controles preencham 100% da div.
   - Adição de `flex-shrink: 0; min-width: 175px;` na combobox de tipo, eliminando em definitivo o esmagamento e sobreposição ("engolimento") do select em reduções progressivas da janela.
   - Agrupamento dos botões de ação com quebra suave e limpa para telas menores sem colisão visual.
+- [x] **Inclusão Semântica do Tipo 'Ambos' nos Filtros de Clientes e Fornecedores (Abordagem Ágil):**
+  - Normalização no backend (`ClienteFornecedorViewSet.get_queryset` em `apps/cadastros/views.py`) com `.strip().upper()`, tornando o filtro de tipo robusto contra variações maiúsculas/minúsculas (`CLIENTE`, `CLIENTES`, `Cliente`, `FORNECEDOR`, `FORNECEDORES`, `Fornecedor`).
+  - Implementação semântica no ORM: parceiros cadastrados com o tipo `Ambos` (dupla atribuição) são incluídos automaticamente tanto nas buscas/filtros de Clientes (`tipo__in=['Cliente', 'Ambos']`) quanto de Fornecedores (`tipo__in=['Fornecedor', 'Ambos']`).
+  - Suíte de testes automatizados unitários enriquecida (`test_filtro_tipo_clientes_e_fornecedores_inclui_ambos` em `cadastros/tests.py`), alcançando 17 testes específicos e 158 testes globais aprovados com 100% de sucesso.
+
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

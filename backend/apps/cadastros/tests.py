@@ -307,6 +307,80 @@ class ClienteFornecedorAPITestCase(CadastrosBaseTestCase):
         res_compras = self.client.get('/api/clientes-fornecedores/?tipo=Fornecedor')
         self.assertEqual(res_compras.status_code, status.HTTP_200_OK)
 
+    def test_filtro_tipo_clientes_e_fornecedores_inclui_ambos(self):
+        """
+        Valida que o filtro por CLIENTE inclui registros 'Cliente' e 'Ambos',
+        o filtro por FORNECEDOR inclui 'Fornecedor' e 'Ambos',
+        e sem filtro retorna todos.
+        """
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        # 1. Cria 3 parceiros distintos: Cliente, Fornecedor e Ambos
+        p_cliente = ClienteFornecedor.objects.create(
+            tipo='Cliente',
+            tipo_pessoa='PJ',
+            nome_razao='CLIENTE EXCLUSIVO TESTE LTDA',
+            cnpj_cpf='11222333000181',
+            cidade='BELO HORIZONTE',
+            uf='MG'
+        )
+        p_fornecedor = ClienteFornecedor.objects.create(
+            tipo='Fornecedor',
+            tipo_pessoa='PJ',
+            nome_razao='FORNECEDOR EXCLUSIVO TESTE LTDA',
+            cnpj_cpf='22333444000192',
+            cidade='CONTAGEM',
+            uf='MG'
+        )
+        p_ambos = ClienteFornecedor.objects.create(
+            tipo='Ambos',
+            tipo_pessoa='PJ',
+            nome_razao='PARCEIRO DUPLO TESTE LTDA',
+            cnpj_cpf='33444555000103',
+            cidade='BETIM',
+            uf='MG'
+        )
+
+        # 2. Filtro ?tipo=CLIENTE (maiúsculas como enviado pelo frontend)
+        res_cli_upper = self.client.get('/api/clientes-fornecedores/?tipo=CLIENTE')
+        self.assertEqual(res_cli_upper.status_code, status.HTTP_200_OK)
+        ids_cli = [r['id'] for r in res_cli_upper.data['results']]
+        self.assertIn(p_cliente.id, ids_cli)
+        self.assertIn(p_ambos.id, ids_cli)
+        self.assertNotIn(p_fornecedor.id, ids_cli)
+
+        # 3. Filtro ?tipo=Cliente (case-insensitive)
+        res_cli_mixed = self.client.get('/api/clientes-fornecedores/?tipo=Cliente')
+        self.assertEqual(res_cli_mixed.status_code, status.HTTP_200_OK)
+        ids_cli_mixed = [r['id'] for r in res_cli_mixed.data['results']]
+        self.assertIn(p_cliente.id, ids_cli_mixed)
+        self.assertIn(p_ambos.id, ids_cli_mixed)
+        self.assertNotIn(p_fornecedor.id, ids_cli_mixed)
+
+        # 4. Filtro ?tipo=FORNECEDOR (maiúsculas como enviado pelo frontend)
+        res_forn_upper = self.client.get('/api/clientes-fornecedores/?tipo=FORNECEDOR')
+        self.assertEqual(res_forn_upper.status_code, status.HTTP_200_OK)
+        ids_forn = [r['id'] for r in res_forn_upper.data['results']]
+        self.assertIn(p_fornecedor.id, ids_forn)
+        self.assertIn(p_ambos.id, ids_forn)
+        self.assertNotIn(p_cliente.id, ids_forn)
+
+        # 5. Filtro ?tipo=Fornecedor (case-insensitive)
+        res_forn_mixed = self.client.get('/api/clientes-fornecedores/?tipo=Fornecedor')
+        self.assertEqual(res_forn_mixed.status_code, status.HTTP_200_OK)
+        ids_forn_mixed = [r['id'] for r in res_forn_mixed.data['results']]
+        self.assertIn(p_fornecedor.id, ids_forn_mixed)
+        self.assertIn(p_ambos.id, ids_forn_mixed)
+        self.assertNotIn(p_cliente.id, ids_forn_mixed)
+
+        # 6. Sem filtro de tipo (TODOS)
+        res_todos = self.client.get('/api/clientes-fornecedores/')
+        self.assertEqual(res_todos.status_code, status.HTTP_200_OK)
+        ids_todos = [r['id'] for r in res_todos.data['results']]
+        self.assertIn(p_cliente.id, ids_todos)
+        self.assertIn(p_fornecedor.id, ids_todos)
+        self.assertIn(p_ambos.id, ids_todos)
+
 
 class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
     """Testes de Equipamentos e Transferência Histórica de Vínculos com Clientes."""
