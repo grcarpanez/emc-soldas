@@ -232,11 +232,15 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Instituição da Governança de Planejamento Mandatória e Histórico Perpétuo (`Planejamento/`):**
   - Atualização do `AGENTS.md` com Regra de Ouro inegociável: proibição terminante de qualquer alteração de código ou configuração sem a prévia elaboração de *Implementation Plan* estruturado e aprovação formal explícita (`Proceed`) do usuário.
   - Criação da pasta `Planejamento/` na raiz do sistema para versionamento perpétuo de todos os planos de implementação, contendo contexto, decisões arquiteturais, checklist de arquivos, testes e transcrição da aprovação do usuário (`Planejamento/YYYY-MM-DD_NN_nome_da_tarefa.md`).
-- [x] **Governança Perpétua de Cache PWA e Versionamento Sincronizado de Assets (`v2.8` e `v2.9`):**
+- [x] **Governança Perpétua de Cache PWA e Versionamento Sincronizado de Assets (`v2.8`, `v2.9` e `v3.0`):**
   - Instituição da Regra Mandatória 12 no `AGENTS.md` e registro de lição técnica em `docs/ERROS.md`: toda e qualquer alteração em JS/CSS obriga a sincronização do `CACHE_NAME` no `frontend/sw.js` e a atualização dos sufixos de query string `?v=X.Y` em todas as tags `<script>` e `<link>` do `frontend/index.html`.
-  - Execução imediata da versão `v2.8` e posterior evolução para `v2.9` em `sw.js` e `index.html`, eliminando retenção de código desatualizado por caches stale no navegador do usuário e assegurando a atualização imediata da máscara universal de placas.
+  - Execução imediata da versão `v2.8`, `v2.9` e `v3.0` em `sw.js` e `index.html`, eliminando retenção de código desatualizado por caches stale no navegador do usuário.
 - [x] **Refinamento de UX no Filtro de Clientes & Fornecedores (v2.9):**
   - Ajuste na combobox de tipo: renomeação de `TODOS OS TIPOS` para `TODOS`, remoção da opção redundante `AMBOS` (permanecendo estritamente `TODOS`, `CLIENTES` e `FORNECEDORES`), expansão da largura para `180px` (eliminando o corte do texto de `FORNECEDORES`) e readequação da textbox de busca para `max-width: 380px`.
+- [x] **Alinhamento Contínuo e Responsividade Anti-Esmagamento da Barra de Clientes (v3.0):**
+  - Unificação da barra em container flex único com `gap: 10px` contínuo entre todos os 4 elementos, eliminando o buraco vazio central e fazendo com que a busca expansiva (`flex: 1`) e os demais controles preencham 100% da div.
+  - Adição de `flex-shrink: 0; min-width: 175px;` na combobox de tipo, eliminando em definitivo o esmagamento e sobreposição ("engolimento") do select em reduções progressivas da janela.
+  - Agrupamento dos botões de ação com quebra suave e limpa para telas menores sem colisão visual.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).

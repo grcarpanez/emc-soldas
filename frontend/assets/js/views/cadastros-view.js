@@ -51,19 +51,16 @@ window.CadastrosView = {
   async renderClientes(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <div style="display: flex; gap: 8px; flex: 1; min-width: 280px;">
-            <input type="text" id="filtro-cliente-busca" class="form-control" placeholder="BUSCAR POR NOME, CNPJ/CPF OU CIDADE..." style="flex: 1; max-width: 380px;">
-            <select id="filtro-cliente-tipo" class="form-control" style="width: 180px; min-width: 180px;">
-              <option value="">TODOS</option>
-              <option value="CLIENTE">CLIENTES</option>
-              <option value="FORNECEDOR">FORNECEDORES</option>
-            </select>
-          </div>
-
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" id="btn-novo-cliente-rapido">+ CADASTRO RÁPIDO</button>
-            <button class="btn btn-primary" id="btn-novo-cliente-completo">+ NOVO CADASTRO</button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-cliente-busca" class="form-control" placeholder="BUSCAR POR NOME, CNPJ/CPF OU CIDADE..." style="flex: 1; min-width: 200px;">
+          <select id="filtro-cliente-tipo" class="form-control" style="width: 175px; min-width: 175px; flex-shrink: 0;">
+            <option value="">TODOS</option>
+            <option value="CLIENTE">CLIENTES</option>
+            <option value="FORNECEDOR">FORNECEDORES</option>
+          </select>
+          <div style="display: flex; gap: 10px; flex-shrink: 0;">
+            <button class="btn btn-secondary" id="btn-novo-cliente-rapido" style="white-space: nowrap;">+ CADASTRO RÁPIDO</button>
+            <button class="btn btn-primary" id="btn-novo-cliente-completo" style="white-space: nowrap;">+ NOVO CADASTRO</button>
           </div>
         </div>
       </div>
