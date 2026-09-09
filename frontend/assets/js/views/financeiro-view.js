@@ -78,12 +78,12 @@ window.FinanceiroView = {
       <div class="card mb-16">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
           <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO OU ID..." style="flex: 1; min-width: 200px;">
-          <div style="width: 240px; min-width: 200px; flex-shrink: 0;" id="wrapper-extrato-conta">
+          <div style="width: 220px; min-width: 180px; flex-shrink: 0;" id="wrapper-extrato-conta">
             <select id="filtro-extrato-conta" class="form-control">
               <option value="">TODAS AS CONTAS BANCÁRIAS</option>
             </select>
           </div>
-          <select id="filtro-extrato-tipo" class="form-control" style="width: 175px; min-width: 175px; flex-shrink: 0;">
+          <select id="filtro-extrato-tipo" class="form-control" style="width: 160px; min-width: 150px; flex-shrink: 0;">
             <option value="">TODOS OS TIPOS</option>
             <option value="ENTRADA">RECEITAS (+)</option>
             <option value="SAIDA">DESPESAS (-)</option>

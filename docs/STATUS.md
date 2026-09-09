@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-09 (Padronização Universal de Controles 42px, Resolução de Erros de Tela e Governança de Commits, PWA v4.4)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Consistência Dimensional e Commits Semânticos)  
+**Última Atualização:** 2026-09-09 (Correção de Espaçamento e Eliminação de Encavalamento nas Comboboxes da Aba Extrato, PWA v4.5)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Harmonização de Comboboxes e Governança de Commits)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -320,6 +320,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Norma Documental de Layout em `docs/DESIGN.md`:** Registro da seção normativa "Interactive Controls & Dimensional Consistency" definindo alturas (42px padrão, 32px small), tipografia técnica (`Inter` para dados, `JetBrains Mono` para botões e códigos) e alinhamento em flex containers.
   - **Governança de Commits Semânticos em `AGENTS.md` e `docs/FSD.md`:** Inclusão da Regra Mandatória 13 no `AGENTS.md` exigindo commits formais após cada Implementation Plan aprovado e inclusão da Seção 30 no `docs/FSD.md` com a tabela e convenções completas do Conventional Commits.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.4` em `frontend/sw.js` e sufixos de cache-busting `?v=4.4` em `frontend/index.html`.
+- [x] **Correção de Espaçamento e Eliminação de Encavalamento nas Comboboxes da Aba Extrato (PWA v4.5):**
+  - **Blindagem do Componente `.emc-multiselect`:** Configuração mandatória de `display: block; width: 100%; box-sizing: border-box;` no Design System (`industrial-integrity.css`), impedindo que o container multi-seleção vaze horizontalmente para além do seu wrapper e cause fusão visual de bordas com seletores adjacentes.
+  - **Calibração Dimensional da Barra de Filtros do Extrato:** Redimensionamento de `#wrapper-extrato-conta` para `220px` (min-width `180px`) e `#filtro-extrato-tipo` para `160px` (min-width `150px`) em `financeiro-view.js`, preservando folga elástica e espaçamento físico nítido de `gap: 10px` entre todos os controles interativos.
+  - **Ocultação Estrita do Select Nativo:** Reforço com `display: none !important` via JavaScript em `utils.js` para garantir que nós nativos não ocupem fluxo de layout residual.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.5` em `frontend/sw.js` e sufixos de cache-busting `?v=4.5` em `frontend/index.html`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

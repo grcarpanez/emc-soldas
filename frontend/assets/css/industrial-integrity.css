@@ -901,7 +901,9 @@ select.form-control {
    ========================================================================== */
 .emc-multiselect {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .emc-multiselect-trigger {

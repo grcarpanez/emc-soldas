@@ -919,7 +919,7 @@ function initMultiSelectCombobox(targetEl, opts = {}) {
   dropdown.appendChild(optionsList);
 
   if (isSelect) {
-    targetEl.style.display = 'none';
+    targetEl.style.setProperty('display', 'none', 'important');
     targetEl.parentNode.insertBefore(container, targetEl);
   } else {
     targetEl.appendChild(container);
