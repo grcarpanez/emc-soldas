@@ -133,11 +133,12 @@ window.ComprasView = {
   },
 
   async abrirModalCompra() {
-    // Carrega fornecedores e itens para o formulário
-    const [fornecedores, itens] = await Promise.all([
-      window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`),
-      window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS)
-    ]);
+    try {
+      // Carrega fornecedores e itens para o formulário
+      const [fornecedores, itens] = await Promise.all([
+        window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`),
+        window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS)
+      ]);
 
     const listaForn = fornecedores.results || fornecedores || [];
     const listaItens = itens.results || itens || [];
@@ -347,6 +348,10 @@ window.ComprasView = {
       document.getElementById('sub-item-qtd').value = '';
       document.getElementById('sub-item-unit').value = 'R$ 0,00';
     });
+    } catch (err) {
+      console.error('Erro ao abrir modal de compras:', err);
+      window.EMCUtils.showToast(err.message || 'Erro ao carregar dados do formulário de compras.', 'error');
+    }
   },
 
   atualizarGridItensNota() {

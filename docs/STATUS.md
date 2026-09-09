@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-09 (Combobox Autocomplete Pesquisável de Fornecedores e Insumos, Modal Empilhado de Cadastro em Compras, PWA v4.7)  
+**Última Atualização:** 2026-09-09 (Correção de Runtime em Modais Empilhados openModal, Blindagem em Compras, PWA v4.8)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -336,6 +336,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Ação Integrada "+ NOVO FORNECEDOR":** Disponibilização de atalho visual no cabeçalho do campo e botão de ação integrado dentro do dropdown pesquisável da combobox (`.emc-combobox-action`).
   - **Retroalimentação e Seleção Automática:** Ao concluir o cadastro no modal secundário, a combobox de compras é atualizada dinamicamente com as opções ordenadas e o novo fornecedor já selecionado, sem perda de contexto ou recarregamento de página.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.7` em `frontend/sw.js` e sufixos de cache-busting `?v=4.7` em `frontend/index.html`.
+- [x] **Correção de Fechamento de Bloco JSDoc em `utils.js` e Blindagem de Abertura de Compras (PWA v4.8):**
+  - **Correção Crítica de Runtime em `openModal`:** Fechamento do bloco JSDoc da Seção 6 de `frontend/assets/js/utils.js` com `*/` antes de `const modalStack = [];`, resolvendo `ReferenceError: modalStack is not defined` que impedia a abertura do modal de compras e de outros modais do sistema.
+  - **Blindagem Defensiva em `compras-view.js`:** Envolvimento do método `abrirModalCompra()` em bloco `try ... catch` com feedback claro via Toast notification caso haja falhas de carregamento ou rede.
+  - **Homologação da Bateria de Testes Backend:** Execução de 161 testes do Django com 100% de aprovação (0 erros, 0 falhas).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.8` em `frontend/sw.js` e sufixos de cache-busting `?v=4.8` em `frontend/index.html`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

@@ -432,6 +432,7 @@ function showToast(mensagem, tipo = 'info', duracaoMs = 4000) {
  * @param {Function} [options.onCancel] - Callback de cancelamento
  * @param {'sm'|'md'|'lg'|'xl'|'full'} [options.size='md'] - Tamanho do modal
  * @param {boolean} [options.hideFooter=false] - Oculta os botões padrão de rodapé
+ */
 // Pilha de modais para suporte a modais empilhados (stacked modals)
 const modalStack = [];
 
