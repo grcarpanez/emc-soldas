@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-09 (Ajuste de Responsividade e Contenção dos Flip Cards do Dashboard no Mobile, PWA v4.6)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Harmonização de Comboboxes, Mobile Flip Cards e Governança de Commits)  
+**Última Atualização:** 2026-09-09 (Combobox Autocomplete Pesquisável de Fornecedores e Insumos, Modal Empilhado de Cadastro em Compras, PWA v4.7)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -330,6 +330,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Contenção e Blindagem de Faces:** Aplicação de `overflow: hidden;` nas faces `.flip-card-front` e `.flip-card-back` com padding de `10px 8px`.
   - **Otimização de Fontes e Espaçamentos:** Calibração de `flip-card-title` (10px), `flip-card-sub` (11px, line-height 1.2), `flip-card-footer` (padding 6px/margin 4px), `flip-card-btn-detail` (10.5px) e versos dos cards (font 11px, line-height 1.4) para garantir estética industrial equilibrada e eliminação completa de vazamento.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.6` em `frontend/sw.js` e sufixos de cache-busting `?v=4.6` em `frontend/index.html`.
+- [x] **Combobox Autocomplete Pesquisável e Modal de Cadastro de Fornecedor em Compras (PWA v4.7):**
+  - **Combobox com Busca em Tempo Real e Autocomplete:** Conversão do `<select id="nota-fornecedor">` e `<select id="sub-item-id">` no modal de Compras (`LANÇAR NOTA FISCAL DE ENTRADA`) em comboboxes pesquisáveis industriais (`initSearchableSelect`), eliminando o seletor nativo do mobile e permitindo filtrar por nome/razão social em tempo real.
+  - **Suporte Arquitetural a Modais Empilhados (*Stacked Modals*):** Refatoração de `openModal` e `closeModal` em `utils.js` para gerenciamento dinâmico via pilha (`modalStack`) com *z-index* incremental, possibilitando abrir o modal de cadastro de fornecedor sobre o modal de compras sem fechá-lo ou destruir os dados digitados na nota.
+  - **Ação Integrada "+ NOVO FORNECEDOR":** Disponibilização de atalho visual no cabeçalho do campo e botão de ação integrado dentro do dropdown pesquisável da combobox (`.emc-combobox-action`).
+  - **Retroalimentação e Seleção Automática:** Ao concluir o cadastro no modal secundário, a combobox de compras é atualizada dinamicamente com as opções ordenadas e o novo fornecedor já selecionado, sem perda de contexto ou recarregamento de página.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.7` em `frontend/sw.js` e sufixos de cache-busting `?v=4.7` em `frontend/index.html`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

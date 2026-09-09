@@ -476,19 +476,22 @@ window.CadastrosView = {
     }
   },
 
-  abrirModalCadastroRapido() {
+  abrirModalCadastroRapido(options = {}) {
+    const tipoPredefinido = (options.tipoPredefinido || 'CLIENTE').toUpperCase();
+    const onSuccess = options.onSuccess || null;
+
     window.EMCUtils.openModal({
-      title: 'CADASTRO RÁPIDO DE CLIENTE (ÁGIL)',
+      title: tipoPredefinido === 'FORNECEDOR' ? 'CADASTRO RÁPIDO DE FORNECEDOR (ÁGIL)' : 'CADASTRO RÁPIDO DE CLIENTE (ÁGIL)',
       size: 'sm',
-      confirmText: 'SALVAR CLIENTE',
+      confirmText: tipoPredefinido === 'FORNECEDOR' ? 'SALVAR FORNECEDOR' : 'SALVAR CLIENTE',
       content: `
         <form id="form-cliente-rapido">
           <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-bottom: 16px;">
-            Preencha apenas o essencial para emitir orçamentos imediatos.
+            Preencha apenas o essencial para emitir orçamentos ou compras imediatas.
           </p>
           <div class="form-group">
             <label class="form-label" for="rapido-nome">Nome / Razão Social *</label>
-            <input type="text" id="rapido-nome" class="form-control" placeholder="NOME DO CLIENTE" required autofocus>
+            <input type="text" id="rapido-nome" class="form-control" placeholder="NOME DO FORNECEDOR OU CLIENTE" required autofocus>
           </div>
           <div class="form-group">
             <label class="form-label" for="rapido-telefone">Telefone / WhatsApp *</label>
@@ -497,9 +500,9 @@ window.CadastrosView = {
           <div class="form-group">
             <label class="form-label" for="rapido-tipo">Tipo</label>
             <select id="rapido-tipo" class="form-control">
-              <option value="CLIENTE" selected>CLIENTE</option>
-              <option value="FORNECEDOR">FORNECEDOR</option>
-              <option value="AMBOS">AMBOS</option>
+              <option value="CLIENTE" ${tipoPredefinido === 'CLIENTE' ? 'selected' : ''}>CLIENTE</option>
+              <option value="FORNECEDOR" ${tipoPredefinido === 'FORNECEDOR' ? 'selected' : ''}>FORNECEDOR</option>
+              <option value="AMBOS" ${tipoPredefinido === 'AMBOS' ? 'selected' : ''}>AMBOS</option>
             </select>
           </div>
         </form>
@@ -515,31 +518,39 @@ window.CadastrosView = {
         }
 
         try {
-          await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES, {
+          const novo = await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES, {
             nome_razao: nome,
             telefone: window.EMCUtils.extrairApenasDigitos(telefone),
             tipo: tipo,
             tipo_pessoa: 'PF'
           });
-          window.EMCUtils.showToast('Cliente cadastrado com sucesso!', 'success');
-          this.carregarListaClientes();
+          window.EMCUtils.showToast(`${tipo === 'FORNECEDOR' ? 'Fornecedor' : 'Cliente'} cadastrado com sucesso!`, 'success');
+          if (typeof this.carregarListaClientes === 'function') {
+            this.carregarListaClientes();
+          }
+          if (typeof onSuccess === 'function') {
+            await onSuccess(novo);
+          }
           return true;
         } catch (err) {
-          window.EMCUtils.showToast(err.message || 'Erro ao cadastrar cliente.', 'error');
+          window.EMCUtils.showToast(err.message || 'Erro ao cadastrar.', 'error');
           return false;
         }
       }
     });
   },
 
-  abrirModalCadastroCompleto(cliente = null) {
+  abrirModalCadastroCompleto(cliente = null, options = {}) {
     const isEdit = !!cliente;
-    const title = isEdit ? `EDITAR CADASTRO #${cliente.id}` : 'NOVO CADASTRO COMPLETO (PF/PJ)';
+    const tipoPredefinido = (options.tipoPredefinido || cliente?.tipo || 'CLIENTE').toUpperCase();
+    const tipoAtual = tipoPredefinido;
+    const title = isEdit 
+      ? `EDITAR CADASTRO #${cliente.id}` 
+      : (tipoAtual === 'FORNECEDOR' ? 'NOVO CADASTRO DE FORNECEDOR (PF/PJ)' : 'NOVO CADASTRO COMPLETO (PF/PJ)');
 
     // Determina se inicia como PJ (se o cliente tem mais de 11 dígitos ou tipo_pessoa === 'PJ')
     const docInicial = window.EMCUtils.extrairApenasDigitos(cliente?.cnpj_cpf || '');
     const isPJInicial = docInicial.length > 11 || cliente?.tipo_pessoa === 'PJ';
-    const tipoAtual = (cliente?.tipo || 'CLIENTE').toUpperCase();
 
     window.EMCUtils.openModal({
       title: title,
@@ -699,14 +710,20 @@ window.CadastrosView = {
         };
 
         try {
+          let resCad;
           if (isEdit) {
-            await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}${cliente.id}/`, payload);
+            resCad = await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}${cliente.id}/`, payload);
             window.EMCUtils.showToast('Cadastro atualizado com sucesso!', 'success');
           } else {
-            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES, payload);
+            resCad = await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES, payload);
             window.EMCUtils.showToast('Cadastro criado com sucesso!', 'success');
           }
-          this.carregarListaClientes();
+          if (typeof this.carregarListaClientes === 'function') {
+            this.carregarListaClientes();
+          }
+          if (typeof options.onSuccess === 'function') {
+            await options.onSuccess(resCad);
+          }
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar cadastro.', 'error');

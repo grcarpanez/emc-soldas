@@ -432,6 +432,21 @@ function showToast(mensagem, tipo = 'info', duracaoMs = 4000) {
  * @param {Function} [options.onCancel] - Callback de cancelamento
  * @param {'sm'|'md'|'lg'|'xl'|'full'} [options.size='md'] - Tamanho do modal
  * @param {boolean} [options.hideFooter=false] - Oculta os botões padrão de rodapé
+// Pilha de modais para suporte a modais empilhados (stacked modals)
+const modalStack = [];
+
+/**
+ * Abre um modal com cabeçalho, corpo e rodapé personalizáveis com suporte a modais empilhados.
+ * @param {Object} options - Configurações do modal
+ * @param {string} [options.title='Confirmação'] - Título do modal
+ * @param {string} [options.content=''] - HTML do conteúdo do corpo
+ * @param {string} [options.confirmText='CONFIRMAR'] - Texto do botão de confirmação
+ * @param {string} [options.cancelText='CANCELAR'] - Texto do botão de cancelamento
+ * @param {Function} [options.onConfirm] - Callback de confirmação
+ * @param {Function} [options.onCancel] - Callback de cancelamento
+ * @param {'sm'|'md'|'lg'|'xl'|'full'} [options.size='md'] - Tamanho do modal
+ * @param {boolean} [options.hideFooter=false] - Oculta os botões padrão de rodapé
+ * @param {boolean} [options.showCancel=true] - Exibe ou oculta o botão de cancelamento
  */
 function openModal(options = {}) {
   const modalRoot = document.getElementById('modal-root');
@@ -445,37 +460,51 @@ function openModal(options = {}) {
     onConfirm = null,
     onCancel = null,
     size = 'md',
-    hideFooter = false
+    hideFooter = false,
+    showCancel = true
   } = options;
 
-  modalRoot.innerHTML = `
-    <div class="modal-overlay" id="active-modal-overlay">
-      <div class="modal-card modal-size-${size}">
-        <div class="modal-header">
-          <h3 class="modal-title">${escapeHtml(title)}</h3>
-          <button class="btn btn-ghost btn-sm" id="modal-close-btn" title="Fechar">X</button>
-        </div>
-        <div class="modal-body" id="active-modal-body">
-          ${content}
-        </div>
-        ${!hideFooter ? `
-          <div class="modal-footer">
-            <button class="btn btn-secondary" id="modal-cancel-btn">${escapeHtml(cancelText)}</button>
-            <button class="btn btn-primary" id="modal-confirm-btn">${escapeHtml(confirmText)}</button>
-          </div>
-        ` : ''}
+  const overlayId = 'modal-overlay-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+  const zIndex = 100000 + (modalStack.length * 20);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = overlayId;
+  overlay.style.zIndex = zIndex;
+
+  overlay.innerHTML = `
+    <div class="modal-card modal-size-${size}">
+      <div class="modal-header">
+        <h3 class="modal-title">${escapeHtml(title)}</h3>
+        <button class="btn btn-ghost btn-sm modal-close-btn" title="Fechar">X</button>
       </div>
+      <div class="modal-body">
+        ${content}
+      </div>
+      ${!hideFooter ? `
+        <div class="modal-footer">
+          ${showCancel !== false ? `<button class="btn btn-secondary modal-cancel-btn">${escapeHtml(cancelText)}</button>` : ''}
+          <button class="btn btn-primary modal-confirm-btn">${escapeHtml(confirmText)}</button>
+        </div>
+      ` : ''}
     </div>
   `;
 
-  const overlay = document.getElementById('active-modal-overlay');
-  const closeBtn = document.getElementById('modal-close-btn');
-  const cancelBtn = document.getElementById('modal-cancel-btn');
-  const confirmBtn = document.getElementById('modal-confirm-btn');
+  modalRoot.appendChild(overlay);
+
+  const closeBtn = overlay.querySelector('.modal-close-btn');
+  const cancelBtn = overlay.querySelector('.modal-cancel-btn');
+  const confirmBtn = overlay.querySelector('.modal-confirm-btn');
 
   function fechar() {
-    modalRoot.innerHTML = '';
+    const idx = modalStack.indexOf(overlay);
+    if (idx !== -1) {
+      modalStack.splice(idx, 1);
+    }
+    overlay.remove();
   }
+
+  modalStack.push(overlay);
 
   if (closeBtn) {
     closeBtn.addEventListener('click', () => {
@@ -504,11 +533,16 @@ function openModal(options = {}) {
 }
 
 /**
- * Fecha o modal ativo.
+ * Fecha o modal ativo no topo da pilha.
  */
 function closeModal() {
-  const modalRoot = document.getElementById('modal-root');
-  if (modalRoot) modalRoot.innerHTML = '';
+  if (modalStack.length > 0) {
+    const topo = modalStack.pop();
+    if (topo) topo.remove();
+  } else {
+    const modalRoot = document.getElementById('modal-root');
+    if (modalRoot) modalRoot.innerHTML = '';
+  }
 }
 
 // ============================================================================
@@ -668,10 +702,25 @@ function initSearchableSelect(selectEl, opts = {}) {
   searchInput.placeholder = 'DIGITE PARA FILTRAR...';
   searchWrapper.appendChild(searchInput);
 
+  dropdown.appendChild(searchWrapper);
+
+  // Ação integrada (ex: + NOVO CADASTRO)
+  if (opts.action && opts.action.label) {
+    const actionEl = document.createElement('div');
+    actionEl.className = 'emc-combobox-action';
+    actionEl.innerHTML = `<span>${escapeHtml(opts.action.label)}</span>`;
+    actionEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fecharDropdown();
+      if (typeof opts.action.onClick === 'function') {
+        opts.action.onClick(searchInput.value.trim());
+      }
+    });
+    dropdown.appendChild(actionEl);
+  }
+
   const optionsList = document.createElement('ul');
   optionsList.className = 'emc-combobox-options';
-
-  dropdown.appendChild(searchWrapper);
   dropdown.appendChild(optionsList);
 
   // Insere container antes do select nativo e oculta o select
@@ -736,7 +785,23 @@ function initSearchableSelect(selectEl, opts = {}) {
     if (encontrados === 0) {
       const noRes = document.createElement('li');
       noRes.className = 'emc-combobox-no-results';
-      noRes.textContent = 'NENHUM RESULTADO ENCONTRADO';
+      if (opts.action && opts.action.label) {
+        noRes.innerHTML = `
+          <div>NENHUM RESULTADO ENCONTRADO</div>
+          <button type="button" class="btn btn-secondary btn-sm emc-combobox-no-res-btn" style="margin-top: 8px; font-size: 11px; padding: 4px 10px;">
+            ${escapeHtml(opts.action.label)}
+          </button>
+        `;
+        noRes.querySelector('.emc-combobox-no-res-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fecharDropdown();
+          if (typeof opts.action.onClick === 'function') {
+            opts.action.onClick(searchInput.value.trim());
+          }
+        });
+      } else {
+        noRes.textContent = 'NENHUM RESULTADO ENCONTRADO';
+      }
       optionsList.appendChild(noRes);
     }
   }
@@ -838,6 +903,18 @@ function initSearchableSelect(selectEl, opts = {}) {
       extrairOpcoes();
       atualizarTriggerText();
       renderizarOpcoes(searchInput.value);
+    },
+    setValue(val) {
+      selecionarItem(val);
+    },
+    updateOptions(newHtml, selectedValue = null) {
+      selectEl.innerHTML = newHtml;
+      if (selectedValue !== null && selectedValue !== undefined) {
+        selectEl.value = selectedValue;
+      }
+      extrairOpcoes();
+      atualizarTriggerText();
+      renderizarOpcoes();
     },
     destroy() {
       container.remove();

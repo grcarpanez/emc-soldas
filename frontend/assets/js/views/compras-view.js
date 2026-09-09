@@ -161,7 +161,10 @@ window.ComprasView = {
         <form id="form-compra-nota">
           <div style="display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px;">
             <div class="form-group">
-              <label class="form-label" for="nota-fornecedor">Fornecedor *</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" for="nota-fornecedor" style="margin-bottom: 0;">Fornecedor *</label>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-compras-novo-forn" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Fornecedor">+ NOVO FORNECEDOR</button>
+              </div>
               <select id="nota-fornecedor" class="form-control" required>${optionsForn}</select>
             </div>
             <div class="form-group">
@@ -262,6 +265,62 @@ window.ComprasView = {
       }
     });
 
+    const selForn = document.getElementById('nota-fornecedor');
+    const selItem = document.getElementById('sub-item-id');
+
+    const dispararCadastroNovoFornecedor = () => {
+      window.CadastrosView.abrirModalCadastroCompleto(null, {
+        tipoPredefinido: 'FORNECEDOR',
+        onSuccess: async (novoForn) => {
+          if (!novoForn || !novoForn.id) return;
+          try {
+            // Recarrega a lista de fornecedores do servidor
+            const fornecedoresAtualizados = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`);
+            const listaFornAtualizada = fornecedoresAtualizados.results || fornecedoresAtualizados || [];
+            listaFornAtualizada.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+
+            let novasOptions = '<option value="">SELECIONE O FORNECEDOR...</option>';
+            listaFornAtualizada.forEach((f) => {
+              novasOptions += `<option value="${f.id}" ${f.id === novoForn.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(f.nome_razao)}</option>`;
+            });
+
+            if (selForn) {
+              if (selForn._emcCombobox) {
+                selForn._emcCombobox.updateOptions(novasOptions, novoForn.id);
+              } else {
+                selForn.innerHTML = novasOptions;
+                selForn.value = novoForn.id;
+              }
+            }
+            window.EMCUtils.showToast(`Fornecedor "${novoForn.nome_razao}" selecionado automaticamente!`, 'success');
+          } catch (e) {
+            console.error('Erro ao atualizar fornecedores:', e);
+          }
+        }
+      });
+    };
+
+    if (selForn) {
+      window.EMCUtils.initSearchableSelect(selForn, {
+        placeholder: 'SELECIONE OU PESQUISE O FORNECEDOR...',
+        action: {
+          label: '+ CADASTRAR NOVO FORNECEDOR',
+          onClick: () => dispararCadastroNovoFornecedor()
+        }
+      });
+    }
+
+    if (selItem) {
+      window.EMCUtils.initSearchableSelect(selItem, {
+        placeholder: 'PESQUISE UM INSUMO...'
+      });
+    }
+
+    document.getElementById('btn-compras-novo-forn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      dispararCadastroNovoFornecedor();
+    });
+
     this.itensTemp = [];
     const btnAdd = document.getElementById('btn-add-item-nota');
     btnAdd?.addEventListener('click', () => {
@@ -280,6 +339,11 @@ window.ComprasView = {
       this.atualizarGridItensNota();
 
       // Limpa campos
+      if (selectItem._emcCombobox) {
+        selectItem._emcCombobox.setValue('');
+      } else {
+        selectItem.value = '';
+      }
       document.getElementById('sub-item-qtd').value = '';
       document.getElementById('sub-item-unit').value = 'R$ 0,00';
     });
