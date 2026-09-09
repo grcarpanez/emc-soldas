@@ -1218,11 +1218,42 @@ select.form-control {
   }
 
   .flip-card-wrapper {
-    height: 160px;
+    height: 195px;
+  }
+
+  .flip-card-front, .flip-card-back {
+    padding: 10px 8px;
+    overflow: hidden;
+  }
+
+  .flip-card-title {
+    font-size: 10px;
+    margin-bottom: 4px;
+    line-height: 1.2;
   }
 
   .flip-card-value {
-    font-size: 17px;
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+
+  .flip-card-sub {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .flip-card-footer {
+    padding-top: 6px;
+    margin-top: 4px;
+  }
+
+  .flip-card-btn-detail {
+    font-size: 10.5px;
+  }
+
+  .flip-card-back div[style*="line-height"] {
+    line-height: 1.4 !important;
+    font-size: 11px !important;
   }
 }
 
