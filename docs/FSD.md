@@ -690,7 +690,158 @@ O FSD atingirá as premissas propostas quando:
 
 Não foram identificadas pendências para iniciar a codificação com base neste FSD. Todas as restrições arquitetônicas e comerciais já se encontram consolidadas nesta estrutura.
 
-## 29. Conclusão
+## 30. Norma Operacional de Versionamento: Boas Práticas, Convenções e Prefixos no Git
+
+Este capítulo consolida a norma obrigatória de versionamento do código-fonte do sistema EMC Soldas, reunindo todos os prefixos semânticos, regras de commits atômicos, nomenclatura de branches e melhores práticas operacionais.
+
+### 30.1 O Padrão Conventional Commits (Prefixos Oficiais e Estendidos)
+
+A convenção adotada pelo projeto é o **Conventional Commits** (inspirado no padrão do Angular e compatível com ferramentas como Semantic Release e Commitlint).
+
+#### Estrutura Fundamental
+```text
+<tipo>[escopo opcional]: <descrição concisa e no imperativo>
+
+[corpo opcional explicando o 'porquê' e o contexto da mudança]
+
+[rodapé(s) opcional(is): BREAKING CHANGE ou referências a issues/PRs]
+```
+
+---
+
+#### Tabela Completa de Prefixos
+
+| Prefixo | Finalidade / Quando Utilizar | Exemplo Real |
+| :--- | :--- | :--- |
+| **`feat`** | Introdução de uma nova funcionalidade no sistema ou API. | `feat(auth): add google sso login integration` |
+| **`fix`** | Correção de bug / problema que afeta o usuário ou o fluxo esperado. | `fix(checkout): resolve calculation error in shipping discount` |
+| **`docs`** | Alterações exclusivas na documentação (README, JSDoc, Swagger, wikis). | `docs(readme): add docker-compose setup instructions` |
+| **`style`** | Modificações que não afetam o significado do código (espaçamento, formatação, vírgulas, linting visual). | `style(components): format button styles with prettier` |
+| **`refactor`** | Refatoração de código: alteração interna que não corrige bug nem adiciona funcionalidade. | `refactor(database): extract query builder logic into repository layer` |
+| **`perf`** | Alteração de código com foco estrito em melhoria de desempenho/performance. | `perf(image-loader): optimize image caching and lazy loading` |
+| **`test`** | Adição de novos testes ou correção/atualização de testes existentes. | `test(order-service): add unit tests for cancelation flow` |
+| **`build`** | Mudanças no sistema de build, dependências externas (npm, pip, maven, gradle) ou scripts de empacotamento. | `build(deps): bump express from 4.18.2 to 4.19.0` |
+| **`ci`** | Alterações em arquivos e scripts de Integração Contínua e Entrega Contínua (GitHub Actions, GitLab CI, CircleCI). | `ci(github-actions): add automated sonarqube analysis step` |
+| **`chore`** | Tarefas de manutenção rotineira que não modificam arquivos de produção ou testes (gitignore, scripts internos). | `chore(gitignore): ignore local terraform state files` |
+| **`revert`** | Reversão explícita de um commit anterior. Geralmente gerado por `git revert`. | `revert: feat(payments): revert "enable pix instant payout"` |
+| **`deps`** | Utilizado em monorepos ou por bots (ex: Dependabot) para gerenciar dependências. | `deps(security): update axios to 1.7.0` |
+| **`security`** | Correções críticas de vulnerabilidades ou implementação de patches de segurança. | `security(jwt): prevent token forgery by enforcing strict algorithm check` |
+| **`release`** | Commit de corte/geração de release, versionamento ou alteração de changelog. | `release: cut version 2.4.0` |
+| **`wip`** | *Work In Progress* (usado apenas em branches de rascunho/locais; **nunca** em branches protegidas). | `wip: experiment with web assembly audio decoder` |
+
+---
+
+#### Quebra de Compatibilidade (*Breaking Changes*)
+
+Quando uma alteração quebra contratos existentes de API ou compatibilidade com versões anteriores:
+1. Adicione uma exclamação `!` logo antes dos dois pontos:
+   ```text
+   feat(auth)!: replace cookie sessions with bearer token validation
+   ```
+2. Ou inclua a menção explícita no rodapé:
+   ```text
+   feat(api): migrate user endpoint structure
+
+   BREAKING CHANGE: The `/v1/users/{id}` endpoint now returns `userId` instead of `id`.
+   ```
+
+---
+
+### 30.2 Padrão Gitmoji (Alternativa Visual)
+
+Se o projeto ou release adotar **Gitmoji**, os prefixos textuais são complementados por emojis padronizados:
+
+| Emoji | Código | Prefixo Equivalente | Finalidade |
+| :---: | :--- | :--- | :--- |
+| ✨ | `:sparkles:` | `feat` | Introduzir novos recursos/features |
+| 🐛 | `:bug:` | `fix` | Corrigir um bug |
+| 📝 | `:memo:` | `docs` | Escrever ou atualizar documentação |
+| 💄 | `:lipstick:` | `style` | Atualizar UI/arquivos de estilo visual |
+| ♻️ | `:recycle:` | `refactor` | Refatorar código |
+| ⚡️ | `:zap:` | `perf` | Melhorar performance |
+| ✅ | `:white_check_mark:` | `test` | Adicionar ou atualizar testes |
+| 👷 | `:construction_worker:` | `ci` | Adicionar/modificar scripts de CI |
+| 📦️ | `:package:` | `build` | Adicionar/atualizar pacotes e dependências |
+| 🔧 | `:wrench:` | `chore` | Modificar configurações do projeto |
+| 🔒️ | `:lock:` | `security` | Corrigir problemas de segurança |
+| ⏪️ | `:rewind:` | `revert` | Reverter alterações anteriores |
+| 🚧 | `:construction:` | `wip` | Trabalho em progresso |
+| 🚀 | `:rocket:` | `release` | Implantar / publicar nova versão |
+| 💥 | `:boom:` | `BREAKING CHANGE` | Introduzir mudanças com quebra de compatibilidade |
+
+---
+
+### 30.3 Padrão de Nomenclatura de Branches
+
+A consistência nas branches evita conflitos e facilita integrações em pipelines de CI/CD.
+
+#### Estrutura Recomendada
+```text
+<categoria>/<id-da-issue-opcional>-<descricao-kebab-case>
+```
+
+#### Prefixos de Branches
+| Prefixo | Cenário de Uso | Exemplo |
+| :--- | :--- | :--- |
+| **`feature/`** ou **`feat/`** | Desenvolvimento de uma nova funcionalidade. | `feature/PROJ-102-user-profile-screen` |
+| **`bugfix/`** ou **`fix/`** | Correção de defeito encontrado em ambiente de homologação/desenvolvimento. | `fix/PROJ-89-cart-coupon-timeout` |
+| **`hotfix/`** | Correção crítica e urgente diretamente em produção (`main`/`master`). | `hotfix/PROJ-999-fix-payment-gateway-nullpointer` |
+| **`release/`** | Preparação de uma nova versão para envio a produção. | `release/v2.1.0` |
+| **`support/`** | Manutenção de versões legadas de suporte de longo prazo (LTS). | `support/v1.x` |
+| **`refactor/`** | Alteração técnica estrutural sem impacto funcional direto. | `refactor/modularize-auth-module` |
+| **`chore/`** | Manutenção técnica interna, limpeza ou tarefas de configuração. | `chore/upgrade-node-20` |
+| **`test/`** | Criação ou reestruturação isolada de suítes de testes. | `test/add-e2e-cypress-suite` |
+| **`experiment/`** ou **`spike/`** | Prova de conceito (PoC) exploratória sem garantia de merge. | `spike/test-graphql-federation` |
+
+---
+
+### 30.4 Regras de Ouro para Mensagens de Commit
+
+1. **Use o modo imperativo no assunto:**
+   - ✅ `feat: add payment gateway` (Adicione / Adicionar)
+   - ❌ `feat: added payment gateway` ou `feat: adds payment gateway`
+2. **Limite o tamanho da linha de cabeçalho:** Mantenha o cabeçalho em no máximo **50 a 72 caracteres**.
+3. **Não finalize o cabeçalho com ponto final (`.`):** Seja conciso e direto.
+4. **Use letras minúsculas no cabeçalho:** `feat: allow multi-currency` (evite maiúsculas sem necessidade).
+5. **Separe o assunto do corpo com uma linha em branco:** O Git usa a primeira linha como título e o restante como descrição detalhada.
+6. **No corpo, foque no *porquê* e no *como*, não no *o quê*:** O diff do Git já mostra o que mudou; explique a razão da abordagem.
+7. **Referencie chamados e issues:** Exemplo: `Closes #124`, `Fixes JIRA-456`.
+
+---
+
+### 30.5 Boas Práticas Operacionais no Fluxo do Git
+
+#### 1. Commits Atômicos (*Atomic Commits*)
+- Faça commits pequenos que contenham apenas **uma alteração lógica**.
+- Nunca misture refatoração de código com correções de bug ou novas funcionalidades no mesmo commit.
+- Vantagem: se for necessário fazer `git revert` ou usar `git bisect`, você não desfaz alterações indesejadas.
+
+#### 2. Higiene de Branches e Histórico
+- **Mantenha a branch atualizada com `rebase`:** Antes de abrir um Pull Request, faça o rebase com a branch base (`git pull --rebase origin main`) para manter um histórico linear e resolver conflitos localmente.
+- **Squash Commits no Merge:** Agrupe múltiplos micro-commits de teste (`"oops"`, `"fix lint"`, `"now it works"`) em um único commit coeso ao mesclar o Pull Request.
+- **Deletar branches mescladas:** Configure seu repositório (GitHub/GitLab) para deletar a branch automaticamente após o merge.
+
+#### 3. O Que NUNCA Versionar
+- **Segredos e Credenciais:** Tokens, senhas, chaves SSH, arquivos `.env`, certificados `.pem`.
+- **Artefatos de Build e Dependências:** `node_modules/`, `target/`, `dist/`, `.venv/`, `.bin/`.
+- **Arquivos da IDE e do Sistema:** `.vscode/`, `.idea/`, `.DS_Store`, `Thumbs.db`.
+- **Solução:** Configure rigorosamente o `.gitignore` na raiz do repositório desde o primeiro commit.
+
+#### 4. Gestão de Tags e Releases (SemVer)
+Adote o **Versionamento Semântico** (`MAJOR.MINOR.PATCH`):
+- **MAJOR (v2.0.0):** Quebra de contrato/compatibilidade.
+- **MINOR (v1.1.0):** Adição de nova funcionalidade sem quebra.
+- **PATCH (v1.0.1):** Correção de bugs retrocompatível.
+
+Use tags anotadas:
+```bash
+git tag -a v1.2.0 -m "Release v1.2.0: Suporte a pagamentos via Pix"
+git push origin v1.2.0
+```
+
+---
+
+## 31. Conclusão
 
 O FSD está consolidado, completo e pronto para orientar de forma autossuficiente uma IA codificadora.
 

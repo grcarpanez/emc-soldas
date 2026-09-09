@@ -3,20 +3,25 @@
  */
 
 window.ComprasView = {
-  render(container) {
+  async render(container) {
     container.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
         <div>
           <h1 style="font-size: 24px; font-weight: 700;">COMPRAS & NOTAS DE ENTRADA</h1>
           <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">REGISTRO DE NOTAS FISCAIS E RETROALIMENTAÇÃO DO MOTOR DE CUSTOS (BOM)</p>
         </div>
-
-        <button class="btn btn-primary" id="btn-nova-compra">+ LANÇAR NOTA DE COMPRA</button>
       </div>
 
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-compra-busca" class="form-control" placeholder="BUSCAR POR NÚMERO DA NOTA, CHAVE OU FORNECEDOR..." style="max-width: 450px;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-compra-busca" class="form-control" placeholder="BUSCAR POR NÚMERO DA NOTA, CHAVE OU FORNECEDOR..." style="flex: 1; min-width: 240px;">
+          <div style="width: 260px; min-width: 220px; flex-shrink: 0;" id="wrapper-filtro-fornecedor">
+            <select id="filtro-compra-fornecedor" class="form-control">
+              <option value="">TODOS OS FORNECEDORES</option>
+            </select>
+          </div>
+          <span id="total-compras-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 NOTAS</span>
+          <button class="btn btn-primary" id="btn-nova-compra" style="white-space: nowrap; flex-shrink: 0;">+ LANÇAR NOTA DE COMPRA</button>
         </div>
       </div>
 
@@ -42,8 +47,38 @@ window.ComprasView = {
 
     document.getElementById('btn-nova-compra')?.addEventListener('click', () => this.abrirModalCompra());
     document.getElementById('filtro-compra-busca')?.addEventListener('input', () => this.carregarListaCompras());
+    document.getElementById('filtro-compra-fornecedor')?.addEventListener('change', () => this.carregarListaCompras());
 
-    this.carregarListaCompras();
+    await this.carregarSelectFornecedoresFiltro();
+    await this.carregarListaCompras();
+  },
+
+  async carregarSelectFornecedoresFiltro() {
+    const select = document.getElementById('filtro-compra-fornecedor');
+    if (!select) return;
+
+    try {
+      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`);
+      const fornecedores = res.results || res || [];
+      fornecedores.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+
+      select.innerHTML = '<option value="">TODOS OS FORNECEDORES</option>';
+      fornecedores.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.nome_razao;
+        select.appendChild(opt);
+      });
+
+      window.EMCUtils.initSearchableSelect(select, {
+        placeholder: 'TODOS OS FORNECEDORES'
+      });
+    } catch (e) {
+      console.warn('Erro ao carregar fornecedores para filtro de compras:', e);
+      window.EMCUtils.initSearchableSelect(select, {
+        placeholder: 'TODOS OS FORNECEDORES'
+      });
+    }
   },
 
   async carregarListaCompras() {
@@ -51,10 +86,21 @@ window.ComprasView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-compra-busca')?.value.trim() || '';
+    const fornecedor = document.getElementById('filtro-compra-fornecedor')?.value || '';
 
     try {
-      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.COMPRAS.NOTAS}?search=${encodeURIComponent(busca)}`);
+      let url = `${window.CONFIG.ENDPOINTS.COMPRAS.NOTAS}?search=${encodeURIComponent(busca)}`;
+      if (fornecedor) {
+        url += `&fornecedor_id=${fornecedor}`;
+      }
+      const res = await window.api.get(url);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-compras-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'NOTA' : 'NOTAS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma nota de compra lançada.</td></tr>';

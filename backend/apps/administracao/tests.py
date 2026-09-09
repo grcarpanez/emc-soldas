@@ -169,6 +169,37 @@ class AdministracaoTests(TestCase):
         self.assertTrue(res_get.data['smtp_has_password'])
         self.assertNotIn('smtp_password', res_get.data)
 
+    def test_validacao_valores_minimos_parametros_globais(self):
+        """Valida que validade >= 1, soft lock >= 1 e logs >= 0 (rejeitando negativos/zero indevidos)."""
+        self.client.force_authenticate(user=self.admin_user)
+
+        # Validade < 1 deve falhar
+        res_val = self.client.patch('/api/configuracoes-globais/1/', {'validade_orcamento_dias': 0})
+        self.assertEqual(res_val.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('validade_orcamento_dias', res_val.data.get('details', res_val.data))
+
+        res_val_neg = self.client.patch('/api/configuracoes-globais/1/', {'validade_orcamento_dias': -5})
+        self.assertEqual(res_val_neg.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Tempo soft lock < 1 deve falhar
+        res_oci = self.client.patch('/api/configuracoes-globais/1/', {'tempo_ociosidade_minutos': 0})
+        self.assertEqual(res_oci.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tempo_ociosidade_minutos', res_oci.data.get('details', res_oci.data))
+
+        res_oci_neg = self.client.patch('/api/configuracoes-globais/1/', {'tempo_ociosidade_minutos': -10})
+        self.assertEqual(res_oci_neg.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Retenção de logs < 0 deve falhar
+        res_log_neg = self.client.patch('/api/configuracoes-globais/1/', {'retencao_logs_dias': -1})
+        self.assertEqual(res_log_neg.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('retencao_logs_dias', res_log_neg.data.get('details', res_log_neg.data))
+
+        # Retenção de logs = 0 deve ser aceita com sucesso (mínimo zero)
+        res_log_zero = self.client.patch('/api/configuracoes-globais/1/', {'retencao_logs_dias': 0})
+        self.assertEqual(res_log_zero.status_code, status.HTTP_200_OK)
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.retencao_logs_dias, 0)
+
     def test_presets_smtp_endpoint(self):
         """Valida o endpoint que fornece presets rápidos para configuração de e-mails."""
         self.client.force_authenticate(user=self.admin_user)

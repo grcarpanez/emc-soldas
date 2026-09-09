@@ -80,15 +80,23 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
         if equipamento_id:
             queryset = queryset.filter(equipamento_id=equipamento_id)
 
-        # Filtro por Status Operacional
+        # Filtro por Status Operacional (suporta múltiplos separados por vírgula: ex 'APROVADO,EM_EXECUCAO')
         status_op = self.request.query_params.get('status_operacional')
         if status_op:
-            queryset = queryset.filter(status_operacional=status_op.upper())
+            status_list = [s.strip().upper() for s in status_op.split(',') if s.strip()]
+            if len(status_list) == 1:
+                queryset = queryset.filter(status_operacional=status_list[0])
+            elif len(status_list) > 1:
+                queryset = queryset.filter(status_operacional__in=status_list)
 
-        # Filtro por Status Financeiro
+        # Filtro por Status Financeiro (suporta múltiplos separados por vírgula: ex 'PENDENTE,FATURADO')
         status_fin = self.request.query_params.get('status_financeiro')
         if status_fin:
-            queryset = queryset.filter(status_financeiro=status_fin.upper())
+            status_fin_list = [s.strip().upper() for s in status_fin.split(',') if s.strip()]
+            if len(status_fin_list) == 1:
+                queryset = queryset.filter(status_financeiro=status_fin_list[0])
+            elif len(status_fin_list) > 1:
+                queryset = queryset.filter(status_financeiro__in=status_fin_list)
 
         # Filtro por Intervalo de Datas
         data_inicio = self.request.query_params.get('data_inicio')

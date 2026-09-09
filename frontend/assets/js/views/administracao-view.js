@@ -21,6 +21,9 @@ window.AdministracaoView = {
         <button class="tab-btn ${this.currentTab === 'smtp' ? 'active' : ''}" id="tab-btn-adm-smtp">
           SERVIÇO SMTP (E-MAILS)
         </button>
+        <button class="tab-btn ${this.currentTab === 'pagamento' ? 'active' : ''}" id="tab-btn-adm-pagamento">
+          FORMAS & REGRAS DE PAGAMENTO
+        </button>
         <button class="tab-btn ${this.currentTab === 'dicionarios' ? 'active' : ''}" id="tab-btn-adm-dicionarios">
           DICIONÁRIOS MESTRES (UOM & ATRIBUTOS)
         </button>
@@ -46,6 +49,10 @@ window.AdministracaoView = {
       this.currentTab = 'smtp';
       this.render(container);
     });
+    document.getElementById('tab-btn-adm-pagamento')?.addEventListener('click', () => {
+      this.currentTab = 'pagamento';
+      this.render(container);
+    });
     document.getElementById('tab-btn-adm-dicionarios')?.addEventListener('click', () => {
       this.currentTab = 'dicionarios';
       this.render(container);
@@ -68,6 +75,8 @@ window.AdministracaoView = {
       this.renderParametros(content);
     } else if (this.currentTab === 'smtp') {
       this.renderSmtp(content);
+    } else if (this.currentTab === 'pagamento') {
+      this.renderFormasPagamento(content);
     } else if (this.currentTab === 'dicionarios') {
       this.renderDicionariosMestres(content);
     } else if (this.currentTab === 'equipe') {
@@ -87,6 +96,9 @@ window.AdministracaoView = {
 
     try {
       const config = await window.api.get(`${window.CONFIG.ENDPOINTS.ADMINISTRACAO.CONFIGURACOES_GLOBAIS}1/`);
+      if (config?.tempo_ociosidade_minutos && window.auth?.updateInactivityTimeout) {
+        window.auth.updateInactivityTimeout(config.tempo_ociosidade_minutos);
+      }
 
       container.innerHTML = `
         <div class="card">
@@ -103,14 +115,14 @@ window.AdministracaoView = {
               </div>
               <div class="form-group">
                 <label class="form-label" for="cfg-cnpj">CNPJ da Empresa *</label>
-                <input type="text" id="cfg-cnpj" class="form-control mono-text" data-mask="cpf-cnpj" value="${config.cnpj || ''}" required>
+                <input type="text" id="cfg-cnpj" class="form-control mono-text" data-mask="cpf-cnpj" value="${window.EMCUtils.formatarCpfCnpjDinamico(config.cnpj || '')}" required>
               </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div class="form-group">
                 <label class="form-label" for="cfg-telefone">Telefone / WhatsApp de Contato</label>
-                <input type="text" id="cfg-telefone" class="form-control mono-text" data-mask="telefone" value="${config.telefone_contato || ''}">
+                <input type="text" id="cfg-telefone" class="form-control mono-text" data-mask="telefone" value="${window.EMCUtils.formatarTelefoneDinamico(config.telefone_contato || '')}">
               </div>
               <div class="form-group">
                 <label class="form-label" for="cfg-endereco">Endereço Completo da Oficina</label>
@@ -124,16 +136,16 @@ window.AdministracaoView = {
                 <input type="text" id="cfg-taxa-mo" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(config.taxa_mao_de_obra_hora || 120)}" required>
               </div>
               <div class="form-group">
-                <label class="form-label" for="cfg-validade">Validade Padrão Orçamento (Dias)</label>
-                <input type="number" id="cfg-validade" class="form-control mono-text" value="${config.validade_orcamento_dias || 15}" required>
+                <label class="form-label" for="cfg-validade">Validade Padrão Orçamento (Dias) *</label>
+                <input type="number" id="cfg-validade" class="form-control mono-text" min="1" step="1" value="${config.validade_orcamento_dias || 15}" required>
               </div>
               <div class="form-group">
-                <label class="form-label" for="cfg-ociosidade">Tempo Soft Lock (Minutos)</label>
-                <input type="number" id="cfg-ociosidade" class="form-control mono-text" value="${config.tempo_ociosidade_minutos || 30}" required>
+                <label class="form-label" for="cfg-ociosidade">Tempo Soft Lock (Minutos) *</label>
+                <input type="number" id="cfg-ociosidade" class="form-control mono-text" min="1" step="1" value="${config.tempo_ociosidade_minutos || 30}" required>
               </div>
               <div class="form-group">
-                <label class="form-label" for="cfg-retencao-logs">Retenção de Logs (Dias)</label>
-                <input type="number" id="cfg-retencao-logs" class="form-control mono-text" value="${config.retencao_logs_dias || 90}" required>
+                <label class="form-label" for="cfg-retencao-logs">Retenção de Logs (Dias) *</label>
+                <input type="number" id="cfg-retencao-logs" class="form-control mono-text" min="0" step="1" value="${config.retencao_logs_dias ?? 90}" required>
               </div>
             </div>
 
@@ -143,6 +155,28 @@ window.AdministracaoView = {
           </form>
         </div>
       `;
+
+      // Aplica máscaras imediatas em todos os campos renderizados
+      window.EMCUtils.aplicarMascarasEmContainer(container);
+
+      // Bloqueio defensivo contra números negativos ou abaixo do mínimo permitido
+      const aplicarRestricaoMinima = (id, minVal) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        const sanitizar = () => {
+          if (input.value === '') return;
+          const val = parseInt(input.value, 10);
+          if (isNaN(val) || val < minVal) {
+            input.value = minVal;
+          }
+        };
+        input.addEventListener('input', sanitizar);
+        input.addEventListener('change', sanitizar);
+      };
+
+      aplicarRestricaoMinima('cfg-validade', 1);
+      aplicarRestricaoMinima('cfg-ociosidade', 1);
+      aplicarRestricaoMinima('cfg-retencao-logs', 0);
 
       document.getElementById('form-config-global')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -163,6 +197,9 @@ window.AdministracaoView = {
           };
 
           await window.api.put(`${window.CONFIG.ENDPOINTS.ADMINISTRACAO.CONFIGURACOES_GLOBAIS}1/`, payload);
+          if (window.auth?.updateInactivityTimeout) {
+            window.auth.updateInactivityTimeout(payload.tempo_ociosidade_minutos);
+          }
           window.EMCUtils.showToast('Parâmetros globais atualizados com sucesso!', 'success');
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar parâmetros.', 'error');
@@ -190,6 +227,12 @@ window.AdministracaoView = {
           <div class="card-header">
             <h3>CONFIGURAÇÃO DO SERVIDOR SMTP (DISPARO DE E-MAILS)</h3>
             <span class="status-chip warning">CRIPTOGRAFIA AES-256</span>
+          </div>
+
+          <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <span class="mono-text" style="font-size: 11px; color: var(--color-steel-gray); font-weight: 700;">PRESETS RÁPIDOS:</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-preset-gmail">GOOGLE GMAIL</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-preset-outlook">MICROSOFT OUTLOOK</button>
           </div>
 
           <form id="form-smtp-config">
@@ -228,21 +271,60 @@ window.AdministracaoView = {
         </div>
       `;
 
+      // Handlers de Presets Rápidos
+      document.getElementById('btn-preset-gmail')?.addEventListener('click', () => {
+        document.getElementById('smtp-host').value = 'smtp.gmail.com';
+        document.getElementById('smtp-port').value = 587;
+        document.getElementById('smtp-user').focus();
+        window.EMCUtils.showToast('Preset Google Gmail aplicado (smtp.gmail.com:587). Informe seu e-mail e senha de app.', 'info');
+      });
+
+      document.getElementById('btn-preset-outlook')?.addEventListener('click', () => {
+        document.getElementById('smtp-host').value = 'smtp.office365.com';
+        document.getElementById('smtp-port').value = 587;
+        document.getElementById('smtp-user').focus();
+        window.EMCUtils.showToast('Preset Microsoft Outlook aplicado (smtp.office365.com:587).', 'info');
+      });
+
       document.getElementById('btn-testar-smtp')?.addEventListener('click', async () => {
         const btn = document.getElementById('btn-testar-smtp');
+        const host = document.getElementById('smtp-host').value.trim();
+        const port = parseInt(document.getElementById('smtp-port').value, 10) || 587;
+        const user = document.getElementById('smtp-user').value.trim();
+        const pass = document.getElementById('smtp-pass').value;
+        const remetente = document.getElementById('smtp-remetente').value.trim();
+
+        if (!host || !user) {
+          window.EMCUtils.showToast('Preencha ao menos o Host e o Usuário SMTP antes de testar.', 'warning');
+          return;
+        }
+
+        const emailPadrao = user && user.includes('@') ? user : (window.auth.user?.email || 'admin@emcsoldas.com.br');
+        const email_destino = prompt('Digite o e-mail de destino para receber a mensagem de teste:', emailPadrao);
+        if (!email_destino) return;
+
         btn.disabled = true;
-        btn.textContent = 'DISPARANDO TESTE...';
+        btn.textContent = 'CONECTANDO E DISPARANDO...';
 
         try {
-          const email_destino = prompt('Digite o e-mail de destino para receber o teste:', window.auth.user?.email || 'admin@emcsoldas.com.br');
-          if (!email_destino) {
-            btn.disabled = false;
-            btn.textContent = '⚡ TESTAR DISPARO EM TEMPO REAL';
-            return;
+          const payload = {
+            smtp_host: host,
+            smtp_port: port,
+            smtp_user: user,
+            destinatario: email_destino.trim(),
+            email_destino: email_destino.trim(),
+            email_remetente_nome: remetente || 'EMC Soldas - Teste'
+          };
+          if (pass) {
+            payload.smtp_password = pass;
           }
 
-          const res = await window.api.post(window.CONFIG.ENDPOINTS.ADMINISTRACAO.TESTAR_SMTP, { email_destino });
-          window.EMCUtils.showToast(res.message || 'E-mail de teste enviado com sucesso!', 'success');
+          const res = await window.api.post(window.CONFIG.ENDPOINTS.ADMINISTRACAO.TESTAR_SMTP, payload);
+          if (res.sucesso) {
+            window.EMCUtils.showToast(res.mensagem || `E-mail de teste enviado com sucesso para ${email_destino}!`, 'success');
+          } else {
+            window.EMCUtils.showToast(res.erro || 'Falha ao conectar no servidor SMTP.', 'error');
+          }
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Falha ao disparar e-mail de teste.', 'error');
         } finally {
@@ -273,6 +355,408 @@ window.AdministracaoView = {
     } catch (err) {
       container.innerHTML = `<div class="alert-banner alert-danger">${window.EMCUtils.escapeHtml(err.message)}</div>`;
     }
+  },
+
+  // ==========================================================================
+  // 2.1 FORMAS E REGRAS DE PAGAMENTO (MEIOS FÍSICOS & CONDIÇÕES COMERCIAIS)
+  // ==========================================================================
+  async renderFormasPagamento(container) {
+    container.innerHTML = `
+      <!-- Card 1: Dicionário de Meios de Pagamento -->
+      <div class="card mb-24" style="width: 100%;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3>MEIOS DE PAGAMENTO</h3>
+            <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">INSTRUMENTOS FÍSICOS E DIGITAIS DE RECEBIMENTO</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-novo-meio-pagto">+ NOVO MEIO DE PAGAMENTO</button>
+        </div>
+        <div class="table-container" style="max-height: 360px; overflow-y: auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">ID</th>
+                <th>NOME DO MEIO</th>
+                <th style="width: 180px;">TAXA MAQUININHA</th>
+                <th style="width: 140px;">STATUS</th>
+                <th style="text-align: right; width: 160px;">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="lista-meios-pagto-tbody">
+              <tr><td colspan="5" class="text-center"><div class="loader-spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card 2: Regras e Condições Comerciais de Pagamento -->
+      <div class="card mb-24" style="width: 100%;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3>REGRAS & CONDIÇÕES COMERCIAIS DE PAGAMENTO</h3>
+            <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PRAZOS, PARCELAMENTOS, INTERVALOS E DESCONTOS PADRÃO</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-nova-regra-pagto">+ NOVA REGRA COMERCIAL</button>
+        </div>
+        <div class="table-container" style="max-height: 480px; overflow-y: auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">ID</th>
+                <th>NOME DA REGRA</th>
+                <th>MEIO VINCULADO</th>
+                <th>TIPO COBRANÇA</th>
+                <th>PARCELAS</th>
+                <th>PRAZOS / INTERVALO</th>
+                <th>DESCONTO (%)</th>
+                <th>STATUS</th>
+                <th style="text-align: right; width: 160px;">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="lista-regras-pagto-tbody">
+              <tr><td colspan="9" class="text-center"><div class="loader-spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-novo-meio-pagto')?.addEventListener('click', () => this.abrirModalMeioPagamento());
+    document.getElementById('btn-nova-regra-pagto')?.addEventListener('click', () => this.abrirModalRegraPagamento());
+
+    await Promise.all([this.carregarMeiosPagamento(), this.carregarRegrasPagamento()]);
+  },
+
+  async carregarMeiosPagamento() {
+    const tbody = document.getElementById('lista-meios-pagto-tbody');
+    if (!tbody) return;
+
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO);
+      const lista = res.results || res || [];
+
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center mono-text" style="padding: 20px;">Nenhum meio de pagamento cadastrado.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      lista.forEach((m) => {
+        const taxaBadge = m.permite_taxa_maquininha
+          ? '<span class="status-chip warning" style="font-size: 10px;">SIM (TAXA)</span>'
+          : '<span class="status-chip secondary" style="font-size: 10px;">NÃO</span>';
+
+        const statusBadge = m.ativo
+          ? '<span class="status-chip success" style="font-size: 10px;">ATIVO</span>'
+          : '<span class="status-chip secondary" style="font-size: 10px;">INATIVO</span>';
+
+        html += `
+          <tr>
+            <td class="mono-text">#${m.id}</td>
+            <td><strong>${window.EMCUtils.escapeHtml(m.nome)}</strong></td>
+            <td>${taxaBadge}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 11px; margin-right: 4px;" onclick='window.AdministracaoView.abrirModalMeioPagamento(${JSON.stringify(m).replace(/'/g, "&apos;")})'>EDITAR</button>
+              <button class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 11px;" onclick="window.AdministracaoView.confirmarExclusaoMeioPagamento(${m.id}, '${window.EMCUtils.escapeHtml(m.nome)}')">EXCLUIR</button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  async abrirModalMeioPagamento(meio = null) {
+    const isEdit = Boolean(meio && meio.id);
+    const title = isEdit ? `EDITAR MEIO DE PAGAMENTO #${meio.id}` : 'NOVO MEIO DE PAGAMENTO';
+
+    window.EMCUtils.openModal({
+      title,
+      size: 'sm',
+      confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
+      content: `
+        <div class="form-group">
+          <label class="form-label" for="meio-nome">Nome do Meio de Pagamento *</label>
+          <input type="text" id="meio-nome" class="form-control" value="${isEdit ? window.EMCUtils.escapeHtml(meio.nome) : ''}" placeholder="Ex: PIX, BOLETO BANCARIO, CARTAO DE CREDITO" required autofocus>
+        </div>
+
+        <div style="margin-top: 12px; background-color: var(--color-surface-container); padding: 12px; border: 1px solid var(--color-steel-gray);">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+            <input type="checkbox" id="meio-permite-taxa" ${isEdit && meio.permite_taxa_maquininha ? 'checked' : ''}>
+            <span style="font-size: 13px; font-weight: 600;">Permite Desconto de Taxa de Maquininha</span>
+          </label>
+          <p style="font-size: 11px; color: var(--color-on-surface-variant); margin-left: 24px;">
+            Habilita campo de valor líquido no faturamento/baixa e gera lançamento automático de tarifa bancária.
+          </p>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="meio-ativo" ${!isEdit || meio.ativo ? 'checked' : ''}>
+            <span style="font-size: 13px; font-weight: 600;">Meio Ativo no Sistema</span>
+          </label>
+        </div>
+      `,
+      onConfirm: async () => {
+        const nome = document.getElementById('meio-nome')?.value.trim();
+        const permite_taxa_maquininha = document.getElementById('meio-permite-taxa')?.checked || false;
+        const ativo = document.getElementById('meio-ativo')?.checked || false;
+
+        if (!nome) {
+          window.EMCUtils.showToast('Informe o nome do meio de pagamento.', 'warning');
+          return false;
+        }
+
+        const payload = { nome, permite_taxa_maquininha, ativo };
+
+        try {
+          if (isEdit) {
+            await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO}${meio.id}/`, payload);
+            window.EMCUtils.showToast('Meio de pagamento atualizado com sucesso!', 'success');
+          } else {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO, payload);
+            window.EMCUtils.showToast('Meio de pagamento cadastrado com sucesso!', 'success');
+          }
+          this.carregarMeiosPagamento();
+          this.carregarRegrasPagamento();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao salvar meio de pagamento.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async confirmarExclusaoMeioPagamento(id, nome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAR INATIVAÇÃO DE MEIO DE PAGAMENTO',
+      size: 'sm',
+      confirmText: 'INATIVAR REGISTRO',
+      content: `
+        <div style="padding: 8px 0;">
+          <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 12px;">
+            Deseja inativar o meio de pagamento <strong>${nome}</strong> (#${id})?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px;">
+            Registros vinculados a regras comerciais ativas ou movimentações financeiras não podem ser inativados.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO}${id}/`);
+          window.EMCUtils.showToast(`Meio de pagamento ${nome} inativado com sucesso!`, 'success');
+          this.carregarMeiosPagamento();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Não foi possível inativar este meio de pagamento.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async carregarRegrasPagamento() {
+    const tbody = document.getElementById('lista-regras-pagto-tbody');
+    if (!tbody) return;
+
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.REGRAS_PAGAMENTO);
+      const lista = res.results || res || [];
+
+      if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center mono-text" style="padding: 20px;">Nenhuma regra comercial cadastrada.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      lista.forEach((r) => {
+        const meioNome = r.meio_pagamento_detalhe?.nome || r.meio_pagamento_nome || (r.meio_pagamento ? `#${r.meio_pagamento}` : '-');
+        const tipoLabel = r.tipo_cobranca === 'A_VISTA' ? 'À VISTA' : (r.tipo_cobranca === 'A_PRAZO' ? 'A PRAZO' : 'PARCELADO');
+        const prazosTexto = r.tipo_cobranca === 'A_VISTA'
+          ? 'IMEDIATO'
+          : `${r.prazo_primeira_parcela_dias}d / +${r.intervalo_parcelas_dias}d`;
+
+        const descFormatado = parseFloat(r.desconto_concedido_padrao || 0) > 0
+          ? `<strong style="color: var(--color-success);">${parseFloat(r.desconto_concedido_padrao).toFixed(2)}%</strong>`
+          : '0,00%';
+
+        const statusBadge = r.ativo
+          ? '<span class="status-chip success" style="font-size: 10px;">ATIVO</span>'
+          : '<span class="status-chip secondary" style="font-size: 10px;">INATIVO</span>';
+
+        html += `
+          <tr>
+            <td class="mono-text">#${r.id}</td>
+            <td><strong>${window.EMCUtils.escapeHtml(r.nome)}</strong></td>
+            <td><span class="status-chip info" style="font-size: 10px;">${window.EMCUtils.escapeHtml(meioNome)}</span></td>
+            <td class="mono-text" style="font-size: 11px;">${tipoLabel}</td>
+            <td class="mono-text">${r.numero_parcelas}x</td>
+            <td class="mono-text" style="font-size: 11px;">${prazosTexto}</td>
+            <td class="mono-text">${descFormatado}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 11px; margin-right: 4px;" onclick='window.AdministracaoView.abrirModalRegraPagamento(${JSON.stringify(r).replace(/'/g, "&apos;")})'>EDITAR</button>
+              <button class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 11px;" onclick="window.AdministracaoView.confirmarExclusaoRegraPagamento(${r.id}, '${window.EMCUtils.escapeHtml(r.nome)}')">EXCLUIR</button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  async abrirModalRegraPagamento(regra = null) {
+    const isEdit = Boolean(regra && regra.id);
+    const title = isEdit ? `EDITAR REGRA DE PAGAMENTO #${regra.id}` : 'NOVA REGRA DE PAGAMENTO';
+
+    let meios = [];
+    try {
+      const resMeios = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO);
+      meios = resMeios.results || resMeios || [];
+    } catch (_) {}
+
+    let optionsMeios = '<option value="">SELECIONE O MEIO VINCULADO...</option>';
+    const currentMeioId = isEdit ? (regra.meio_pagamento?.id || regra.meio_pagamento) : null;
+    meios.forEach((m) => {
+      const sel = (currentMeioId && currentMeioId === m.id) ? 'selected' : '';
+      optionsMeios += `<option value="${m.id}" ${sel}>${window.EMCUtils.escapeHtml(m.nome)}</option>`;
+    });
+
+    const tipoAtual = isEdit ? regra.tipo_cobranca : 'A_VISTA';
+
+    window.EMCUtils.openModal({
+      title,
+      size: 'md',
+      confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
+      content: `
+        <div class="form-group">
+          <label class="form-label" for="regra-nome">Nome da Condição Comercial *</label>
+          <input type="text" id="regra-nome" class="form-control" value="${isEdit ? window.EMCUtils.escapeHtml(regra.nome) : ''}" placeholder="Ex: A VISTA NO PIX (5%), BOLETO 30/60/90 DIAS" required autofocus>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label" for="regra-meio">Meio de Pagamento Vinculado *</label>
+            <select id="regra-meio" class="form-control" required>
+              ${optionsMeios}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regra-tipo">Tipo de Cobrança *</label>
+            <select id="regra-tipo" class="form-control">
+              <option value="A_VISTA" ${tipoAtual === 'A_VISTA' ? 'selected' : ''}>À VISTA</option>
+              <option value="A_PRAZO" ${tipoAtual === 'A_PRAZO' ? 'selected' : ''}>A PRAZO (PARCELA ÚNICA)</option>
+              <option value="PARCELADO" ${tipoAtual === 'PARCELADO' ? 'selected' : ''}>PARCELADO (MÚLTIPLAS PARCELAS)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label" for="regra-parcelas">Nº de Parcelas *</label>
+            <input type="number" id="regra-parcelas" class="form-control mono-text" min="1" step="1" value="${isEdit ? regra.numero_parcelas : 1}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regra-prazo-1">1ª Parcela (Dias) *</label>
+            <input type="number" id="regra-prazo-1" class="form-control mono-text" min="0" step="1" value="${isEdit ? regra.prazo_primeira_parcela_dias : 0}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="regra-intervalo">Intervalo (Dias) *</label>
+            <input type="number" id="regra-intervalo" class="form-control mono-text" min="0" step="1" value="${isEdit ? regra.intervalo_parcelas_dias : 0}" required>
+          </div>
+        </div>
+
+        <div class="form-grid-2" style="align-items: center; margin-top: 4px;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" for="regra-desconto">Desconto Sugerido Padrão (%)</label>
+            <input type="number" id="regra-desconto" class="form-control mono-text" min="0" max="100" step="0.1" value="${isEdit ? parseFloat(regra.desconto_concedido_padrao || 0).toFixed(2) : '0.00'}">
+          </div>
+          <div class="form-group" style="margin-bottom: 8px; padding-top: 4px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 42px;">
+              <input type="checkbox" id="regra-ativo" ${!isEdit || regra.ativo ? 'checked' : ''}>
+              <span style="font-size: 13px; font-weight: 600;">Regra Ativa no Sistema</span>
+            </label>
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        const nome = document.getElementById('regra-nome')?.value.trim();
+        const meio_pagamento = parseInt(document.getElementById('regra-meio')?.value, 10);
+        const tipo_cobranca = document.getElementById('regra-tipo')?.value;
+        const numero_parcelas = parseInt(document.getElementById('regra-parcelas')?.value, 10) || 1;
+        const prazo_primeira_parcela_dias = parseInt(document.getElementById('regra-prazo-1')?.value, 10) || 0;
+        const intervalo_parcelas_dias = parseInt(document.getElementById('regra-intervalo')?.value, 10) || 0;
+        const desconto_concedido_padrao = parseFloat(document.getElementById('regra-desconto')?.value || 0);
+        const ativo = document.getElementById('regra-ativo')?.checked || false;
+
+        if (!nome || !meio_pagamento) {
+          window.EMCUtils.showToast('Informe o nome da regra e selecione o meio vinculado.', 'warning');
+          return false;
+        }
+
+        const payload = {
+          nome,
+          meio_pagamento,
+          tipo_cobranca,
+          numero_parcelas,
+          prazo_primeira_parcela_dias,
+          intervalo_parcelas_dias,
+          desconto_concedido_padrao,
+          ativo
+        };
+
+        try {
+          if (isEdit) {
+            await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.REGRAS_PAGAMENTO}${regra.id}/`, payload);
+            window.EMCUtils.showToast('Regra de pagamento atualizada com sucesso!', 'success');
+          } else {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.REGRAS_PAGAMENTO, payload);
+            window.EMCUtils.showToast('Regra de pagamento cadastrada com sucesso!', 'success');
+          }
+          this.carregarRegrasPagamento();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao salvar regra comercial.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async confirmarExclusaoRegraPagamento(id, nome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAR INATIVAÇÃO DE REGRA COMERCIAL',
+      size: 'sm',
+      confirmText: 'INATIVAR REGISTRO',
+      content: `
+        <div style="padding: 8px 0;">
+          <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 12px;">
+            Deseja inativar a regra de pagamento <strong>${nome}</strong> (#${id})?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px;">
+            Regras vinculadas a propostas de orçamentos ou faturas existentes não podem ser inativadas para preservação do histórico comercial.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.FINANCEIRO.REGRAS_PAGAMENTO}${id}/`);
+          window.EMCUtils.showToast(`Regra ${nome} inativada com sucesso!`, 'success');
+          this.carregarRegrasPagamento();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Não foi possível inativar esta regra de pagamento.', 'error');
+          return false;
+        }
+      }
+    });
   },
 
   // ==========================================================================
@@ -966,10 +1450,11 @@ window.AdministracaoView = {
                   <th>ID</th>
                   <th>SIGLA</th>
                   <th>DESCRIÇÃO OFICIAL</th>
+                  <th style="text-align: right;">AÇÕES</th>
                 </tr>
               </thead>
               <tbody id="lista-uom-adm-tbody">
-                <tr><td colspan="3" class="text-center"><div class="loader-spinner"></div></td></tr>
+                <tr><td colspan="4" class="text-center"><div class="loader-spinner"></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -990,11 +1475,12 @@ window.AdministracaoView = {
                 <tr>
                   <th>ID</th>
                   <th>NOME DO ATRIBUTO</th>
-                  <th style="text-align: right;">STATUS</th>
+                  <th>STATUS</th>
+                  <th style="text-align: right;">AÇÕES</th>
                 </tr>
               </thead>
               <tbody id="lista-attr-adm-tbody">
-                <tr><td colspan="3" class="text-center"><div class="loader-spinner"></div></td></tr>
+                <tr><td colspan="4" class="text-center"><div class="loader-spinner"></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -1075,23 +1561,76 @@ window.AdministracaoView = {
       const lista = res.results || res || [];
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center mono-text">Nenhuma UOM cadastrada.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center mono-text">Nenhuma UOM cadastrada.</td></tr>';
         return;
       }
 
       let html = '';
       lista.forEach((u) => {
+        const uomJson = JSON.stringify(u).replace(/"/g, '&quot;');
         html += `
           <tr>
             <td class="mono-text">#${u.id}</td>
             <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(u.sigla)}</strong></td>
             <td>${window.EMCUtils.escapeHtml(u.descricao)}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick='window.AdministracaoView.abrirModalEditarUom(${uomJson})'>EDITAR</button>
+              <button class="btn btn-danger btn-sm" onclick="window.AdministracaoView.confirmarExclusaoUom(${u.id}, '${window.EMCUtils.escapeHtml(u.sigla)}')">EXCLUIR</button>
+            </td>
           </tr>
         `;
       });
       tbody.innerHTML = html;
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  abrirModalEditarUom(uom) {
+    window.EMCUtils.openModal({
+      title: `EDITAR UNIDADE DE MEDIDA (UOM) - ${window.EMCUtils.escapeHtml(uom.sigla)} (#${uom.id})`,
+      size: 'sm',
+      confirmText: 'SALVAR ALTERAÇÕES',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Sigla *</label>
+          <input type="text" id="edit-uom-sigla" class="form-control mono-text" maxlength="10" value="${window.EMCUtils.escapeHtml(uom.sigla)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descrição Oficial *</label>
+          <input type="text" id="edit-uom-desc" class="form-control" value="${window.EMCUtils.escapeHtml(uom.descricao)}" required>
+        </div>
+      `,
+      onConfirm: async () => {
+        const sigla = document.getElementById('edit-uom-sigla')?.value.trim();
+        const descricao = document.getElementById('edit-uom-desc')?.value.trim();
+        if (!sigla || !descricao) {
+          window.EMCUtils.showToast('Preencha todos os campos obrigatórios.', 'warning');
+          return false;
+        }
+
+        try {
+          await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM}${uom.id}/`, { sigla, descricao });
+          window.EMCUtils.showToast('UOM atualizada com sucesso!', 'success');
+          this.carregarUomsAdm();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao atualizar UOM.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async confirmarExclusaoUom(id, sigla) {
+    if (!confirm(`Deseja realmente inativar a UOM "${sigla}" (#${id})? Ela não poderá ser excluída se estiver vinculada a insumos ou produtos.`)) return;
+
+    try {
+      await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM}${id}/`);
+      window.EMCUtils.showToast(`UOM "${sigla}" inativada com sucesso!`, 'success');
+      this.carregarUomsAdm();
+    } catch (e) {
+      window.EMCUtils.showToast(e.message || 'Não foi possível inativar a UOM.', 'error');
     }
   },
 
@@ -1104,23 +1643,71 @@ window.AdministracaoView = {
       const lista = res.results || res || [];
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center mono-text">Nenhum atributo cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center mono-text">Nenhum atributo cadastrado.</td></tr>';
         return;
       }
 
       let html = '';
       lista.forEach((a) => {
+        const attrJson = JSON.stringify(a).replace(/"/g, '&quot;');
         html += `
           <tr>
             <td class="mono-text">#${a.id}</td>
             <td><strong>${window.EMCUtils.escapeHtml(a.nome_atributo)}</strong></td>
-            <td style="text-align: right;"><span class="status-chip success">ATIVO</span></td>
+            <td><span class="status-chip success">ATIVO</span></td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick='window.AdministracaoView.abrirModalEditarAtributo(${attrJson})'>EDITAR</button>
+              <button class="btn btn-danger btn-sm" onclick="window.AdministracaoView.confirmarExclusaoAtributo(${a.id}, '${window.EMCUtils.escapeHtml(a.nome_atributo)}')">EXCLUIR</button>
+            </td>
           </tr>
         `;
       });
       tbody.innerHTML = html;
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="3" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  abrirModalEditarAtributo(attr) {
+    window.EMCUtils.openModal({
+      title: `EDITAR ATRIBUTO TÉCNICO - ${window.EMCUtils.escapeHtml(attr.nome_atributo)} (#${attr.id})`,
+      size: 'sm',
+      confirmText: 'SALVAR ALTERAÇÕES',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Nome do Atributo *</label>
+          <input type="text" id="edit-attr-nome" class="form-control" value="${window.EMCUtils.escapeHtml(attr.nome_atributo)}" required autofocus>
+        </div>
+      `,
+      onConfirm: async () => {
+        const nome_atributo = document.getElementById('edit-attr-nome')?.value.trim();
+        if (!nome_atributo) {
+          window.EMCUtils.showToast('Informe o nome do atributo técnico.', 'warning');
+          return false;
+        }
+
+        try {
+          await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS}${attr.id}/`, { nome_atributo });
+          window.EMCUtils.showToast('Atributo técnico atualizado com sucesso!', 'success');
+          this.carregarAtributosAdm();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao atualizar atributo.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async confirmarExclusaoAtributo(id, nome) {
+    if (!confirm(`Deseja realmente inativar o atributo técnico "${nome}" (#${id})? Ele não poderá ser excluído se estiver vinculado a insumos.`)) return;
+
+    try {
+      await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS}${id}/`);
+      window.EMCUtils.showToast(`Atributo "${nome}" inativado com sucesso!`, 'success');
+      this.carregarAtributosAdm();
+    } catch (e) {
+      window.EMCUtils.showToast(e.message || 'Não foi possível inativar o atributo técnico.', 'error');
     }
   }
 };

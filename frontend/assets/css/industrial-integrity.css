@@ -35,6 +35,7 @@
   --color-primary-container: #b7410e;
   --color-on-primary-container: #ffe2d9;
   --color-rust-orange: #b7410e;
+  --color-rust-orange-bright: #ff6b35;
 
   /* Secundária e Terciária */
   --color-secondary: #c0c8cd;
@@ -141,9 +142,11 @@ p, span, label, input, textarea, select {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  height: 42px;
+  padding: 0 20px;
+  box-sizing: border-box !important;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -151,6 +154,7 @@ p, span, label, input, textarea, select {
   border: 1px solid transparent;
   transition: border-width 0.1s ease, background-color 0.15s ease, transform 0.05s ease;
   user-select: none;
+  white-space: nowrap;
 }
 
 .btn:active {
@@ -166,7 +170,7 @@ p, span, label, input, textarea, select {
 .btn-primary:hover {
   background-color: #a2390c;
   border: 2px solid #ffffff;
-  padding: 9px 19px; /* Mantém alinhamento com borda de 2px */
+  padding: 0 19px; /* Mantém alinhamento com borda de 2px */
 }
 
 .btn-secondary {
@@ -178,7 +182,7 @@ p, span, label, input, textarea, select {
 .btn-secondary:hover {
   border: 2px solid var(--color-brushed-metal);
   background-color: var(--color-surface-container-highest);
-  padding: 9px 19px;
+  padding: 0 19px;
 }
 
 .btn-danger {
@@ -189,7 +193,7 @@ p, span, label, input, textarea, select {
 
 .btn-danger:hover {
   border: 2px solid #ffffff;
-  padding: 9px 19px;
+  padding: 0 19px;
 }
 
 /* Inputs e Formulários */
@@ -210,20 +214,32 @@ p, span, label, input, textarea, select {
 }
 
 .form-control {
+  height: 42px;
   background-color: var(--color-surface-container-low);
   color: var(--color-on-surface);
   border: 1px solid var(--color-steel-gray);
-  padding: 10px 14px;
-  font-size: 15px;
+  padding: 0 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: normal;
+  box-sizing: border-box !important;
   outline: none;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+select.form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23A5A9B4' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 32px;
 }
 
 .form-control:focus {
   border-color: var(--color-rust-orange);
   background-color: var(--color-surface-container);
   border-width: 2px;
-  padding: 9px 13px;
+  padding: 0 13px;
 }
 
 .form-control.is-invalid {
@@ -319,6 +335,12 @@ p, span, label, input, textarea, select {
   background-color: #172b38;
   color: #8ac8f0;
   border-color: #244b63;
+}
+
+.status-chip.secondary {
+  background-color: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  border-color: var(--color-steel-gray);
 }
 
 /* ==========================================================================
@@ -459,6 +481,8 @@ p, span, label, input, textarea, select {
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .modal-size-sm { max-width: 420px; }
@@ -488,7 +512,22 @@ p, span, label, input, textarea, select {
 .modal-body {
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
+  box-sizing: border-box;
+}
+
+/* Grids Responsivos de Formulários */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
 }
 
 .modal-footer {
@@ -733,11 +772,15 @@ p, span, label, input, textarea, select {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  height: 42px;
   background-color: var(--color-surface-container-low);
   color: var(--color-on-surface);
   border: 1px solid var(--color-steel-gray);
-  padding: 10px 14px;
+  padding: 0 14px;
+  font-family: var(--font-body);
   font-size: 14px;
+  line-height: normal;
+  box-sizing: border-box !important;
   cursor: pointer;
   user-select: none;
   border-radius: 0px;
@@ -748,6 +791,8 @@ p, span, label, input, textarea, select {
 .emc-combobox-trigger:focus {
   border-color: var(--color-rust-orange);
   background-color: var(--color-surface-container);
+  border-width: 2px;
+  padding: 0 13px;
   outline: none;
 }
 
@@ -849,6 +894,151 @@ p, span, label, input, textarea, select {
   color: var(--color-on-surface-variant);
   text-align: center;
   font-family: var(--font-mono);
+}
+
+/* ==========================================================================
+   COMBOBOX MULTI-SELEÇÃO COM FLAGS - INDUSTRIAL INTEGRITY
+   ========================================================================== */
+.emc-multiselect {
+  position: relative;
+  display: inline-block;
+}
+
+.emc-multiselect-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 42px;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-steel-gray);
+  padding: 0 14px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: normal;
+  box-sizing: border-box !important;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 0px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.emc-multiselect.open .emc-multiselect-trigger,
+.emc-multiselect-trigger:focus {
+  border-color: var(--color-rust-orange);
+  background-color: var(--color-surface-container);
+  border-width: 2px;
+  padding: 0 13px;
+  outline: none;
+}
+
+.emc-multiselect-trigger-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.emc-multiselect-trigger-arrow {
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--color-on-surface-variant);
+  transition: transform 0.2s ease;
+}
+
+.emc-multiselect.open .emc-multiselect-trigger-arrow {
+  transform: rotate(180deg);
+  color: var(--color-rust-orange);
+}
+
+.emc-multiselect-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 360px;
+  max-height: 280px;
+  background-color: var(--color-surface-container-high);
+  border: 1px solid var(--color-rust-orange);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 100050;
+  border-radius: 0px;
+  flex-direction: column;
+}
+
+.emc-multiselect.open .emc-multiselect-dropdown {
+  display: flex;
+}
+
+.emc-multiselect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background-color: var(--color-surface-container-highest);
+  border-bottom: 1px solid var(--color-steel-gray);
+  gap: 8px;
+}
+
+.emc-multiselect-header button {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-steel-gray);
+  color: var(--color-on-surface);
+  cursor: pointer;
+  border-radius: 0px;
+}
+
+.emc-multiselect-header button:hover {
+  border-color: var(--color-rust-orange);
+  color: var(--color-rust-orange-bright);
+}
+
+.emc-multiselect-options {
+  overflow-y: auto;
+  max-height: 220px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.emc-multiselect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  color: var(--color-on-surface);
+}
+
+.emc-multiselect-item:last-child {
+  border-bottom: none;
+}
+
+.emc-multiselect-item:hover {
+  background-color: rgba(183, 65, 14, 0.15);
+}
+
+.emc-multiselect-item.selected {
+  background-color: rgba(183, 65, 14, 0.25);
+  font-weight: 600;
+}
+
+.emc-multiselect-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--color-rust-orange);
+  margin: 0;
 }
 
 /* ==========================================================================
@@ -985,12 +1175,17 @@ p, span, label, input, textarea, select {
     flex-shrink: 0;
   }
 
-  /* Colapso Responsivo de Grids de Formulários em Modais */
+  /* Colapso Responsivo de Grids de Formulários em Modais e Geral */
+  .modal-body div[style*="grid-template-columns"],
+  .modal-body div[style*="display: grid"],
   form div[style*="grid-template-columns"],
   form div[style*="display: grid"],
-  .form-grid {
+  .form-grid,
+  .form-grid-2,
+  .form-grid-3,
+  .form-grid-4 {
     grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    gap: 10px !important;
   }
 
   /* Barras de Ação e Filtros */

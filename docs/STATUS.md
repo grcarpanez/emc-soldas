@@ -2,9 +2,9 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-07 (Combobox Pesquisável de Proprietários, Painel de Pátio/Frota e PWA v3.3)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Verificações em andamento no frontend)  
-**Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - pronta para início após validações do frontend)  
+**Última Atualização:** 2026-09-09 (Padronização Universal de Controles 42px, Resolução de Erros de Tela e Governança de Commits, PWA v4.4)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Consistência Dimensional e Commits Semânticos)  
+**Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
 
@@ -255,18 +255,90 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - Frontend: badge visual de destaque `[NO PÁTIO (#X)]` na coluna de Proprietário da tabela.
   - Testes unitários dedicados em `apps/cadastros/tests.py` (19 testes de cadastros e 160 testes globais aprovados com 100% de sucesso).
   - Versionamento PWA: cache sincronizado para `emc-soldas-v3.2` em `frontend/sw.js` e tags atualizadas com `?v=3.2` em `frontend/index.html`.
-- [x] **Combobox Pesquisável com Autocomplete Industrial para Proprietários (PWA v3.3):**
-  - Integração da combobox de proprietários com `window.EMCUtils.initSearchableSelect`, transformando o select estático em um componente pesquisável com digitação e autocomplete em tempo real (*Industrial Integrity*).
-  - Suporte a digitação imediata (`DIGITE PARA FILTRAR...`), navegação por teclado (`↑`, `↓`, `Enter`, `Esc`) e sincronização reativa ao selecionar qualquer cliente ou as opções de topo (`TODOS OS PROPRIETÁRIOS` e `NÃO VINCULADOS`), eliminando a rolagem manual em listas extensas de parceiros.
-  - Versionamento PWA: cache elevado para `emc-soldas-v3.3` no `sw.js` e tags de scripts/estilos atualizadas com `?v=3.3` no `index.html`.
+- [x] **Temporizador Visual de Inatividade na Topbar & Alerta Fixo aos 30s (PWA v3.6):**
+  - Componente de Topbar em Tempo Real: Inclusão do chip monospace `<span class="status-chip secondary mono-text" id="session-timer-chip">⏱ MM:SS</span>` na barra superior ao lado do indicador de conectividade (`ONLINE`).
+  - Alerta Visual Mandatório aos 30s: Contagem regressiva contínua baseada em tempo real que transiciona para estilo de alerta (`status-chip warning` - tom âmbar/laranja industrial) quando o tempo restante for `<= 30 segundos`, avisando o operador antes do bloqueio automático.
+  - Reset Dinâmico por Utilização Efetiva: O cronômetro reinicia de volta ao tempo total configurado imediatamente ao ocorrer qualquer clique no sistema, digitação, seleção ou chamada de API (mantendo o critério de que mexer o mouse sem clicar ou usar outros aplicativos no Windows não reseta a ociosidade da sessão).
+  - Versionamento PWA: Cache sincronizado para `emc-soldas-v3.6` em `frontend/sw.js` e sufixos de cache-busting `?v=3.6` em `frontend/index.html`.
+  - Suíte de Testes Automatizados: 36 testes executados e 100% aprovados (`apps.authentication` e `apps.administracao`).
+- [x] **Restrição de Valores Mínimos em Parâmetros Globais & Bloqueio Anti-Negativo (PWA v3.7):**
+  - Travamento Físico de Mínimos no Frontend: Configuração de `min="1"` e `step="1"` para Validade do Orçamento (`cfg-validade`) e Tempo Soft Lock (`cfg-ociosidade`), e `min="0"` e `step="1"` para Retenção de Logs (`cfg-retencao-logs`), impedindo navegação para valores negativos através das setinhas do stepper.
+  - Sanitização Ativa de Entrada: Ouvintes reativos nos eventos `input` e `change` que corrigem imediatamente digitação ou colagem manual de números inferiores ao piso permitido (bloqueando sinais de menos ou valores negativos).
+  - Blindagem Mandatória no Backend DRF: Validações no `ConfiguracaoGlobalSerializer` rejeitando com `400 Bad Request` qualquer payload com `validade_orcamento_dias < 1`, `tempo_ociosidade_minutos < 1` ou `retencao_logs_dias < 0`.
+  - Versionamento PWA: Cache elevado para `emc-soldas-v3.7` em `frontend/sw.js` e sufixos de cache-busting `?v=3.7` em `frontend/index.html`.
+  - Suíte de Testes Automatizados: 37 testes executados e 100% aprovados (`apps.authentication` e `apps.administracao`).
+- [x] **Disparo Real de Teste SMTP via Conexão Direta, Presets de E-mail e Diagnóstico (PWA v3.8):**
+  - Conexão SMTP Real Direta: Eliminação do interceptador de console local na função `testar_conexao_smtp()` em `apps/administracao/services.py`, forçando conexão por socket TCP direto com o host e porta indicados (ex: `smtp.gmail.com:587`) com timeout seguro de 15 segundos.
+  - Sincronização de Parâmetros e Dados da Tela: Suporte ao alias `email_destino` no `TesteSmtpSerializer` e envio dinâmico dos dados digitados na tela na hora pelo frontend (inclusive nova senha de app digitada sem precisar salvar antes no banco).
+  - Presets Rápidos de Provedores: Inclusão de botões rápidos `[GOOGLE GMAIL]` e `[MICROSOFT OUTLOOK]` no cabeçalho do formulário que preenchem automaticamente o host (`smtp.gmail.com` / `smtp.office365.com`) e porta (`587`) com 1 clique.
+  - Versionamento PWA: Cache elevado para `emc-soldas-v3.8` em `frontend/sw.js` e sufixos de cache-busting `?v=3.8` em `frontend/index.html`.
+  - Suíte de Testes Automatizados: 17 testes executados e 100% aprovados (`apps.administracao`).
+- [x] **Gestão de Formas & Regras Comerciais de Pagamento e CRUD Completo de Dicionários Mestres (PWA v3.9):**
+  - **Aba de Formas & Regras de Pagamento:** Criação da aba dedicada na Central do Administrador (`#/administracao`) estruturada em duas tabelas no padrão *Industrial Integrity*:
+    - **Meios de Pagamento (`MeioPagamento`):** Listagem com ID, Nome, badge de Taxa de Maquininha (sim/não), Status e botões de `EDITAR` e `EXCLUIR` (soft delete seguro com bloqueio automático pelo backend caso haja regras ativas ou movimentações vinculadas).
+    - **Regras Comerciais (`RegraPagamento`):** Listagem com Meio vinculado, Tipo de Cobrança (`À VISTA`, `A PRAZO`, `PARCELADO`), número de parcelas, intervalos e prazos de vencimento em dias, percentual de desconto sugerido, Status e botões de `EDITAR` e `EXCLUIR` (soft delete seguro com bloqueio automático pelo backend caso haja propostas ou faturas vinculadas).
+    - Modais industriais para criação e edição com validações reativas e atualização em tempo real.
+  - **CRUD Completo em Dicionários Mestres (UOM & Atributos Técnicos):**
+    - Adição de coluna `AÇÕES` com botões `EDITAR` e `EXCLUIR` nas tabelas de Unidades de Medida (`DicionarioUom`) e Atributos Técnicos (`DicionarioAtributo`).
+    - Modais dedicados de edição com suporte a `PUT` nas rotas da API.
+    - Exclusão lógica com confirmação e tratamento gracioso das proteções do backend (impedindo exclusão de UOMs ou atributos em uso por itens/produtos no catálogo).
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v3.9` em `frontend/sw.js` e sufixos de cache-busting `?v=3.9` em `frontend/index.html`.
+  - **Suíte de Testes Automatizados:** 49 testes executados e 100% aprovados (`apps.financeiro`, `apps.catalogo`, `apps.administracao`).
+- [x] **Reestruturação e Empilhamento Vertical de Formas & Regras Comerciais de Pagamento (PWA v4.0):**
+  - **Empilhamento Vertical 100%:** Transição do layout de 2 colunas paralelas apertadas (`5fr` / `7fr`) para disposição empilhada (um card abaixo do outro com largura total), eliminando esmagamentos de texto, truncamento no cabeçalho e cortes horizontais na tabela de regras.
+  - **Card Superior (Meios de Pagamento):** Largura completa com visual arejado e tabela densa (`ID`, `NOME DO MEIO`, `TAXA MAQUININHA`, `STATUS`, `AÇÕES`), botão `+ NOVO MEIO DE PAGAMENTO`.
+  - **Card Inferior (Regras Comerciais):** Largura completa acomodando com total folga e legibilidade as 9 colunas (`ID`, `NOME DA REGRA`, `MEIO VINCULADO`, `TIPO COBRANÇA`, `PARCELAS`, `PRAZOS / INTERVALO`, `DESCONTO (%)`, `STATUS`, `AÇÕES`), botão `+ NOVA REGRA COMERCIAL` com rótulo completo e botões de ação folgados.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.0` em `frontend/sw.js` e sufixos de cache-busting `?v=4.0` em `frontend/index.html`.
+  - **Suíte de Testes Automatizados:** 34 testes executados e 100% aprovados (`apps.administracao`, `apps.financeiro`).
+- [x] **Fluidez Vertical e Eliminação de Scroll Horizontal em Modais Mobile (PWA v4.1):**
+  - **Blindagem Global Anti-Scroll Horizontal:** Configuração de `overflow-x: hidden;` e `box-sizing: border-box;` em `.modal-card` e `.modal-body` no `industrial-integrity.css`, eliminando barras de rolagem horizontais em qualquer modal da aplicação.
+  - **Classes Utilitárias de Grids Responsivos:** Implementação de `.form-grid-2` e `.form-grid-3` e ampliação do seletor responsivo (`.modal-body div[style*="grid-template-columns"]`, `.modal-body div[style*="display: grid"]`, `.form-grid-2`, `.form-grid-3`), forçando colapso automático para 1 coluna (`grid-template-columns: 1fr !important;`) em telas `<= 768px` (smartphones em modo retrato e paisagem).
+  - **Reestruturação do Modal de Regras de Pagamento:** Eliminação de grids inline rígidos, garantindo que parcelas, prazos e descontos quebrem suavemente em linhas individuais no celular, rolando com fluidez natural exclusivamente na vertical.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.1` em `frontend/sw.js` e sufixos de cache-busting `?v=4.1` em `frontend/index.html`.
+  - **Suíte de Testes Automatizados:** 34 testes executados e 100% aprovados (`apps.administracao`, `apps.financeiro`).
+- [x] **Combobox Pesquisável com Autocomplete para Insumos na Ficha Técnica BOM (PWA v4.2):**
+  - **Campo de Busca e Digitação em Tempo Real:** Conversão do seletor nativo `<select id="add-ficha-item-id">` no modal de Ficha Técnica (BOM) em componente dinâmico `window.EMCUtils.initSearchableSelect`, idêntico ao de veículos e orçamentos, permitindo digitar trechos de insumos e matérias-primas e filtrar instantaneamente.
+  - **Ordenação Alfabética Prévia:** Ordenação automática alfabética por nome (`localeCompare`) dos itens retornados da API antes da montagem das opções.
+  - **Navegação Completa por Teclado:** Suporte total a navegação com setas cima/baixo, Enter para selecionar e Esc para fechar, mantendo o valor selecionado no select nativo e submissão 100% compatível com a API REST.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.2` em `frontend/sw.js` e sufixos de cache-busting `?v=4.2` em `frontend/index.html`.
+- [x] **Reestruturação Universal das Barras de Filtros e Comboboxes com Flags Multiselect (PWA v4.3):**
+  - **Eliminação de Espaços Vazios e Larguras Fixas:** Remoção de travas de `max-width: 380px`, adotando campos de pesquisa elásticos (`flex: 1; min-width: 240px;`), chips contadores em tempo real (`status-chip secondary`) e botões primários integrados à barra em todas as telas principais do sistema.
+  - **Catálogo & Motor BOM (`/#catalogo`):** Ambas as abas (Insumos e Produtos) reformuladas com busca elástica, chip totalizador e botão primário, respeitando a diretriz de não utilizar filtro de unidade de medida.
+  - **Compras & Entradas (`/#compras`):** Barra unificada com busca elástica por NFe, combobox pesquisável de fornecedores, chip totalizador e botão `+ LANÇAR NOTA DE COMPRA`.
+  - **Tesouraria & Caixa (`/#tesouraria`):**
+    - *Aba Extrato:* Busca elástica, combobox multiselect com flags para Contas Bancárias (seleção de 1 ou N contas com botões rápidos `[✓ TODOS]` e `[✕ LIMPAR]`), filtro de tipo e botão de lançamento.
+    - *Aba Contas a Pagar:* Busca elástica, combobox multiselect com flags para Status (`PENDENTE`, `PAGO`, `PARCIAL`, `CANCELADO`), chip totalizador e botão de despesa rápida.
+    - *Aba Contas a Receber:* Busca elástica, combobox multiselect com flags para Status, chip totalizador e botão de receita rápida.
+  - **Faturamento (`/#faturamento`):** Busca elástica por cliente/fatura, combobox multiselect com flags para Status (`FATURADO`, `PAGO`, `PARCIAL`, `CANCELADO`), chip totalizador e atalho para Conta Corrente.
+  - **Orçamentos (`/#orcamentos`):** Busca elástica por cliente/equipamento/número, combobox multiselect com flags para Status Operacional, filtro de status financeiro, chip totalizador e botão `+ NOVO ORÇAMENTO` integrado.
+  - **Backend com Suporte a Filtros Múltiplos Separados por Vírgula:** Suporte a filtros `status__in`, `conta_id__in`, `status_operacional__in` e `status_financeiro__in` via DRF Queryset em `LancamentoFinanceiroViewSet`, `FaturaViewSet` e `OrcamentoViewSet`.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.3` em `frontend/sw.js` e sufixos de cache-busting `?v=4.3` em `frontend/index.html`.
+- [x] **Padronização Visual Universal de Controles (42px), Correção de Tela e Governança de Commits (PWA v4.4):**
+  - **Correção de Runtime na Tela de Compras (`/#compras`):** Conversão de `render(container)` para método assíncrono `async render(container)` em `compras-view.js`, eliminando o erro de sintaxe `SyntaxError: await is only valid in async functions` que causava `Cannot read properties of undefined (reading 'render')`.
+  - **Altura Canônica Universal de 42px para Controles Interativos:** Fixação estrita de `height: 42px; box-sizing: border-box !important;` em `.form-control`, `select.form-control`, `.btn`, `.emc-combobox-trigger` e `.emc-multiselect-trigger` no `industrial-integrity.css`, eliminando qualquer desnível de pixels entre textboxes, comboboxes e botões nas barras de ferramentas.
+  - **Harmonização Cromática e Prevenção de Encavalamento:** Declaração de `--color-rust-orange-bright: #ff6b35;` no `:root`, correção de contraste em textos selecionados e padding de foco compensado (`0 13px`) para preservar a altura total exata de 42px com borda de 2px.
+  - **Norma Documental de Layout em `docs/DESIGN.md`:** Registro da seção normativa "Interactive Controls & Dimensional Consistency" definindo alturas (42px padrão, 32px small), tipografia técnica (`Inter` para dados, `JetBrains Mono` para botões e códigos) e alinhamento em flex containers.
+  - **Governança de Commits Semânticos em `AGENTS.md` e `docs/FSD.md`:** Inclusão da Regra Mandatória 13 no `AGENTS.md` exigindo commits formais após cada Implementation Plan aprovado e inclusão da Seção 30 no `docs/FSD.md` com a tabela e convenções completas do Conventional Commits.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.4` em `frontend/sw.js` e sufixos de cache-busting `?v=4.4` em `frontend/index.html`.
 
-
-
-
+### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
+Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
+- [ ] **Gestão de Contas Bancárias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
+  - *Situação atual:* Tabela 18 do FSD. Usada em seletores de quitação, despesas e conciliação bancária, mas sem tela de listagem, inclusão, edição de saldo inicial/limite de cheque especial e inativação de contas.
+  - *Local sugerido:* Nova aba "CONTAS BANCÁRIAS" na Tesouraria (`#/financeiro`) ou na Central Administrativa.
+- [ ] **Gestão da Árvore Hierárquica de Categorias Financeiras DRE (`apps/financeiro` - `/api/categorias-financeiras/`):**
+  - *Situação atual:* Tabela 21 do FSD. Suporta tipos `RECEITA`, `DESPESA`, `CUSTO_FIXO`, `CUSTO_VARIAVEL` e subcategorias pai/filho. Usada nos lançamentos e no relatório DRE, mas sem interface visual para o administrador gerenciar a árvore de categorias.
+  - *Local sugerido:* Subaba na Tesouraria ou na Central Administrativa.
+- [ ] **Gestão de Cartões de Crédito Corporativos & Fechamento de Faturas (`apps/financeiro` - `/api/cartoes/` e `/api/faturas-cartao/`):**
+  - *Situação atual:* Tabelas 19 e 20 do FSD. Cartões e faturas mensais modelados no backend, mas geridos hoje apenas via modal auxiliar no lançamento de despesas.
+  - *Local sugerido:* Aba dedicada na Tesouraria.
+- [ ] **Editor Dedicado de Ficha Técnica / Estrutura de Insumos BOM (`apps/catalogo` - `/api/fichas-tecnicas/`):**
+  - *Situação atual:* O cadastro de produtos permite definir itens no modal, mas uma visualização em árvore de composição detalhada e ajuste em lote da receita ainda pode ser expandida.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy
 - [ ] Executar suíte de testes automatizados unitários e de integração (`python manage.py test`).
 - [ ] Executar Pentest Mandatório de Conclusão (6 testes: RBAC/IDOR, Brute-force, SQLi/XSS, Uploads, Sessão HttpOnly, Criptografia/Tracebacks).
+- [ ] **Remoção Mandatória de Configurações Temporárias de Túnel Externo:** Auditar e remover a liberação de CSRF para o wildcard `https://*.trycloudflare.com` em `backend/config/settings.py` antes do deploy definitivo em produção.
 - [ ] Disponibilizar script gerador de chaves criptográficas de 64 caracteres (`tools/generate_keys.py`).
 - [ ] Elaborar guia de implantação em produção Cloud PaaS.
 

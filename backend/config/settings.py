@@ -63,6 +63,12 @@ if DEBUG:
     if 'http://192.168.2.138:8000' not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append('http://192.168.2.138:8000')
 
+    # [ATENÇÃO / ROLLBACK MANDATÓRIO NA FASE 15]: Liberação temporária de CSRF para Cloudflare Quick Tunnels
+    # Permite acesso e testes remotos via trycloudflare.com enquanto o sistema estiver em desenvolvimento.
+    # Esta diretriz DEVE ser removida ou desfeita durante o Hardening de Deploy em Produção (Fase 15).
+    if 'https://*.trycloudflare.com' not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append('https://*.trycloudflare.com')
+
 CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
 CORS_ALLOW_CREDENTIALS = True
 

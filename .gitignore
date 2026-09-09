@@ -96,3 +96,7 @@ backend/staticfiles/
 ehthumbs.db
 Thumbs.db
 [Dd]esktop.ini
+
+# Binários e Ferramentas Locais
+*.exe
+tools/*.exe

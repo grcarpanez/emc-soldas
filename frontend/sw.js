@@ -3,7 +3,7 @@
  * Sistema EMC Soldas - Industrial Integrity PWA
  */
 
-const CACHE_NAME = 'emc-soldas-v3.3';
+const CACHE_NAME = 'emc-soldas-v4.4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -82,34 +82,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Requisições de arquivos estáticos: Cache-First ou Network-First com fallback
+  // Requisições de assets estáticos (.js, .css, .html): Network-First com fallback para Cache
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Atualiza o cache em segundo plano (Stale-While-Revalidate)
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, networkResponse);
-            });
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-
+    fetch(event.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
         const responseToCache = networkResponse.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, responseToCache);
         });
-
-        return networkResponse;
-      }).catch(() => {
-        // Fallback para o index.html em navegação
+      }
+      return networkResponse;
+    }).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
         if (event.request.mode === 'navigate') {
           return caches.match('/');
         }

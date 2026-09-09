@@ -107,16 +107,36 @@ class LoginView(APIView):
 
         user_data = UsuarioSerializer(usuario).data
 
+        config_data = self._obter_config_operacional()
+
         response = Response({
             'status': 'success',
             'message': 'Login realizado com sucesso.',
             'user': user_data,
+            'config': config_data,
             'access': tokens['access'],
         }, status=status.HTTP_200_OK)
 
         # Injeta tokens em Cookies HttpOnly com SameSite=Strict
         set_auth_cookies(response, tokens['access'], tokens['refresh'])
         return response
+
+    @staticmethod
+    def _obter_config_operacional():
+        try:
+            from apps.administracao.models import ConfiguracaoGlobal
+            cfg = ConfiguracaoGlobal.get_solo()
+            return {
+                'tempo_ociosidade_minutos': cfg.tempo_ociosidade_minutos,
+                'razao_social': cfg.razao_social,
+                'validade_orcamento_dias': cfg.validade_orcamento_dias,
+            }
+        except Exception:
+            return {
+                'tempo_ociosidade_minutos': 30,
+                'razao_social': 'EMC SOLDAS',
+                'validade_orcamento_dias': 15,
+            }
 
 
 class LogoutView(APIView):
@@ -143,9 +163,11 @@ class MeView(APIView):
 
     def get(self, request):
         serializer = UsuarioSerializer(request.user)
+        config_data = LoginView._obter_config_operacional()
         return Response({
             'status': 'success',
-            'user': serializer.data
+            'user': serializer.data,
+            'config': config_data,
         }, status=status.HTTP_200_OK)
 
 

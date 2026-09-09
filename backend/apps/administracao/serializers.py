@@ -79,13 +79,18 @@ class ConfiguracaoGlobalSerializer(serializers.ModelSerializer):
         return value
 
     def validate_validade_orcamento_dias(self, value):
-        if value is not None and value <= 0:
+        if value is not None and value < 1:
             raise serializers.ValidationError("A validade do orçamento deve ser de pelo menos 1 dia.")
         return value
 
-    def validate_retencao_logs_dias(self, value):
+    def validate_tempo_ociosidade_minutos(self, value):
         if value is not None and value < 1:
-            raise serializers.ValidationError("O prazo de retenção de logs deve ser de pelo menos 1 dia.")
+            raise serializers.ValidationError("O tempo de ociosidade para soft lock deve ser de pelo menos 1 minuto.")
+        return value
+
+    def validate_retencao_logs_dias(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("O prazo de retenção de logs não pode ser negativo (mínimo 0 dias).")
         return value
 
     def update(self, instance, validated_data):
@@ -124,6 +129,12 @@ class TesteSmtpSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="E-mail destinatário para o envio de teste. Se omitido, usa o usuário SMTP ou Admin"
     )
+    email_destino = serializers.EmailField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text="Alias para destinatario"
+    )
     smtp_host = serializers.CharField(required=False, allow_blank=True)
     smtp_port = serializers.IntegerField(required=False)
     smtp_user = serializers.CharField(required=False, allow_blank=True)
@@ -131,6 +142,11 @@ class TesteSmtpSerializer(serializers.Serializer):
     smtp_use_tls = serializers.BooleanField(required=False)
     smtp_use_ssl = serializers.BooleanField(required=False)
     email_remetente_nome = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if not attrs.get('destinatario') and attrs.get('email_destino'):
+            attrs['destinatario'] = attrs['email_destino']
+        return attrs
 
 
 class ControleArquivoLogSerializer(serializers.ModelSerializer):

@@ -7,18 +7,111 @@ class AuthManager {
     this.user = null;
     this.isAuthenticated = false;
     this.isSoftLocked = false;
-    this.inactivityTimer = null;
     this.failedPinAttempts = 0;
-    this.inactivityTimeoutMs = (window.CONFIG?.SOFT_LOCK_TIMEOUT_MINUTES || 30) * 60 * 1000;
+    this.inactivityMinutes = window.CONFIG?.SOFT_LOCK_TIMEOUT_MINUTES || 30;
+    this.inactivityTimeoutMs = this.inactivityMinutes * 60 * 1000;
+    this.lastActivityTimestamp = Date.now();
+    this.heartbeatInterval = null;
 
     this.initEventListeners();
+    this.iniciarHeartbeatInatividade();
+  }
+
+  registrarAtividadeEfetiva(origem = 'Ação') {
+    if (!this.isAuthenticated || this.isSoftLocked) return;
+    this.lastActivityTimestamp = Date.now();
+    this.atualizarIndicadorTemporizador();
+  }
+
+  updateInactivityTimeout(minutes) {
+    const min = parseInt(minutes, 10);
+    if (!isNaN(min) && min > 0) {
+      this.inactivityMinutes = min;
+      this.inactivityTimeoutMs = min * 60 * 1000;
+      this.lastActivityTimestamp = Date.now();
+      console.log(`[Soft Lock] Temporizador de inatividade configurado para ${min} min (${this.inactivityTimeoutMs} ms).`);
+      this.atualizarIndicadorTemporizador();
+    }
+  }
+
+  iniciarHeartbeatInatividade() {
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.heartbeatInterval = setInterval(() => {
+      this.verificarInatividade();
+      this.atualizarIndicadorTemporizador();
+    }, 1000);
+  }
+
+  verificarInatividade() {
+    if (!this.isAuthenticated || this.isSoftLocked) return;
+
+    const tempoDecorridoMs = Date.now() - this.lastActivityTimestamp;
+    if (tempoDecorridoMs >= this.inactivityTimeoutMs) {
+      this.triggerSoftLock();
+    }
+  }
+
+  atualizarIndicadorTemporizador() {
+    const timerChip = document.getElementById('session-timer-chip');
+    if (!timerChip) return;
+
+    // Oculta se não autenticado ou em Soft Lock
+    if (!this.isAuthenticated || this.isSoftLocked) {
+      timerChip.style.display = 'none';
+      return;
+    }
+
+    timerChip.style.display = 'inline-flex';
+
+    const tempoDecorridoMs = Date.now() - this.lastActivityTimestamp;
+    const restanteMs = Math.max(0, this.inactivityTimeoutMs - tempoDecorridoMs);
+    const segTotal = Math.ceil(restanteMs / 1000);
+
+    const min = Math.floor(segTotal / 60);
+    const seg = segTotal % 60;
+    const formatado = String(min).padStart(2, '0') + ':' + String(seg).padStart(2, '0');
+
+    timerChip.textContent = `⏱ ${formatado}`;
+
+    // Alerta fixo aos 30 segundos ou menos
+    if (segTotal <= 30) {
+      timerChip.className = 'status-chip warning mono-text';
+      timerChip.title = `Atenção: Bloqueio por inatividade em ${segTotal} segundo(s)!`;
+    } else {
+      timerChip.className = 'status-chip secondary mono-text';
+      timerChip.title = 'Tempo de inatividade restante até o bloqueio (Soft Lock)';
+    }
   }
 
   initEventListeners() {
-    // Eventos de atividade do usuário para resetar timer de ociosidade
-    const userEvents = ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll'];
-    userEvents.forEach((ev) => {
-      window.addEventListener(ev, () => this.resetInactivityTimer(), { passive: true });
+    // 1. Apenas ações efetivas DENTRO do sistema EMC Soldas resetam o temporizador
+    // Cliques em botões, links, abas ou componentes do sistema
+    document.addEventListener('click', () => {
+      this.registrarAtividadeEfetiva('Clique');
+    }, { capture: true, passive: true });
+
+    // Digitação e alteração de campos em formulários
+    document.addEventListener('input', () => {
+      this.registrarAtividadeEfetiva('Digitação');
+    }, { capture: true, passive: true });
+
+    document.addEventListener('change', () => {
+      this.registrarAtividadeEfetiva('Seleção');
+    }, { capture: true, passive: true });
+
+    document.addEventListener('submit', () => {
+      this.registrarAtividadeEfetiva('Submissão');
+    }, { capture: true, passive: true });
+
+    // 2. Verificação IMEDIATA ao retornar o foco ou a visibilidade da aba
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        this.verificarInatividade();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      this.verificarInatividade();
     });
 
     // Evento de desautenticação global (401)
@@ -38,21 +131,14 @@ class AuthManager {
   }
 
   resetInactivityTimer() {
-    if (!this.isAuthenticated || this.isSoftLocked) return;
-
-    if (this.inactivityTimer) {
-      clearTimeout(this.inactivityTimer);
-    }
-
-    this.inactivityTimer = setTimeout(() => {
-      this.triggerSoftLock();
-    }, this.inactivityTimeoutMs);
+    this.registrarAtividadeEfetiva('Reset Manual');
   }
 
   triggerSoftLock() {
     if (!this.isAuthenticated || this.isSoftLocked) return;
     this.isSoftLocked = true;
-    if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
+    console.warn(`[Soft Lock] Sistema bloqueado após ${this.inactivityMinutes} min de inatividade.`);
+    this.atualizarIndicadorTemporizador();
     this.showPinModal();
   }
 
@@ -69,7 +155,7 @@ class AuthManager {
           </div>
           <div class="modal-body" style="padding: 24px 16px;">
             <p style="color: var(--color-on-surface-variant); font-size: 14px; margin-bottom: 16px;">
-              Sessão protegida por 30 min de ociosidade.<br>
+              Sessão protegida por ${this.inactivityMinutes || 30} min de ociosidade.<br>
               Digite seu <strong>PIN de 6 dígitos</strong> para destravar a tela.
             </p>
 
@@ -164,7 +250,11 @@ class AuthManager {
         this.isAuthenticated = true;
         this.isSoftLocked = false;
         this.failedPinAttempts = 0;
-        this.resetInactivityTimer();
+        if (res.config?.tempo_ociosidade_minutos) {
+          this.updateInactivityTimeout(res.config.tempo_ociosidade_minutos);
+        } else {
+          this.resetInactivityTimer();
+        }
         this.updateUiUserBar();
         return true;
       }
@@ -182,7 +272,11 @@ class AuthManager {
       this.isAuthenticated = true;
       this.isSoftLocked = false;
       this.failedPinAttempts = 0;
-      this.resetInactivityTimer();
+      if (res.config?.tempo_ociosidade_minutos) {
+        this.updateInactivityTimeout(res.config.tempo_ociosidade_minutos);
+      } else {
+        this.resetInactivityTimer();
+      }
       this.updateUiUserBar();
       window.dispatchEvent(new CustomEvent('auth:login_success'));
       return { success: true };
@@ -251,9 +345,12 @@ class AuthManager {
 
       // Atualiza visibilidade dos menus na sidebar conforme RBAC
       this.updateSidebarPermissions();
+      this.atualizarIndicadorTemporizador();
     } else {
       if (appSidebar) appSidebar.style.display = 'none';
       if (topbarActions) topbarActions.style.display = 'none';
+      const timerChip = document.getElementById('session-timer-chip');
+      if (timerChip) timerChip.style.display = 'none';
     }
   }
 

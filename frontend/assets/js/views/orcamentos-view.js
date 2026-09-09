@@ -11,22 +11,30 @@ window.OrcamentosView = {
           <h1 style="font-size: 24px; font-weight: 700;">ORÇAMENTOS COMERCIAIS</h1>
           <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">ELABORAÇÃO, SNAPSHOTS DE CUSTO, VALIDADE E GERAÇÃO DE PROPOSTAS</p>
         </div>
-
-        <button class="btn btn-primary" id="btn-novo-orcamento">+ NOVO ORÇAMENTO</button>
       </div>
 
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-orc-busca" class="form-control" placeholder="BUSCAR POR CLIENTE, EQUIPAMENTO OU ID..." style="max-width: 380px;">
-          <select id="filtro-orc-status" class="form-control" style="width: 180px;">
-            <option value="">TODOS OS STATUS</option>
-            <option value="GERADO">GERADO</option>
-            <option value="ENVIADO">ENVIADO</option>
-            <option value="APROVADO">APROVADO</option>
-            <option value="EM_EXECUCAO">EM EXECUÇÃO</option>
-            <option value="CONCLUIDO">CONCLUÍDO</option>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-orc-busca" class="form-control" placeholder="BUSCAR POR CLIENTE, EQUIPAMENTO OU ID..." style="flex: 1; min-width: 220px;">
+          <div style="width: 230px; min-width: 190px; flex-shrink: 0;" id="wrapper-orc-status">
+            <select id="filtro-orc-status" class="form-control">
+              <option value="GERADO">GERADO</option>
+              <option value="ENVIADO">ENVIADO</option>
+              <option value="APROVADO">APROVADO</option>
+              <option value="EM_EXECUCAO">EM EXECUÇÃO</option>
+              <option value="CONCLUIDO">CONCLUÍDO</option>
+              <option value="CANCELADO">CANCELADO</option>
+            </select>
+          </div>
+          <select id="filtro-orc-status-fin" class="form-control" style="width: 175px; min-width: 165px; flex-shrink: 0;">
+            <option value="">FINANCEIRO: TODOS</option>
+            <option value="A_FATURAR">A FATURAR</option>
+            <option value="FATURADO">FATURADO</option>
+            <option value="PAGO">PAGO</option>
             <option value="CANCELADO">CANCELADO</option>
           </select>
+          <span id="total-orc-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 ORÇAMENTOS</span>
+          <button class="btn btn-primary" id="btn-novo-orcamento" style="white-space: nowrap; flex-shrink: 0;">+ NOVO ORÇAMENTO</button>
         </div>
       </div>
 
@@ -51,9 +59,18 @@ window.OrcamentosView = {
       </div>
     `;
 
+    const selStatusOp = document.getElementById('filtro-orc-status');
+    if (selStatusOp) {
+      window.EMCUtils.initMultiSelectCombobox(selStatusOp, {
+        placeholder: 'TODOS OS STATUS',
+        prefix: 'OPERACIONAL',
+        onChange: () => this.carregarListaOrcamentos()
+      });
+    }
+
     document.getElementById('btn-novo-orcamento')?.addEventListener('click', () => this.abrirModalNovoOrcamento());
     document.getElementById('filtro-orc-busca')?.addEventListener('input', () => this.carregarListaOrcamentos());
-    document.getElementById('filtro-orc-status')?.addEventListener('change', () => this.carregarListaOrcamentos());
+    document.getElementById('filtro-orc-status-fin')?.addEventListener('change', () => this.carregarListaOrcamentos());
 
     this.carregarListaOrcamentos();
   },
@@ -63,15 +80,24 @@ window.OrcamentosView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-orc-busca')?.value.trim() || '';
-    const status = document.getElementById('filtro-orc-status')?.value || '';
+    const selStatus = document.getElementById('filtro-orc-status');
+    const statusOp = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
+    const statusFin = document.getElementById('filtro-orc-status-fin')?.value || '';
 
     try {
       const query = new URLSearchParams();
       if (busca) query.append('search', busca);
-      if (status) query.append('status_operacional', status);
+      if (statusOp) query.append('status_operacional', statusOp);
+      if (statusFin) query.append('status_financeiro', statusFin);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.ORCAMENTOS.LISTA}?${query.toString()}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-orc-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'ORÇAMENTO' : 'ORÇAMENTOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum orçamento encontrado.</td></tr>';

@@ -88,20 +88,20 @@ def testar_conexao_smtp(dados_teste: Dict[str, Any] = None) -> Dict[str, Any]:
 
     remetente_formatado = f"{nome_remetente} <{user or 'nao-responda@emcsoldas.com.br'}>"
 
-    # Em ambiente de testes (locmem) ou console, utiliza a conexão configurada
+    # Em ambiente de testes automatizados do Django (locmem), utiliza a conexão simulada
     backend_configurado = getattr(settings, 'EMAIL_BACKEND', '')
     try:
-        if 'locmem' in backend_configurado or 'console' in backend_configurado:
+        if 'locmem' in backend_configurado:
             conexao = get_connection()
         else:
             conexao = EmailBackend(
                 host=host,
-                port=port,
+                port=int(port),
                 username=user,
                 password=password,
                 use_tls=use_tls,
                 use_ssl=use_ssl,
-                timeout=10
+                timeout=15
             )
 
         assunto = "[EMC SOLDAS] Teste de Disparo de E-mail (SMTP)"

@@ -50,15 +50,18 @@ window.FaturamentoView = {
   async renderFaturas(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-fat-busca" class="form-control" placeholder="BUSCAR POR CLIENTE, NÚMERO OU ID..." style="max-width: 380px;">
-          <select id="filtro-fat-status" class="form-control" style="width: 180px;">
-            <option value="">TODOS OS STATUS</option>
-            <option value="RASCUNHO">RASCUNHO (PRÉ-FATURA)</option>
-            <option value="FATURADA">FATURADA</option>
-            <option value="PAGA">PAGA (QUITADA)</option>
-            <option value="CANCELADA">CANCELADA</option>
-          </select>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-fat-busca" class="form-control" placeholder="BUSCAR POR CLIENTE, NÚMERO OU ID..." style="flex: 1; min-width: 200px;">
+          <div style="width: 240px; min-width: 200px; flex-shrink: 0;" id="wrapper-fat-status">
+            <select id="filtro-fat-status" class="form-control">
+              <option value="RASCUNHO">RASCUNHO (PRÉ-FATURA)</option>
+              <option value="FATURADA">FATURADA</option>
+              <option value="PAGA">PAGA (QUITADA)</option>
+              <option value="CANCELADA">CANCELADA</option>
+            </select>
+          </div>
+          <span id="total-fat-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 FATURAS</span>
+          <button class="btn btn-secondary" id="btn-ir-conta-corrente" style="white-space: nowrap; flex-shrink: 0;">VER CONTA CORRENTE (A FATURAR)</button>
         </div>
       </div>
 
@@ -82,8 +85,20 @@ window.FaturamentoView = {
       </div>
     `;
 
+    const selStatusFat = document.getElementById('filtro-fat-status');
+    if (selStatusFat) {
+      window.EMCUtils.initMultiSelectCombobox(selStatusFat, {
+        placeholder: 'TODOS OS STATUS',
+        prefix: 'STATUS',
+        onChange: () => this.carregarListaFaturas()
+      });
+    }
+
     document.getElementById('filtro-fat-busca')?.addEventListener('input', () => this.carregarListaFaturas());
-    document.getElementById('filtro-fat-status')?.addEventListener('change', () => this.carregarListaFaturas());
+    document.getElementById('btn-ir-conta-corrente')?.addEventListener('click', () => {
+      this.currentTab = 'conta-corrente';
+      this.render(document.getElementById('app-root'));
+    });
 
     this.carregarListaFaturas();
   },
@@ -93,7 +108,8 @@ window.FaturamentoView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-fat-busca')?.value.trim() || '';
-    const status = document.getElementById('filtro-fat-status')?.value || '';
+    const selStatus = document.getElementById('filtro-fat-status');
+    const status = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
 
     try {
       const query = new URLSearchParams();
@@ -102,6 +118,12 @@ window.FaturamentoView = {
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FATURAMENTO.FATURAS}?${query.toString()}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-fat-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'FATURA' : 'FATURAS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma fatura encontrada.</td></tr>';

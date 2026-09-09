@@ -670,6 +670,7 @@ Executar a bateria completa de testes automatizados locais (unitários, integra�
   - **Teste 5 (Sessão & Cookie HttpOnly):** Validar invisibilidade do JWT via JavaScript (`document.cookie`) e Soft Lock após 30 min.
   - **Teste 6 (Criptografia & Logs):** Verificar credenciais SMTP cifradas em AES-256 e não-vazamento de Tracebacks em erros 500.
 - [ ] Criar script de apoio gerador de chaves criptográficas de 64 caracteres (`tools/generate_keys.py`) para `SECRET_KEY` e `ENCRYPTION_KEY`.
+- [ ] **Remoção Mandatória de Configurações Temporárias de Túnel Externo:** Auditar e remover a liberação de CSRF para o wildcard `https://*.trycloudflare.com` em `backend/config/settings.py` antes do deploy definitivo em produção, garantindo conformidade estrita de segurança.
 - [ ] Elaborar guia de deploy assistido para Cloud PaaS sem exposição de segredos.
 
 ### Critérios de Pronto

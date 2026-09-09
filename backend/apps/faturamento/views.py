@@ -72,10 +72,14 @@ class FaturaViewSet(viewsets.ModelViewSet):
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
 
-        # Filtro por Status
+        # Filtro por Status (suporta múltiplos separados por vírgula: ex 'RASCUNHO,FATURADA')
         status_param = self.request.query_params.get('status')
         if status_param:
-            queryset = queryset.filter(status=status_param.upper())
+            status_list = [s.strip().upper() for s in status_param.split(',') if s.strip()]
+            if len(status_list) == 1:
+                queryset = queryset.filter(status=status_list[0])
+            elif len(status_list) > 1:
+                queryset = queryset.filter(status__in=status_list)
 
         # Filtro por Intervalo de Datas de Emissão
         data_inicio = self.request.query_params.get('data_inicio')

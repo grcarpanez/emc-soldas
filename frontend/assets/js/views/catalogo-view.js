@@ -49,9 +49,10 @@ window.CatalogoView = {
   async renderItens(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-item-busca" class="form-control" placeholder="BUSCAR POR NOME DO INSUMO OU CÓDIGO..." style="max-width: 380px;">
-          <button class="btn btn-primary" id="btn-novo-item">+ NOVO INSUMO / ITEM</button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-item-busca" class="form-control" placeholder="BUSCAR POR NOME DO INSUMO OU CÓDIGO..." style="flex: 1; min-width: 240px;">
+          <span id="total-itens-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 INSUMOS</span>
+          <button class="btn btn-primary" id="btn-novo-item" style="white-space: nowrap; flex-shrink: 0;">+ NOVO INSUMO / ITEM</button>
         </div>
       </div>
 
@@ -91,6 +92,12 @@ window.CatalogoView = {
     try {
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}?search=${encodeURIComponent(busca)}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-itens-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'INSUMO' : 'INSUMOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum item cadastrado no catálogo.</td></tr>';
@@ -244,9 +251,10 @@ window.CatalogoView = {
   async renderProdutos(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-prod-busca" class="form-control" placeholder="BUSCAR POR NOME DA PEÇA / SERVIÇO COMPOSTO..." style="max-width: 380px;">
-          <button class="btn btn-primary" id="btn-novo-produto">+ NOVO PRODUTO / RECEITA BOM</button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-prod-busca" class="form-control" placeholder="BUSCAR POR NOME DA PEÇA / SERVIÇO COMPOSTO..." style="flex: 1; min-width: 240px;">
+          <span id="total-prod-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 PRODUTOS</span>
+          <button class="btn btn-primary" id="btn-novo-produto" style="white-space: nowrap; flex-shrink: 0;">+ NOVO PRODUTO / RECEITA BOM</button>
         </div>
       </div>
 
@@ -284,6 +292,12 @@ window.CatalogoView = {
     try {
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}?search=${encodeURIComponent(busca)}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-prod-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'PRODUTO' : 'PRODUTOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum produto composto cadastrado.</td></tr>';
@@ -422,6 +436,7 @@ window.CatalogoView = {
       ]);
 
       const listaItens = itensCatalogo.results || itensCatalogo || [];
+      listaItens.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
       const ficha = prod.ficha_tecnica_itens || prod.ficha_tecnica || [];
 
       let optionsItens = '<option value="">SELECIONE UM INSUMO / MATÉRIA-PRIMA...</option>';
@@ -512,6 +527,16 @@ window.CatalogoView = {
           </div>
         `
       });
+
+      // Inicializa a Combobox Pesquisável com Autocomplete para Insumos
+      setTimeout(() => {
+        const selItemFicha = document.getElementById('add-ficha-item-id');
+        if (selItemFicha) {
+          window.EMCUtils.initSearchableSelect(selItemFicha, {
+            placeholder: 'SELECIONE OU BUSQUE UM INSUMO...'
+          });
+        }
+      }, 50);
 
       document.getElementById('btn-add-item-ficha')?.addEventListener('click', async () => {
         const item_id = parseInt(document.getElementById('add-ficha-item-id').value);

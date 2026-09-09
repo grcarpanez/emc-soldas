@@ -143,3 +143,60 @@ The shape language is strictly **Sharp (0px roundedness)**. Every container, but
 - **Lists & Tables:** High-density rows separated by 1px Dark Iron borders. Use JetBrains Mono for all numerical data within tables.
 - **Status Chips:** Rectangular with no rounding. Use high-saturation colors (Safety Red, Caution Yellow, Success Green) but keep them within the industrial tonal range (slightly desaturated/darkened).
 - **Maintenance Logs:** Use vertical "timeline" lines that look like structural beams to connect historical data points.
+
+---
+
+## Interactive Controls & Dimensional Consistency
+
+Para garantir harmonia visual absoluta e alinhamento milimétrico em barras de controle, filtros e formulários em todo o sistema, os seguintes padrões de layout e dimensionamento são **normativos e mandatórios**:
+
+### 1. Altura Canônica Universal dos Campos de Interação
+Todos os controles interativos de nível padrão possuem altura externa total estritamente fixada em **42px**:
+- **Altura Padrão:** `height: 42px; box-sizing: border-box !important;`
+  - Textboxes / Inputs de texto (`.form-control`)
+  - Seletores nativos (`select.form-control`)
+  - Comboboxes pesquisáveis com autocomplete (`.emc-combobox-trigger`)
+  - Comboboxes multi-seleção com flags (`.emc-multiselect-trigger`)
+  - Botões primários, secundários e de ação (`.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger`)
+- **Controles Compactos / Small:** `height: 32px; box-sizing: border-box;` (utilizados em paginação, ações de tabela e modais de leitura densa: `.btn-sm`, `.form-control-sm`).
+- **Chips Contadores e Badges de Barra:** Devem utilizar `height: 42px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 12px;` quando posicionados em barras de filtros horizontais para acompanhar o alinhamento central.
+
+### 2. Tipografia dos Controles
+- **Entrada de Dados e Textos (Inputs, Selects e Comboboxes):**
+  - Família tipográfica: `var(--font-body)` (`Inter`, sans-serif)
+  - Tamanho da fonte: `14px`
+  - Peso: `400` (inputs e selects) e `500` (triggers de combobox)
+  - `line-height: normal` (evita distorções de altura vertical entre navegadores)
+- **Ações, Rótulos Técnicos e Botões:**
+  - Família tipográfica: `var(--font-mono)` (`JetBrains Mono`, monospace)
+  - Tamanho da fonte: `13px` a `14px`
+  - Peso: `600`
+  - Transformação: `text-transform: uppercase;`
+  - Espaçamento entre letras: `letter-spacing: 0.05em;`
+
+### 3. Cores e Estados de Superfície
+- **Estado Neutro / Repouso:**
+  - Fundo: `var(--color-surface-container-low)` (`#1b1c1c`)
+  - Borda: `1px solid var(--color-steel-gray)` (`#71797E`)
+  - Texto / Ícone: `var(--color-on-surface)` (`#e4e2e1`)
+  - Texto Placeholder / Vazio: `var(--color-on-surface-variant)` (`#e0c0b5`)
+- **Estado de Foco / Aberto:**
+  - Fundo: `var(--color-surface-container)` (`#1f2020`)
+  - Borda: `2px solid var(--color-rust-orange)` (`#b7410e`)
+  - Compensação interna: `padding: 0 13px;` para manter exatamente os `42px` externos sem saltos visuais no DOM
+- **Estado Selecionado / Destaque de Múltiplos Itens:**
+  - Trigger com múltiplos itens: `color: var(--color-rust-orange-bright)` (`#ff6b35;`), peso `600`
+  - Item ativo no dropdown: `background-color: rgba(183, 65, 14, 0.25);`
+  - Botões de cabeçalho da combobox (`[✓ TODOS]` e `[✕ LIMPAR]`): tipografia `JetBrains Mono` 11px, borda cinza e hover em Rust Orange
+
+### 4. Barras de Ação e Filtros (Flex Container)
+- **Estrutura padrão de barra de controle:**
+  ```css
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  ```
+- **Campos elásticos:** O campo principal de pesquisa textual deve receber `flex: 1; min-width: 200px;` para preencher organicamente o espaço central livre.
+- **Wrappers e Comboboxes:** Devem ter largura fixa ou controlada (ex: `width: 220px; min-width: 180px; flex-shrink: 0;`), garantindo que o texto nunca empurre ou quebre o alinhamento da linha em resoluções desktop normais.

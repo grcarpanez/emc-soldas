@@ -164,6 +164,14 @@ Este arquivo estabelece o contexto arquitetural, regras de segurança, padrões 
       2. **Cache-Busting no Shell SPA:** Atualizar o sufixo de query string (`?v=X.Y`) em todas as tags `<script src="...">` e `<link rel="stylesheet" href="...">` no arquivo `frontend/index.html`.
       3. **Instrução de Reload ao Usuário:** Orientar explicitamente o usuário a realizar um recarregamento forçado (`Ctrl + Shift + R` ou `Ctrl + F5`) no navegador para ativação imediata dos novos bundles.
     - É terminantemente proibido entregar modificações em JS/CSS sem sincronizar a versão do `sw.js` e do `index.html`.
+13. **Política Mandatória de Execução de Commits Semânticos por Etapa (Conventional Commits):**
+    - A cada ciclo de trabalho, refatoração, correção ou nova funcionalidade aprovada pelo usuário via **Implementation Plan**, é **estritamente obrigatório** realizar o commit formal no Git antes de considerar a tarefa finalizada.
+    - É terminantemente proibido acumular múltiplas tarefas, fases ou refinamentos aprovados em um único commit genérico.
+    - As mensagens de commit devem seguir estritamente o padrão **Conventional Commits**:
+      - Formato: `<tipo>[escopo opcional]: <descrição concisa no imperativo>`
+      - Tipos oficiais permitidos: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `security`.
+      - Exemplo: `fix(compras): resolve syntax error in async render method and align combobox heights`
+    - O versionamento completo com tabela de prefixos está registrado formalmente na **Seção 30 do `docs/FSD.md`**.
 
 ---
 
@@ -227,7 +235,9 @@ Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
    - Registrar qualquer erro, regressão ou lição técnica identificada (sintoma, causa raiz, solução aplicada e como evitar).
 3. **Atualizar o registro em `Planejamento/`:**
    - Marcar o plano como `Concluído` e registrar os resultados obtidos.
-4. **Informar detalhadamente ao usuário:**
+4. **Executar Commit Semântico Mandatório (Regra 13):**
+   - Realizar o commit no repositório Git com mensagem semântica no padrão Conventional Commits (ex: `feat(...)`, `fix(...)`, `style(...)`, `docs(...)`).
+5. **Informar detalhadamente ao usuário:**
    - O que foi construído e alterado.
    - Roteiro prático com comandos e ações para testar/validar a entrega (incluindo instrução de `Ctrl + Shift + R` caso o frontend tenha sido alterado).
 

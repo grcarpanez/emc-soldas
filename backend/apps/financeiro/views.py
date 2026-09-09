@@ -379,10 +379,14 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
         if tipo:
             qs = qs.filter(tipo_lancamento=tipo.upper())
 
-        # Filtro por status de pagamento (A_VENCER, VENCIDO, PAGO, CANCELADO)
+        # Filtro por status de pagamento (suporta múltiplos separados por vírgula: ex 'A_VENCER,VENCIDO')
         status_pagto = params.get('status_pagamento')
         if status_pagto:
-            qs = qs.filter(status_pagamento=status_pagto.upper())
+            status_list = [s.strip().upper() for s in status_pagto.split(',') if s.strip()]
+            if len(status_list) == 1:
+                qs = qs.filter(status_pagamento=status_list[0])
+            elif len(status_list) > 1:
+                qs = qs.filter(status_pagamento__in=status_list)
 
         # Filtro por Regime (competencia vs caixa)
         regime = params.get('regime')
@@ -392,10 +396,14 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             elif regime.lower() == 'competencia':
                 qs = qs.filter(status_pagamento__in=['A_VENCER', 'VENCIDO'])
 
-        # Filtro por Conta Bancária
+        # Filtro por Conta Bancária (suporta múltiplos IDs separados por vírgula: ex '1,2')
         conta_id = params.get('conta_id') or params.get('conta')
         if conta_id:
-            qs = qs.filter(conta_id=conta_id)
+            contas_list = [c.strip() for c in str(conta_id).split(',') if c.strip().isdigit()]
+            if len(contas_list) == 1:
+                qs = qs.filter(conta_id=contas_list[0])
+            elif len(contas_list) > 1:
+                qs = qs.filter(conta_id__in=contas_list)
 
         # Filtro por Categoria
         categoria_id = params.get('categoria_id') or params.get('categoria')

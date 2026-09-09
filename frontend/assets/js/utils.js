@@ -850,6 +850,302 @@ function initSearchableSelect(selectEl, opts = {}) {
   return instancia;
 }
 
+/**
+ * Inicializa uma Combobox Multi-Seleção com Flags (Checkboxes) no padrão Industrial Integrity.
+ * Permite selecionar 1 ou N opções simultaneamente.
+ * @param {HTMLElement} targetEl - Elemento select ou container div
+ * @param {Object} opts - Opções de configuração
+ * @param {string} [opts.placeholder='TODOS'] - Texto exibido quando nenhuma opção específica estiver marcada
+ * @param {string} [opts.singularLabel='SELECIONADO'] - Sufixo quando apenas 1 item estiver marcado
+ * @param {string} [opts.prefix=''] - Prefixo no trigger quando múltiplos selecionados (ex: 'STATUS')
+ * @param {Array<{value: string, label: string, selected?: boolean}>} [opts.items] - Itens caso não seja select
+ * @param {Function} [opts.onChange] - Callback (selectedValues, selectedLabels) => {}
+ * @returns {Object} Instância com getValues(), setValues(), refresh(), destroy()
+ */
+function initMultiSelectCombobox(targetEl, opts = {}) {
+  if (!targetEl) return null;
+  if (targetEl._emcMultiSelect) {
+    targetEl._emcMultiSelect.refresh();
+    return targetEl._emcMultiSelect;
+  }
+
+  const isSelect = targetEl.tagName === 'SELECT';
+  const placeholder = opts.placeholder || targetEl.getAttribute('placeholder') || 'TODOS';
+  const onChangeCallback = typeof opts.onChange === 'function' ? opts.onChange : null;
+
+  // Cria estrutura da Combobox Multi-Seleção
+  const container = document.createElement('div');
+  container.className = 'emc-multiselect';
+  if (targetEl.id) container.dataset.for = targetEl.id;
+  if (opts.width) container.style.width = opts.width;
+
+  const trigger = document.createElement('div');
+  trigger.className = 'emc-multiselect-trigger';
+  trigger.tabIndex = 0;
+
+  const triggerText = document.createElement('span');
+  triggerText.className = 'emc-multiselect-trigger-text';
+
+  const triggerArrow = document.createElement('span');
+  triggerArrow.className = 'emc-multiselect-trigger-arrow';
+  triggerArrow.textContent = '▼';
+
+  trigger.appendChild(triggerText);
+  trigger.appendChild(triggerArrow);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'emc-multiselect-dropdown';
+
+  // Cabeçalho de Ações Rápidas (Todos / Limpar)
+  const header = document.createElement('div');
+  header.className = 'emc-multiselect-header';
+
+  const btnMarcarTodos = document.createElement('button');
+  btnMarcarTodos.type = 'button';
+  btnMarcarTodos.textContent = '✓ TODOS';
+  btnMarcarTodos.title = 'Marcar todas as opções';
+
+  const btnLimpar = document.createElement('button');
+  btnLimpar.type = 'button';
+  btnLimpar.textContent = '✕ LIMPAR';
+  btnLimpar.title = 'Desmarcar todas as opções';
+
+  header.appendChild(btnMarcarTodos);
+  header.appendChild(btnLimpar);
+  dropdown.appendChild(header);
+
+  const optionsList = document.createElement('ul');
+  optionsList.className = 'emc-multiselect-options';
+  dropdown.appendChild(optionsList);
+
+  if (isSelect) {
+    targetEl.style.display = 'none';
+    targetEl.parentNode.insertBefore(container, targetEl);
+  } else {
+    targetEl.appendChild(container);
+  }
+
+  container.appendChild(trigger);
+  container.appendChild(dropdown);
+
+  let itens = [];
+
+  function extrairOpcoes() {
+    itens = [];
+    if (isSelect) {
+      const options = targetEl.querySelectorAll('option');
+      options.forEach((opt) => {
+        if (opt.value !== '') {
+          itens.push({
+            value: opt.value,
+            label: opt.textContent.trim(),
+            selected: opt.selected
+          });
+        }
+      });
+    } else if (Array.isArray(opts.items)) {
+      itens = opts.items.map(it => ({
+        value: String(it.value),
+        label: it.label || it.text || String(it.value),
+        selected: !!it.selected
+      }));
+    }
+  }
+
+  function getSelectedValues() {
+    return itens.filter(it => it.selected).map(it => it.value);
+  }
+
+  function getSelectedLabels() {
+    return itens.filter(it => it.selected).map(it => it.label);
+  }
+
+  function atualizarTriggerText() {
+    const selecionados = itens.filter(it => it.selected);
+    if (selecionados.length === 0) {
+      triggerText.textContent = placeholder;
+      triggerText.style.color = 'var(--color-on-surface-variant)';
+      container.title = placeholder;
+    } else if (selecionados.length === 1) {
+      triggerText.textContent = selecionados[0].label;
+      triggerText.style.color = 'var(--color-on-surface)';
+      container.title = selecionados[0].label;
+    } else if (selecionados.length === itens.length && itens.length > 1) {
+      triggerText.textContent = opts.allSelectedText || placeholder;
+      triggerText.style.color = 'var(--color-on-surface)';
+      container.title = selecionados.map(s => s.label).join(', ');
+    } else {
+      const labelPrefix = opts.prefix ? `${opts.prefix}: ` : '';
+      triggerText.textContent = `${labelPrefix}${selecionados.length} SELECIONADOS`;
+      triggerText.style.color = 'var(--color-rust-orange-bright)';
+      container.title = selecionados.map(s => s.label).join(', ');
+    }
+  }
+
+  function sincronizarComSelectNativo() {
+    if (isSelect) {
+      const options = targetEl.querySelectorAll('option');
+      options.forEach(opt => {
+        const item = itens.find(it => it.value === opt.value);
+        if (item) {
+          opt.selected = item.selected;
+        } else if (opt.value === '') {
+          opt.selected = itens.every(it => !it.selected);
+        }
+      });
+      targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (onChangeCallback) {
+      onChangeCallback(getSelectedValues(), getSelectedLabels());
+    }
+  }
+
+  function renderizarLista() {
+    optionsList.innerHTML = '';
+    itens.forEach((it) => {
+      const li = document.createElement('li');
+      li.className = 'emc-multiselect-item' + (it.selected ? ' selected' : '');
+
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.checked = it.selected;
+
+      const span = document.createElement('span');
+      span.textContent = it.label;
+
+      li.appendChild(chk);
+      li.appendChild(span);
+
+      li.addEventListener('click', (e) => {
+        if (e.target !== chk) {
+          chk.checked = !chk.checked;
+        }
+        it.selected = chk.checked;
+        li.classList.toggle('selected', it.selected);
+        atualizarTriggerText();
+        sincronizarComSelectNativo();
+      });
+
+      optionsList.appendChild(li);
+    });
+  }
+
+  btnMarcarTodos.addEventListener('click', (e) => {
+    e.stopPropagation();
+    itens.forEach(it => it.selected = true);
+    renderizarLista();
+    atualizarTriggerText();
+    sincronizarComSelectNativo();
+  });
+
+  btnLimpar.addEventListener('click', (e) => {
+    e.stopPropagation();
+    itens.forEach(it => it.selected = false);
+    renderizarLista();
+    atualizarTriggerText();
+    sincronizarComSelectNativo();
+  });
+
+  function abrirDropdown() {
+    document.querySelectorAll('.emc-combobox.open, .emc-multiselect.open').forEach(c => {
+      if (c !== container) c.classList.remove('open');
+    });
+    container.classList.add('open');
+  }
+
+  function fecharDropdown() {
+    container.classList.remove('open');
+  }
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (container.classList.contains('open')) {
+      fecharDropdown();
+    } else {
+      abrirDropdown();
+    }
+  });
+
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      abrirDropdown();
+    } else if (e.key === 'Escape') {
+      fecharDropdown();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) {
+      fecharDropdown();
+    }
+  });
+
+  extrairOpcoes();
+  renderizarLista();
+  atualizarTriggerText();
+
+  const instancia = {
+    getValues: getSelectedValues,
+    getLabels: getSelectedLabels,
+    setValues(vals) {
+      const arr = Array.isArray(vals) ? vals.map(String) : [String(vals)];
+      itens.forEach(it => {
+        it.selected = arr.includes(it.value);
+      });
+      renderizarLista();
+      atualizarTriggerText();
+      sincronizarComSelectNativo();
+    },
+    setItems(novosItens) {
+      opts.items = novosItens;
+      extrairOpcoes();
+      renderizarLista();
+      atualizarTriggerText();
+    },
+    refresh() {
+      extrairOpcoes();
+      renderizarLista();
+      atualizarTriggerText();
+    },
+    destroy() {
+      container.remove();
+      if (isSelect) targetEl.style.display = '';
+      delete targetEl._emcMultiSelect;
+    }
+  };
+
+  targetEl._emcMultiSelect = instancia;
+  return instancia;
+}
+
+/**
+ * Aplica máscaras imediatas em todos os inputs com data-mask contidos em um elemento/container.
+ */
+function aplicarMascarasEmContainer(container = document) {
+  if (!container) return;
+  container.querySelectorAll('input[data-mask]').forEach((input) => {
+    const maskType = input.dataset.mask;
+    if (!input.value) return;
+
+    if (maskType === 'cpf-cnpj') {
+      input.value = formatarCpfCnpjDinamico(input.value);
+    } else if (maskType === 'telefone') {
+      input.value = formatarTelefoneDinamico(input.value);
+    } else if (maskType === 'moeda-atm') {
+      aplicarMascaraMoedaATM(input);
+    } else if (maskType === 'cep') {
+      input.value = formatarCep(input.value);
+    } else if (maskType === 'placa') {
+      input.value = formatarPlacaVeiculo(input.value);
+    } else if (maskType === 'chave-nfe') {
+      input.value = formatarChaveAcessoNfe(input.value);
+    } else if (maskType === 'linha-boleto') {
+      input.value = formatarLinhaDigitavelBoleto(input.value);
+    }
+  });
+}
+
 // Disponibilização no escopo global para consumo da SPA
 window.EMCUtils = {
   sanitizarTextoEmTempoReal,
@@ -875,5 +1171,7 @@ window.EMCUtils = {
   showToast,
   openModal,
   closeModal,
-  initSearchableSelect
+  initSearchableSelect,
+  initMultiSelectCombobox,
+  aplicarMascarasEmContainer
 };

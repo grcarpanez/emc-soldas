@@ -76,13 +76,20 @@ window.FinanceiroView = {
   async renderExtrato(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO OU ID..." style="max-width: 380px;">
-          <div style="display: flex; gap: 8px;">
-            <select id="filtro-extrato-conta" class="form-control" style="width: 220px;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO OU ID..." style="flex: 1; min-width: 200px;">
+          <div style="width: 240px; min-width: 200px; flex-shrink: 0;" id="wrapper-extrato-conta">
+            <select id="filtro-extrato-conta" class="form-control">
               <option value="">TODAS AS CONTAS BANCÁRIAS</option>
             </select>
           </div>
+          <select id="filtro-extrato-tipo" class="form-control" style="width: 175px; min-width: 175px; flex-shrink: 0;">
+            <option value="">TODOS OS TIPOS</option>
+            <option value="ENTRADA">RECEITAS (+)</option>
+            <option value="SAIDA">DESPESAS (-)</option>
+          </select>
+          <span id="total-extrato-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 LANÇAMENTOS</span>
+          <button class="btn btn-primary" id="btn-novo-extrato-avulso" style="white-space: nowrap; flex-shrink: 0;">+ LANÇAMENTO AVULSO</button>
         </div>
       </div>
 
@@ -107,18 +114,26 @@ window.FinanceiroView = {
       </div>
     `;
 
-    // Carrega contas para o filtro
+    // Carrega contas para o filtro com flags multi-seleção
     const contas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS).catch(() => []);
     const listaContas = contas.results || contas || [];
-    let options = '<option value="">TODAS AS CONTAS</option>';
+    let options = '<option value="">TODAS AS CONTAS BANCÁRIAS</option>';
     listaContas.forEach((c) => {
       options += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)}</option>`;
     });
     const selConta = document.getElementById('filtro-extrato-conta');
-    if (selConta) selConta.innerHTML = options;
+    if (selConta) {
+      selConta.innerHTML = options;
+      window.EMCUtils.initMultiSelectCombobox(selConta, {
+        placeholder: 'TODAS AS CONTAS BANCÁRIAS',
+        prefix: 'CONTAS',
+        onChange: () => this.carregarListaExtrato()
+      });
+    }
 
-    selConta?.addEventListener('change', () => this.carregarListaExtrato());
+    document.getElementById('filtro-extrato-tipo')?.addEventListener('change', () => this.carregarListaExtrato());
     document.getElementById('filtro-extrato-busca')?.addEventListener('input', () => this.carregarListaExtrato());
+    document.getElementById('btn-novo-extrato-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento());
 
     this.carregarListaExtrato();
   },
@@ -128,15 +143,24 @@ window.FinanceiroView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-extrato-busca')?.value.trim() || '';
-    const conta = document.getElementById('filtro-extrato-conta')?.value || '';
+    const selConta = document.getElementById('filtro-extrato-conta');
+    const contaMulti = selConta?._emcMultiSelect ? selConta._emcMultiSelect.getValues().join(',') : (selConta?.value || '');
+    const tipo = document.getElementById('filtro-extrato-tipo')?.value || '';
 
     try {
       const query = new URLSearchParams({ status_pagamento: 'PAGO' });
       if (busca) query.append('search', busca);
-      if (conta) query.append('conta_id', conta);
+      if (contaMulti) query.append('conta_id', contaMulti);
+      if (tipo) query.append('tipo_lancamento', tipo);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-extrato-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'LANÇAMENTO' : 'LANÇAMENTOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
@@ -178,14 +202,18 @@ window.FinanceiroView = {
   async renderContasPagar(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-pagar-busca" class="form-control" placeholder="BUSCAR POR DESPESA, FORNECEDOR OU ID..." style="max-width: 380px;">
-          <select id="filtro-pagar-status" class="form-control" style="width: 180px;">
-            <option value="A_VENCER" selected>A VENCER</option>
-            <option value="VENCIDO">VENCIDAS EM ATRASO</option>
-            <option value="PAGO">PAGAS</option>
-            <option value="">TODAS</option>
-          </select>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-pagar-busca" class="form-control" placeholder="BUSCAR POR DESPESA, FORNECEDOR OU ID..." style="flex: 1; min-width: 200px;">
+          <div style="width: 220px; min-width: 190px; flex-shrink: 0;" id="wrapper-pagar-status">
+            <select id="filtro-pagar-status" class="form-control">
+              <option value="A_VENCER" selected>A VENCER</option>
+              <option value="VENCIDO">VENCIDAS EM ATRASO</option>
+              <option value="PAGO">PAGAS</option>
+              <option value="CANCELADO">CANCELADAS</option>
+            </select>
+          </div>
+          <span id="total-pagar-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 TÍTULOS</span>
+          <button class="btn btn-primary" id="btn-novo-pagar-avulso" style="white-space: nowrap; flex-shrink: 0;">+ NOVA DESPESA / TÍTULO</button>
         </div>
       </div>
 
@@ -209,8 +237,17 @@ window.FinanceiroView = {
       </div>
     `;
 
+    const selStatusPagar = document.getElementById('filtro-pagar-status');
+    if (selStatusPagar) {
+      window.EMCUtils.initMultiSelectCombobox(selStatusPagar, {
+        placeholder: 'TODOS OS STATUS',
+        prefix: 'STATUS',
+        onChange: () => this.carregarListaContasPagar()
+      });
+    }
+
     document.getElementById('filtro-pagar-busca')?.addEventListener('input', () => this.carregarListaContasPagar());
-    document.getElementById('filtro-pagar-status')?.addEventListener('change', () => this.carregarListaContasPagar());
+    document.getElementById('btn-novo-pagar-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('SAIDA'));
 
     this.carregarListaContasPagar();
   },
@@ -220,15 +257,22 @@ window.FinanceiroView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-pagar-busca')?.value.trim() || '';
-    const status = document.getElementById('filtro-pagar-status')?.value || '';
+    const selStatus = document.getElementById('filtro-pagar-status');
+    const statusVal = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
 
     try {
       const query = new URLSearchParams({ tipo_lancamento: 'SAIDA' });
       if (busca) query.append('search', busca);
-      if (status) query.append('status_pagamento', status);
+      if (statusVal) query.append('status_pagamento', statusVal);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-pagar-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma conta a pagar encontrada.</td></tr>';
@@ -268,14 +312,18 @@ window.FinanceiroView = {
   async renderContasReceber(container) {
     container.innerHTML = `
       <div class="card mb-16">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <input type="text" id="filtro-receber-busca" class="form-control" placeholder="BUSCAR POR RECEITA, CLIENTE OU ID..." style="max-width: 380px;">
-          <select id="filtro-receber-status" class="form-control" style="width: 180px;">
-            <option value="A_VENCER" selected>A VENCER</option>
-            <option value="VENCIDO">VENCIDAS EM ATRASO</option>
-            <option value="PAGO">RECEBIDAS</option>
-            <option value="">TODAS</option>
-          </select>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+          <input type="text" id="filtro-receber-busca" class="form-control" placeholder="BUSCAR POR RECEITA, CLIENTE OU ID..." style="flex: 1; min-width: 200px;">
+          <div style="width: 220px; min-width: 190px; flex-shrink: 0;" id="wrapper-receber-status">
+            <select id="filtro-receber-status" class="form-control">
+              <option value="A_VENCER" selected>A VENCER</option>
+              <option value="VENCIDO">VENCIDAS EM ATRASO</option>
+              <option value="PAGO">RECEBIDAS</option>
+              <option value="CANCELADO">CANCELADAS</option>
+            </select>
+          </div>
+          <span id="total-receber-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 TÍTULOS</span>
+          <button class="btn btn-primary" id="btn-novo-receber-avulso" style="white-space: nowrap; flex-shrink: 0;">+ NOVO TÍTULO AVULSO</button>
         </div>
       </div>
 
@@ -298,8 +346,17 @@ window.FinanceiroView = {
       </div>
     `;
 
+    const selStatusReceber = document.getElementById('filtro-receber-status');
+    if (selStatusReceber) {
+      window.EMCUtils.initMultiSelectCombobox(selStatusReceber, {
+        placeholder: 'TODOS OS STATUS',
+        prefix: 'STATUS',
+        onChange: () => this.carregarListaContasReceber()
+      });
+    }
+
     document.getElementById('filtro-receber-busca')?.addEventListener('input', () => this.carregarListaContasReceber());
-    document.getElementById('filtro-receber-status')?.addEventListener('change', () => this.carregarListaContasReceber());
+    document.getElementById('btn-novo-receber-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('ENTRADA'));
 
     this.carregarListaContasReceber();
   },
@@ -309,15 +366,22 @@ window.FinanceiroView = {
     if (!tbody) return;
 
     const busca = document.getElementById('filtro-receber-busca')?.value.trim() || '';
-    const status = document.getElementById('filtro-receber-status')?.value || '';
+    const selStatus = document.getElementById('filtro-receber-status');
+    const statusVal = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
 
     try {
       const query = new URLSearchParams({ tipo_lancamento: 'ENTRADA' });
       if (busca) query.append('search', busca);
-      if (status) query.append('status_pagamento', status);
+      if (statusVal) query.append('status_pagamento', statusVal);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
       const lista = res.results || res || [];
+
+      const badge = document.getElementById('total-receber-badge');
+      if (badge) {
+        const count = lista.length;
+        badge.textContent = `${count} ${count === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
+      }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum título a receber encontrado.</td></tr>';
@@ -603,7 +667,7 @@ window.FinanceiroView = {
     });
   },
 
-  async abrirModalNovoLancamento() {
+  async abrirModalNovoLancamento(defaultTipo = 'SAIDA') {
     const [contas, categorias, meios] = await Promise.all([
       window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS),
       window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS),
@@ -624,7 +688,7 @@ window.FinanceiroView = {
     listaMeios.forEach((m) => { optionsMeios += `<option value="${m.id}">${window.EMCUtils.escapeHtml(m.nome)}</option>`; });
 
     window.EMCUtils.openModal({
-      title: 'NOVO LANÇAMENTO AVULSO',
+      title: defaultTipo === 'ENTRADA' ? 'NOVO TÍTULO A RECEBER (AVULSO)' : (defaultTipo === 'SAIDA' ? 'NOVA DESPESA A PAGAR (AVULSA)' : 'NOVO LANÇAMENTO AVULSO'),
       size: 'md',
       confirmText: 'SALVAR LANÇAMENTO',
       content: `
@@ -633,8 +697,8 @@ window.FinanceiroView = {
             <div class="form-group">
               <label class="form-label">Tipo de Movimentação *</label>
               <select id="nl-tipo" class="form-control">
-                <option value="SAIDA">SAÍDA (DESPESA)</option>
-                <option value="ENTRADA">ENTRADA (RECEITA)</option>
+                <option value="SAIDA" ${defaultTipo === 'SAIDA' ? 'selected' : ''}>SAÍDA (DESPESA)</option>
+                <option value="ENTRADA" ${defaultTipo === 'ENTRADA' ? 'selected' : ''}>ENTRADA (RECEITA)</option>
               </select>
             </div>
             <div class="form-group">
