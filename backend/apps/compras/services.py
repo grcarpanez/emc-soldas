@@ -61,15 +61,26 @@ MAGIC_NUMBERS = {
 
 def validar_arquivo_anexo_compra(arquivo):
     """
-    Valida a extensão e os magic bytes / integridade do arquivo enviado (XML, PDF, PNG, JPG).
-    Impede uploads de scripts disfarçados (NoExec e proteção contra arquivos maliciosos).
+    Valida a extensão, o cabeçalho (magic bytes) e a integridade de segurança do arquivo enviado.
+    Aplica verificações rigorosas:
+    1. Rejeição de nomes com Path Traversal (../) ou Null Bytes (\x00).
+    2. Validação de extensão permitida (PDF, XML, PNG, JPG).
+    3. Limite estrito de tamanho (20MB).
+    4. Inspeção dos bytes de cabeçalho (Magic Bytes) para garantir que o tipo real confere com o anunciado.
+    5. Proteção contra ataques XXE (XML External Entity) e expansão recursiva de entidades (Billion Laughs) para XMLs.
     """
     if not arquivo:
         raise ValidationError("Nenhum arquivo enviado.")
 
     nome_arquivo = getattr(arquivo, 'name', '')
-    extensao = os.path.splitext(nome_arquivo)[1].lower()
+    if not nome_arquivo:
+        raise ValidationError("Nome de arquivo ausente.")
 
+    # Proteção contra Path Traversal e Null Byte
+    if '\x00' in nome_arquivo or '..' in nome_arquivo or '/' in nome_arquivo or '\\' in nome_arquivo:
+        raise ValidationError("Nome de arquivo contém caracteres ou padrões de caminho não permitidos.")
+
+    extensao = os.path.splitext(nome_arquivo)[1].lower()
     if extensao not in EXTENSOES_PERMITIDAS:
         raise ValidationError(
             f"Extensão '{extensao}' não permitida. Extensões aceitas: PDF, XML, PNG, JPG, JPEG."
@@ -79,7 +90,10 @@ def validar_arquivo_anexo_compra(arquivo):
     if arquivo.size > 20 * 1024 * 1024:
         raise ValidationError("O tamanho do arquivo excede o limite máximo permitido de 20MB.")
 
-    # Leitura dos primeiros bytes (Magic Number Check)
+    if arquivo.size == 0:
+        raise ValidationError("O arquivo enviado está vazio (0 bytes).")
+
+    # Leitura e inspeção do cabeçalho binário (Magic Bytes Check)
     arquivo.seek(0)
     cabecalho = arquivo.read(512)
     arquivo.seek(0)
@@ -89,15 +103,27 @@ def validar_arquivo_anexo_compra(arquivo):
         valido = any(cabecalho.startswith(sig) for sig in assinaturas)
         if not valido:
             raise ValidationError(
-                f"O conteúdo do arquivo não corresponde a um formato {extensao.upper().replace('.', '')} válido."
+                f"Cabeçalho inválido: o conteúdo real do arquivo não corresponde a um arquivo {extensao.upper().replace('.', '')} legítimo."
             )
 
     elif extensao == '.xml':
-        # Validação de integridade do documento XML
+        # Validação do cabeçalho de XML
+        cabecalho_texto = cabecalho.decode('utf-8', errors='ignore').strip()
+        # Arquivos XML começam com <?xml ou com uma tag <raiz
+        if not (cabecalho_texto.startswith('<?xml') or cabecalho_texto.startswith('<')):
+            raise ValidationError("Cabeçalho inválido: o arquivo XML não inicia com declaração ou tag XML válida.")
+
+        # Proteção contra XXE e DTD Malicioso
+        arquivo.seek(0)
+        conteudo = arquivo.read(1024 * 1024 * 5)  # lê até 5MB para análise de segurança
+        arquivo.seek(0)
+
+        conteudo_str = conteudo.decode('utf-8', errors='ignore')
+        # Bloqueia compulsoriamente <!DOCTYPE e <!ENTITY para blindar contra XXE e Billion Laughs
+        if '<!DOCTYPE' in conteudo_str.upper() or '<!ENTITY' in conteudo_str.upper() or 'SYSTEM' in conteudo_str.upper():
+            raise ValidationError("Arquivo XML rejeitado por conter declarações DTD ou entidades externas não seguras (proteção contra XXE).")
+
         try:
-            arquivo.seek(0)
-            conteudo = arquivo.read(1024 * 1024 * 5) # lê até 5MB para parse
-            arquivo.seek(0)
             ET.fromstring(conteudo)
         except Exception:
             raise ValidationError("O arquivo XML enviado é inválido ou está corrompido.")

@@ -110,6 +110,11 @@ window.ComprasView = {
       let html = '';
       lista.forEach((nota) => {
         const chaveFmt = nota.chave_acesso ? window.EMCUtils.formatarChaveAcessoNfe(nota.chave_acesso) : '-';
+        const temAnexo = Boolean(nota.caminho_arquivo_anexo);
+        const btnDanfe = temAnexo 
+          ? `<button class="btn btn-secondary btn-sm" onclick="window.ComprasView.baixarDanfe(${nota.id}, '${window.EMCUtils.escapeHtml(nota.num_nota)}')" title="Baixar DANFE / XML" style="margin-right: 6px; color: var(--color-rust-orange);">📄 DANFE</button>`
+          : '';
+
         html += `
           <tr>
             <td class="mono-text">#${nota.id}</td>
@@ -120,7 +125,8 @@ window.ComprasView = {
               ${window.EMCUtils.formatarMoeda(nota.valor_total)}
             </td>
             <td class="mono-text" style="font-size: 11px; max-width: 220px; word-break: break-all;">${chaveFmt}</td>
-            <td style="text-align: right;">
+            <td style="text-align: right; white-space: nowrap;">
+              ${btnDanfe}
               <button class="btn btn-secondary btn-sm" onclick="window.ComprasView.verDetalhesNota(${nota.id})">ITENS</button>
             </td>
           </tr>
@@ -178,9 +184,16 @@ window.ComprasView = {
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="nota-chave">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
-            <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="nota-chave">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
+              <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="nota-arquivo-anexo">Anexo DANFE / XML da Nota (Opcional)</label>
+              <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="padding: 7px 12px; font-size: 12px;">
+              <small class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant); display: block; margin-top: 2px;">Formatos aceitos: PDF (DANFE) ou XML (NFe). Máximo: 20MB.</small>
+            </div>
           </div>
 
           <!-- Sub-Grid de Itens Comprados -->
@@ -231,6 +244,8 @@ window.ComprasView = {
         const num_nota = document.getElementById('nota-numero').value.trim();
         const data_compra = document.getElementById('nota-data').value;
         const chave_acesso = window.EMCUtils.extrairApenasDigitos(document.getElementById('nota-chave').value);
+        const inputArquivo = document.getElementById('nota-arquivo-anexo');
+        const arquivoAnexo = inputArquivo && inputArquivo.files && inputArquivo.files[0] ? inputArquivo.files[0] : null;
 
         if (!fornecedor_id || !num_nota || !data_compra) {
           window.EMCUtils.showToast('Preencha os campos obrigatórios da nota.', 'error');
@@ -242,12 +257,21 @@ window.ComprasView = {
           return false;
         }
 
+        // Validação prévia de tamanho no client-side para resposta instantânea
+        if (arquivoAnexo && arquivoAnexo.size > 20 * 1024 * 1024) {
+          window.EMCUtils.showToast('O arquivo da DANFE excede o limite máximo de 20MB.', 'error');
+          return false;
+        }
+
         try {
+          const valorTotalCalculado = this.itensTemp.reduce((acc, it) => acc + (it.quantidade_comprada * it.valor_unitario), 0);
+
           const payload = {
             fornecedor_id,
             num_nota,
             data_compra,
-            chave_acesso,
+            chave_acesso: chave_acesso || null,
+            valor_total: valorTotalCalculado.toFixed(2),
             itens_comprados: this.itensTemp.map(it => ({
               item_id: it.item_id,
               quantidade_comprada: it.quantidade_comprada,
@@ -255,8 +279,24 @@ window.ComprasView = {
             }))
           };
 
-          await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.NOTAS, payload);
-          window.EMCUtils.showToast('Nota registrada e custos dos insumos atualizados com sucesso!', 'success');
+          const novaNota = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.NOTAS, payload);
+
+          // Se o usuário selecionou arquivo da DANFE / XML, realiza o upload seguro
+          if (arquivoAnexo && novaNota && novaNota.id) {
+            try {
+              const formData = new FormData();
+              formData.append('arquivo', arquivoAnexo);
+              const endpointAnexo = window.CONFIG.ENDPOINTS.COMPRAS.ANEXAR_ARQUIVO.replace('{id}', novaNota.id);
+              await window.api.post(endpointAnexo, formData);
+              window.EMCUtils.showToast('Nota registrada e arquivo da DANFE anexado com sucesso!', 'success');
+            } catch (errAnexo) {
+              console.warn('Nota salva, mas erro ao enviar anexo:', errAnexo);
+              window.EMCUtils.showToast('Nota registrada, porém houve erro ao anexar a DANFE: ' + (errAnexo.message || 'formato ou cabeçalho inválido'), 'warning');
+            }
+          } else {
+            window.EMCUtils.showToast('Nota registrada e custos dos insumos atualizados com sucesso!', 'success');
+          }
+
           this.carregarListaCompras();
           return true;
         } catch (err) {
@@ -437,15 +477,34 @@ window.ComprasView = {
             </table>
           </div>
 
-          <div class="text-right">
-            <span class="mono-text" style="font-size: 16px; color: var(--color-rust-orange); font-weight: 700;">
-              TOTAL: ${window.EMCUtils.formatarMoeda(nota.valor_total)}
-            </span>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              ${nota.caminho_arquivo_anexo 
+                ? `<button type="button" class="btn btn-secondary btn-sm" onclick="window.ComprasView.baixarDanfe(${nota.id}, '${window.EMCUtils.escapeHtml(nota.num_nota)}')">📄 BAIXAR ANEXO (DANFE / XML)</button>` 
+                : '<span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Nenhum anexo importado para esta nota.</span>'}
+            </div>
+            <div class="text-right">
+              <span class="mono-text" style="font-size: 16px; color: var(--color-rust-orange); font-weight: 700;">
+                TOTAL: ${window.EMCUtils.formatarMoeda(nota.valor_total)}
+              </span>
+            </div>
           </div>
         `
       });
     } catch (e) {
       window.EMCUtils.showToast('Erro ao carregar detalhes da nota.', 'error');
+    }
+  },
+
+  async baixarDanfe(notaId, numNota) {
+    try {
+      window.EMCUtils.showToast('Iniciando download seguro do anexo...', 'info');
+      const endpoint = window.CONFIG.ENDPOINTS.COMPRAS.DOWNLOAD_ANEXO.replace('{id}', notaId);
+      const filenamePadrao = `DANFE_NF_${numNota || notaId}.pdf`;
+      await window.api.downloadFile(endpoint, filenamePadrao);
+    } catch (err) {
+      console.error('Erro ao baixar anexo:', err);
+      window.EMCUtils.showToast(err.message || 'Erro ao realizar download do anexo da compra.', 'error');
     }
   }
 };

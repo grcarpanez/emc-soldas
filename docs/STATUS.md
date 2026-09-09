@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-09 (Correção de Runtime em Modais Empilhados openModal, Blindagem em Compras, PWA v4.8)  
+**Última Atualização:** 2026-09-09 (Auto-Cálculo de Valor Total de Compras, Upload/Download Seguro de DANFE/XML com Validação de Headers, PWA v4.9)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -341,6 +341,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Blindagem Defensiva em `compras-view.js`:** Envolvimento do método `abrirModalCompra()` em bloco `try ... catch` com feedback claro via Toast notification caso haja falhas de carregamento ou rede.
   - **Homologação da Bateria de Testes Backend:** Execução de 161 testes do Django com 100% de aprovação (0 erros, 0 falhas).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.8` em `frontend/sw.js` e sufixos de cache-busting `?v=4.8` em `frontend/index.html`.
+- [x] **Auto-Cálculo de Valor Total e Upload/Download Seguro de DANFE/XML em Compras (PWA v4.9):**
+  - **Blindagem do Valor Total:** O frontend passa a calcular a soma dos subtotais dos itens e injetar `valor_total` no payload JSON. O serializer do backend torna o campo opcional e calcula automaticamente caso omitido, eliminando o erro de validação `"valor_total é obrigatório"`.
+  - **Hardening e Validação Rigorosa de Arquivos (Headers/Magic Bytes):** Implementada checagem binária dos primeiros bytes do arquivo (`%PDF`, `\x89PNG`, `\xff\xd8\xff`), proteção estrita contra Path Traversal e Null Bytes no nome do arquivo, e proteção anti-XXE com bloqueio de DTD e entidades externas em arquivos XML.
+  - **Upload e Gestão da DANFE no Frontend:** Campo de arquivo no modal de compras (`accept=".pdf,.xml"`), upload automático em `FormData` após registro da nota, botão `📄 DANFE` na listagem de notas e opção de download seguro no modal de detalhes via Blob com Content-Disposition forçado.
+  - **Homologação da Bateria de Testes:** Execução de 163 testes automatizados do Django com 100% de aprovação (OK em 65.1s).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.9` em `frontend/sw.js` e sufixos de cache-busting `?v=4.9` em `frontend/index.html`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

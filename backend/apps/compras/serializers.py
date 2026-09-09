@@ -118,6 +118,7 @@ class DocumentoFiscalCompraSerializer(serializers.ModelSerializer):
     fornecedor_nome = serializers.CharField(source='fornecedor.nome_razao', read_only=True)
     fornecedor_cnpj_cpf = serializers.CharField(source='fornecedor.cnpj_cpf', read_only=True)
     chave_acesso = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    valor_total = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
     itens_comprados = NotaCompraItemSerializer(many=True, required=False)
     total_itens = serializers.SerializerMethodField(read_only=True)
 
@@ -205,8 +206,9 @@ class DocumentoFiscalCompraSerializer(serializers.ModelSerializer):
             if not isinstance(itens_data, list):
                 raise ValidationError({"itens_comprados": "O campo itens_comprados deve ser uma lista de itens."})
             
-            # Validação anti-duplicação de item na mesma nota
+            # Validação anti-duplicação de item na mesma nota e somatório automático
             item_ids = []
+            soma_itens = Decimal('0.00')
             for idx, item_dict in enumerate(itens_data):
                 item_id = item_dict.get('item_id') or item_dict.get('item')
                 if not item_id:
@@ -216,6 +218,21 @@ class DocumentoFiscalCompraSerializer(serializers.ModelSerializer):
                         "itens_comprados": f"O item ID {item_id} foi adicionado mais de uma vez nesta nota. Cada item deve constar apenas uma vez por nota fiscal."
                     })
                 item_ids.append(item_id)
+
+                try:
+                    qtd = Decimal(str(item_dict.get('quantidade_comprada', 0)))
+                    vlr = Decimal(str(item_dict.get('valor_unitario', 0)))
+                    soma_itens += (qtd * vlr)
+                except Exception:
+                    pass
+
+            # Se valor_total não foi enviado explicitamente, adota a soma calculada dos itens
+            if 'valor_total' not in attrs or attrs.get('valor_total') is None:
+                if soma_itens <= Decimal('0'):
+                    raise ValidationError({"valor_total": "O valor total da nota fiscal deve ser estritamente maior que zero."})
+                attrs['valor_total'] = soma_itens.quantize(Decimal('0.01'))
+        elif 'valor_total' not in attrs or attrs.get('valor_total') is None:
+            raise ValidationError({"valor_total": "O valor total da nota fiscal é obrigatório."})
 
         return attrs
 

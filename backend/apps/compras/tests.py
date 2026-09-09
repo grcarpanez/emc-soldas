@@ -380,7 +380,57 @@ class ComprasModuleTestCase(TestCase):
             format='multipart'
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("não corresponde a um formato PDF válido", str(response.data))
+        self.assertIn("Cabeçalho inválido", str(response.data))
+
+    def test_upload_xml_xxe_rejeitado(self):
+        """Arquivo XML com entidade maliciosa/DOCTYPE deve ser rejeitado por segurança."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        doc = DocumentoFiscalCompra.objects.create(
+            num_nota="NF 450",
+            fornecedor=self.fornecedor_acos,
+            data_compra=date(2026, 8, 10),
+            valor_total=Decimal('450.00')
+        )
+
+        xml_malicioso = b'<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>'
+        arquivo_xxe = SimpleUploadedFile("malicioso.xml", xml_malicioso, content_type="application/xml")
+
+        response = self.client.post(
+            f'/api/documentos-fiscais-compra/{doc.id}/anexar-arquivo/',
+            {'arquivo': arquivo_xxe},
+            format='multipart'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("proteção contra XXE", str(response.data))
+
+    def test_criar_nota_compra_calcula_valor_total_automatico(self):
+        """Se valor_total for omitido no payload, o serializer calcula automaticamente a soma dos itens."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        payload = {
+            "num_nota": "NF 9999",
+            "fornecedor_id": self.fornecedor_acos.id,
+            "data_compra": "2026-08-20",
+            # valor_total omitido intencionalmente
+            "itens_comprados": [
+                {
+                    "item_id": self.item_tubo.id,
+                    "quantidade_comprada": "2.0000",
+                    "valor_unitario": "50.0000"
+                },
+                {
+                    "item_id": self.item_arame.id,
+                    "quantidade_comprada": "4.0000",
+                    "valor_unitario": "25.0000"
+                }
+            ]
+        }
+
+        response = self.client.post('/api/documentos-fiscais-compra/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # 2 * 50 + 4 * 25 = 200.00
+        self.assertEqual(Decimal(str(response.data['valor_total'])), Decimal('200.00'))
 
     # =========================================================================
     # 5. TESTES DE HISTÓRICO DE PREÇOS E CONSULTAS
