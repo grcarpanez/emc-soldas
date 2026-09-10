@@ -246,6 +246,35 @@ select.form-control {
   border-color: var(--color-error) !important;
 }
 
+input[type="file"].form-control {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+input[type="file"].form-control::file-selector-button {
+  background-color: var(--color-surface-container-highest);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-steel-gray);
+  border-radius: 0px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="file"].form-control::file-selector-button:hover {
+  background-color: var(--color-rust-orange);
+  border-color: var(--color-rust-orange-bright);
+  color: #ffffff;
+}
+
 /* Cards Usinados */
 .card {
   background-color: var(--color-surface-container);

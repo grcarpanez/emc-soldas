@@ -166,32 +166,40 @@ window.ComprasView = {
       confirmText: 'REGISTRAR COMPRA',
       content: `
         <form id="form-compra-nota">
-          <div style="display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px;">
-            <div class="form-group">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 180px 160px; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-fornecedor" style="margin-bottom: 0;">Fornecedor *</label>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-compras-novo-forn" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Fornecedor">+ NOVO FORNECEDOR</button>
               </div>
               <select id="nota-fornecedor" class="form-control" required>${optionsForn}</select>
             </div>
-            <div class="form-group">
-              <label class="form-label" for="nota-numero">Número da Nota (NF-e / Recibo) *</label>
-              <input type="text" id="nota-numero" class="form-control mono-text" placeholder="EX: 000.123.456" required>
+            <div class="form-group" style="margin-bottom: 0;">
+              <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="nota-numero" style="margin-bottom: 0; white-space: nowrap;">Nº Nota (NF-e/Recibo) *</label>
+              </div>
+              <input type="text" id="nota-numero" class="form-control mono-text" placeholder="EX: 123456" required style="width: 100%;">
             </div>
-            <div class="form-group">
-              <label class="form-label" for="nota-data">Data de Emissão *</label>
-              <input type="date" id="nota-data" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required>
+            <div class="form-group" style="margin-bottom: 0;">
+              <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="nota-data" style="margin-bottom: 0; white-space: nowrap;">Data Emissão *</label>
+              </div>
+              <input type="date" id="nota-data" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required style="width: 100%; box-sizing: border-box;">
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="form-group">
-              <label class="form-label" for="nota-chave">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
-              <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="nota-chave" style="margin-bottom: 0;">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
+              </div>
+              <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000" style="width: 100%;">
             </div>
-            <div class="form-group">
-              <label class="form-label" for="nota-arquivo-anexo">Anexo DANFE / XML da Nota (Opcional)</label>
-              <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="padding: 7px 12px; font-size: 12px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="nota-arquivo-anexo" style="margin-bottom: 0;">Anexo DANFE / XML da Nota (Opcional)</label>
+              </div>
+              <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="width: 100%;">
               <small class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant); display: block; margin-top: 2px;">Formatos aceitos: PDF (DANFE) ou XML (NFe). Máximo: 20MB.</small>
             </div>
           </div>

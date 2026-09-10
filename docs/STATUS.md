@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-09 (Auto-Cálculo de Valor Total de Compras, Upload/Download Seguro de DANFE/XML com Validação de Headers, PWA v4.9)  
+**Última Atualização:** 2026-09-10 (Alinhamento Horizontal, Enquadramento Proporcional e Estilização Usinada do Modal de Compras, PWA v4.10)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -347,6 +347,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Upload e Gestão da DANFE no Frontend:** Campo de arquivo no modal de compras (`accept=".pdf,.xml"`), upload automático em `FormData` após registro da nota, botão `📄 DANFE` na listagem de notas e opção de download seguro no modal de detalhes via Blob com Content-Disposition forçado.
   - **Homologação da Bateria de Testes:** Execução de 163 testes automatizados do Django com 100% de aprovação (OK em 65.1s).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.9` em `frontend/sw.js` e sufixos de cache-busting `?v=4.9` em `frontend/index.html`.
+- [x] **Alinhamento Horizontal, Enquadramento Proporcional e Estilização Usinada do Modal de Compras (PWA v4.10):**
+  - **Combobox Elástica de Fornecedor & Número de Nota Compacto:** Redefinido o grid superior do modal para `grid-template-columns: minmax(0, 1fr) 180px 160px; gap: 12px;`, permitindo que o seletor de fornecedor expanda organicamente para preencher o espaço remanescente, enquanto o número da nota assume largura compacta (180px) com o rótulo conciso `"Nº Nota (NF-e/Recibo) *"`, eliminando qualquer quebra de linha.
+  - **Enquadramento Perfeito da Data de Emissão:** A coluna de data de emissão foi ajustada para 160px com `width: 100%; box-sizing: border-box;`, resolvendo o transbordamento lateral e mantendo o campo 100% contido dentro da borda direita do modal.
+  - **Equalização Vertical dos Inputs:** Padronizada a altura dos contêineres de rótulos (`min-height: 22px; display: flex; align-items: center; margin-bottom: 4px;`) em todos os `.form-group` da linha, garantindo alinhamento horizontal milimétrico dos campos.
+  - **Estilização Usinada de `input[type="file"]`:** Criada regra no Design System (`industrial-integrity.css`) para `<input type="file"].form-control` e `::file-selector-button` sem cantos arredondados, com altura padronizada de 42px.
+  - **Homologação:** 163 testes automatizados do Django executados com 100% de aprovação (OK em 82.6s).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.10` em `frontend/sw.js` e sufixos de cache-busting `?v=4.10` em `frontend/index.html`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
