@@ -555,3 +555,101 @@ class ComprasModuleTestCase(TestCase):
         self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
         results = list_resp.data.get('results', list_resp.data)
         self.assertEqual(len(results), 0)
+
+    # =========================================================================
+    # 7. TESTES DE ANÁLISE PRÉVIA E CRUZAMENTO DE CNPJ (XML / PDF)
+    # =========================================================================
+
+    def test_analisar_documento_xml_fornecedor_existente(self):
+        """Envio de XML extrai dados e identifica fornecedor existente pelo CNPJ."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        xml_conteudo = f"""<?xml version="1.0" encoding="UTF-8"?>
+        <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
+            <NFe>
+                <infNFe Id="NFe35260933000167000101550010001234561000000018">
+                    <ide>
+                        <nNF>123456</nNF>
+                        <dhEmi>2026-09-10T10:00:00-03:00</dhEmi>
+                    </ide>
+                    <emit>
+                        <CNPJ>33000167000101</CNPJ>
+                        <xNome>ACOS BRASIL DISTRIBUIDORA LTDA</xNome>
+                    </emit>
+                    <total>
+                        <ICMSTot>
+                            <vNF>1500.50</vNF>
+                        </ICMSTot>
+                    </total>
+                </infNFe>
+            </NFe>
+        </nfeProc>
+        """.encode('utf-8')
+
+        arquivo_xml = SimpleUploadedFile("nfe_teste.xml", xml_conteudo, content_type="text/xml")
+        resp = self.client.post(
+            '/api/documentos-fiscais-compra/analisar-documento/',
+            {'arquivo': arquivo_xml},
+            format='multipart'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        dados = resp.data.get('dados_extraidos', {})
+        self.assertEqual(dados.get('cnpj_emitente'), '33000167000101')
+        self.assertEqual(dados.get('num_nota'), '123456')
+        self.assertEqual(dados.get('data_compra'), '2026-09-10')
+        self.assertEqual(dados.get('valor_total'), '1500.50')
+        self.assertEqual(dados.get('chave_acesso'), '35260933000167000101550010001234561000000018')
+
+        parceiro = resp.data.get('parceiro_existente')
+        self.assertIsNotNone(parceiro)
+        self.assertEqual(parceiro['id'], self.fornecedor_acos.id)
+        self.assertEqual(parceiro['tipo'], 'Fornecedor')
+
+    def test_analisar_documento_cliente_a_habilitar(self):
+        """Identifica quando o emitente existe no banco mas com tipo 'Cliente'."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        xml_conteudo = f"""<?xml version="1.0" encoding="UTF-8"?>
+        <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
+            <NFe>
+                <infNFe Id="NFe35260988888888000188550010000009991000000017">
+                    <ide>
+                        <nNF>999</nNF>
+                        <dhEmi>2026-09-10T10:00:00-03:00</dhEmi>
+                    </ide>
+                    <emit>
+                        <CNPJ>11222333000144</CNPJ>
+                        <xNome>TRANSPORTADORA VELOZ LTDA</xNome>
+                    </emit>
+                    <total>
+                        <ICMSTot>
+                            <vNF>850.00</vNF>
+                        </ICMSTot>
+                    </total>
+                </infNFe>
+            </NFe>
+        </nfeProc>
+        """.encode('utf-8')
+
+        arquivo_xml = SimpleUploadedFile("nfe_cliente.xml", xml_conteudo, content_type="text/xml")
+        resp = self.client.post(
+            '/api/documentos-fiscais-compra/analisar-documento/',
+            {'arquivo': arquivo_xml},
+            format='multipart'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        parceiro = resp.data.get('parceiro_existente')
+        self.assertIsNotNone(parceiro)
+        self.assertEqual(parceiro['tipo'], 'Cliente')
+
+        # Agora testa a ação de habilitar fornecedor
+        resp_hab = self.client.post(f'/api/clientes-fornecedores/{parceiro["id"]}/habilitar-fornecedor/')
+        self.assertEqual(resp_hab.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_hab.data['parceiro']['tipo'], 'Ambos')
+
+        # Recarrega do banco
+        self.cliente_apenas.refresh_from_db()
+        self.assertEqual(self.cliente_apenas.tipo, 'Ambos')
+

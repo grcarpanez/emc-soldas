@@ -42,7 +42,8 @@ const CONFIG = {
       DICIONARIO_UOM: '/dicionario-uom/',
       DICIONARIO_ATRIBUTOS: '/dicionario-atributos/',
       CONSULTA_CNPJ: '/utilitarios/consulta-cnpj/{cnpj}/',
-      VERIFICAR_DOCUMENTO: '/utilitarios/verificar-documento/'
+      VERIFICAR_DOCUMENTO: '/utilitarios/verificar-documento/',
+      HABILITAR_FORNECEDOR: '/clientes-fornecedores/{id}/habilitar-fornecedor/'
     },
     CATALOGO: {
       ITENS: '/itens/',
@@ -58,7 +59,8 @@ const CONFIG = {
       NOTA_ITENS: '/nota-compra-itens/',
       ANEXAR_ARQUIVO: '/documentos-fiscais-compra/{id}/anexar-arquivo/',
       DOWNLOAD_ANEXO: '/documentos-fiscais-compra/{id}/download-anexo/',
-      HISTORICO_PRECOS: '/documentos-fiscais-compra/historico-precos/'
+      HISTORICO_PRECOS: '/documentos-fiscais-compra/historico-precos/',
+      ANALISAR_DOCUMENTO: '/documentos-fiscais-compra/analisar-documento/'
     },
     ORCAMENTOS: {
       LISTA: '/orcamentos/',

@@ -258,6 +258,32 @@ class ClienteFornecedorViewSet(viewsets.ModelViewSet):
         ]
         return Response(dados, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='habilitar-fornecedor')
+    def habilitar_fornecedor(self, request, pk=None):
+        """
+        Altera o tipo do parceiro para 'Ambos' (Cliente e Fornecedor), permitindo seu
+        uso imediato no lançamento de compras e cotações sem duplicar registros.
+        """
+        parceiro = self.get_object()
+
+        if parceiro.tipo == 'Cliente':
+            parceiro.tipo = 'Ambos'
+            if request.user and request.user.is_authenticated:
+                parceiro.updated_by_id = request.user.id
+            parceiro.save(update_fields=['tipo', 'updated_at', 'updated_by_id'])
+
+        return Response({
+            "status": "success",
+            "message": f"Cadastro de '{parceiro.nome_razao}' habilitado com sucesso como Fornecedor.",
+            "parceiro": {
+                "id": parceiro.id,
+                "nome_razao": parceiro.nome_razao,
+                "tipo": parceiro.tipo,
+                "cnpj_cpf": parceiro.cnpj_cpf
+            }
+        }, status=status.HTTP_200_OK)
+
+
 
 class EquipamentoViewSet(viewsets.ModelViewSet):
     """

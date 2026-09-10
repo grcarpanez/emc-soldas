@@ -542,15 +542,18 @@ window.CadastrosView = {
 
   abrirModalCadastroCompleto(cliente = null, options = {}) {
     const isEdit = !!cliente;
-    const tipoPredefinido = (options.tipoPredefinido || cliente?.tipo || 'CLIENTE').toUpperCase();
+    const dadosIniciais = options.dadosIniciais || {};
+    const clienteEfetivo = cliente || dadosIniciais;
+    const tipoPredefinido = (options.tipoPredefinido || clienteEfetivo?.tipo || 'CLIENTE').toUpperCase();
     const tipoAtual = tipoPredefinido;
     const title = isEdit 
       ? `EDITAR CADASTRO #${cliente.id}` 
       : (tipoAtual === 'FORNECEDOR' ? 'NOVO CADASTRO DE FORNECEDOR (PF/PJ)' : 'NOVO CADASTRO COMPLETO (PF/PJ)');
 
     // Determina se inicia como PJ (se o cliente tem mais de 11 dígitos ou tipo_pessoa === 'PJ')
-    const docInicial = window.EMCUtils.extrairApenasDigitos(cliente?.cnpj_cpf || '');
-    const isPJInicial = docInicial.length > 11 || cliente?.tipo_pessoa === 'PJ';
+    const docInicial = window.EMCUtils.extrairApenasDigitos(clienteEfetivo?.cnpj_cpf || '');
+    const isPJInicial = docInicial.length > 11 || clienteEfetivo?.tipo_pessoa === 'PJ' || (!cliente && !docInicial);
+
 
     window.EMCUtils.openModal({
       title: title,
@@ -563,7 +566,7 @@ window.CadastrosView = {
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="comp-documento">CPF / CNPJ (Identificação Fiscal)</label>
               <div style="position: relative;">
-                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite CPF ou CNPJ..." value="${cliente?.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(cliente.cnpj_cpf) : ''}" autofocus>
+                <input type="text" id="comp-documento" class="form-control mono-text" data-mask="cpf-cnpj" placeholder="Digite CPF ou CNPJ..." value="${clienteEfetivo?.cnpj_cpf ? window.EMCUtils.formatarCpfCnpjDinamico(clienteEfetivo.cnpj_cpf) : ''}" autofocus>
                 <div id="doc-spinner" class="loader-spinner" style="position: absolute; right: 12px; top: 12px; display: none; width: 18px; height: 18px;"></div>
               </div>
               <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px; display: block;">
@@ -575,11 +578,11 @@ window.CadastrosView = {
           <div id="container-nome-fantasia" style="display: grid; grid-template-columns: ${isPJInicial ? '2fr 1fr' : '1fr'}; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-nome" id="lbl-comp-nome">${isPJInicial ? 'Razão Social *' : 'Nome Completo *'}</label>
-              <input type="text" id="comp-nome" class="form-control" value="${cliente?.nome_razao || ''}" required>
+              <input type="text" id="comp-nome" class="form-control" value="${clienteEfetivo?.nome_razao || ''}" required>
             </div>
             <div class="form-group" id="group-comp-fantasia" style="${isPJInicial ? '' : 'display: none;'}">
               <label class="form-label" for="comp-fantasia">Nome Fantasia</label>
-              <input type="text" id="comp-fantasia" class="form-control" value="${cliente?.nome_fantasia || ''}">
+              <input type="text" id="comp-fantasia" class="form-control" value="${clienteEfetivo?.nome_fantasia || ''}">
             </div>
           </div>
 
@@ -594,37 +597,37 @@ window.CadastrosView = {
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-email">E-mail Corporativo / Cobrança</label>
-              <input type="email" id="comp-email" class="form-control" data-no-transform="true" placeholder="exemplo@empresa.com.br" value="${cliente?.email || ''}">
+              <input type="email" id="comp-email" class="form-control" data-no-transform="true" placeholder="exemplo@empresa.com.br" value="${clienteEfetivo?.email || ''}">
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 140px 1fr 100px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-cep">CEP</label>
-              <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" value="${cliente?.cep ? window.EMCUtils.formatarCep(cliente.cep) : ''}">
+              <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" value="${clienteEfetivo?.cep ? window.EMCUtils.formatarCep(clienteEfetivo.cep) : ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-logradouro">Logradouro / Endereço</label>
-              <input type="text" id="comp-logradouro" class="form-control" value="${cliente?.logradouro || ''}">
+              <input type="text" id="comp-logradouro" class="form-control" value="${clienteEfetivo?.logradouro || ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-numero">Número</label>
-              <input type="text" id="comp-numero" class="form-control" value="${cliente?.numero || ''}">
+              <input type="text" id="comp-numero" class="form-control" value="${clienteEfetivo?.numero || ''}">
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr 80px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-bairro">Bairro</label>
-              <input type="text" id="comp-bairro" class="form-control" value="${cliente?.bairro || ''}">
+              <input type="text" id="comp-bairro" class="form-control" value="${clienteEfetivo?.bairro || ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-cidade">Cidade</label>
-              <input type="text" id="comp-cidade" class="form-control" value="${cliente?.cidade || ''}">
+              <input type="text" id="comp-cidade" class="form-control" value="${clienteEfetivo?.cidade || ''}">
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-uf">UF</label>
-              <input type="text" id="comp-uf" class="form-control text-center" maxlength="2" value="${cliente?.uf || ''}">
+              <input type="text" id="comp-uf" class="form-control text-center" maxlength="2" value="${clienteEfetivo?.uf || ''}">
             </div>
           </div>
 

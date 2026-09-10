@@ -166,6 +166,23 @@ window.ComprasView = {
       confirmText: 'REGISTRAR COMPRA',
       content: `
         <form id="form-compra-nota">
+          <!-- 1º CAMPO EM DESTAQUE NO TOPO: IMPORTAÇÃO INTELIGENTE DO DOCUMENTO FISCAL -->
+          <div class="card mb-16" style="background-color: var(--color-surface-container-high); border-left: 3px solid var(--color-rust-orange);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label class="form-label" for="nota-arquivo-anexo" style="margin-bottom: 0; font-weight: 700;">
+                1. IMPORTAR DOCUMENTO FISCAL (DANFE EM PDF OU XML DA NF-E)
+              </label>
+              <span id="status-analise-doc" class="mono-text" style="font-size: 11px; display: none;"></span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="flex: 1;">
+            </div>
+            <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">
+              Ao selecionar uma DANFE (PDF) ou XML da NF-e, os dados da nota são extraídos e o fornecedor é identificado automaticamente.
+            </small>
+          </div>
+
+          <!-- DADOS PRINCIPAIS DA NOTA FISCAL -->
           <div style="display: grid; grid-template-columns: minmax(0, 1fr) 180px 160px; gap: 12px; margin-bottom: 12px;">
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
@@ -188,19 +205,12 @@ window.ComprasView = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 16px;">
+          <div style="margin-bottom: 16px;">
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-chave" style="margin-bottom: 0;">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
               </div>
               <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000" style="width: 100%;">
-            </div>
-            <div class="form-group" style="margin-bottom: 0;">
-              <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
-                <label class="form-label" for="nota-arquivo-anexo" style="margin-bottom: 0;">Anexo DANFE / XML da Nota (Opcional)</label>
-              </div>
-              <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="width: 100%;">
-              <small class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant); display: block; margin-top: 2px;">Formatos aceitos: PDF (DANFE) ou XML (NFe). Máximo: 20MB.</small>
             </div>
           </div>
 
@@ -317,9 +327,10 @@ window.ComprasView = {
     const selForn = document.getElementById('nota-fornecedor');
     const selItem = document.getElementById('sub-item-id');
 
-    const dispararCadastroNovoFornecedor = () => {
+    const dispararCadastroNovoFornecedor = (dadosPreenchimento = {}) => {
       window.CadastrosView.abrirModalCadastroCompleto(null, {
         tipoPredefinido: 'FORNECEDOR',
+        dadosIniciais: dadosPreenchimento,
         onSuccess: async (novoForn) => {
           if (!novoForn || !novoForn.id) return;
           try {
@@ -348,6 +359,173 @@ window.ComprasView = {
         }
       });
     };
+
+    // Função utilitária para aplicar os dados extraídos nos campos da nota
+    const aplicarDadosExtraidosNaNota = (dados) => {
+      if (!dados) return;
+      const inputNumero = document.getElementById('nota-numero');
+      const inputData = document.getElementById('nota-data');
+      const inputChave = document.getElementById('nota-chave');
+
+      if (dados.num_nota && inputNumero && !inputNumero.value.trim()) {
+        inputNumero.value = dados.num_nota;
+      }
+      if (dados.data_compra && inputData) {
+        inputData.value = dados.data_compra;
+      }
+      if (dados.chave_acesso && inputChave && !inputChave.value.trim()) {
+        inputChave.value = window.EMCUtils.formatarChaveNFe ? window.EMCUtils.formatarChaveNFe(dados.chave_acesso) : dados.chave_acesso;
+      }
+    };
+
+    // Função para selecionar um fornecedor na combobox (ou recarregar caso tenha acabado de habilitar)
+    const selecionarFornecedorNaCombobox = async (fornecedorId) => {
+      if (!selForn || !fornecedorId) return;
+
+      // Recarrega opções para garantir que o parceiro apareça como fornecedor
+      try {
+        const fornecedoresAtualizados = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`);
+        const listaFornAtualizada = fornecedoresAtualizados.results || fornecedoresAtualizados || [];
+        listaFornAtualizada.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+
+        let novasOptions = '<option value="">SELECIONE O FORNECEDOR...</option>';
+        listaFornAtualizada.forEach((f) => {
+          novasOptions += `<option value="${f.id}" ${f.id == fornecedorId ? 'selected' : ''}>${window.EMCUtils.escapeHtml(f.nome_razao)}</option>`;
+        });
+
+        if (selForn._emcCombobox) {
+          selForn._emcCombobox.updateOptions(novasOptions, fornecedorId);
+        } else {
+          selForn.innerHTML = novasOptions;
+          selForn.value = fornecedorId;
+        }
+      } catch (err) {
+        console.error('Erro ao selecionar fornecedor:', err);
+      }
+    };
+
+    // Listener do campo de arquivo para análise prévia e cruzamento cadastral
+    const inputArquivo = document.getElementById('nota-arquivo-anexo');
+    const statusAnalise = document.getElementById('status-analise-doc');
+
+    inputArquivo?.addEventListener('change', async (e) => {
+      const arquivo = e.target.files && e.target.files[0];
+      if (!arquivo) return;
+
+      const ext = arquivo.name.split('.').pop().toLowerCase();
+      if (ext !== 'pdf' && ext !== 'xml') {
+        window.EMCUtils.showToast('Selecione um arquivo PDF (DANFE) ou XML da NF-e.', 'warning');
+        return;
+      }
+
+      if (arquivo.size > 20 * 1024 * 1024) {
+        window.EMCUtils.showToast('O arquivo excede o limite máximo de 20MB.', 'error');
+        return;
+      }
+
+      if (statusAnalise) {
+        statusAnalise.style.display = 'inline';
+        statusAnalise.style.color = 'var(--color-rust-orange)';
+        statusAnalise.textContent = 'ANALISANDO DOCUMENTO...';
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('arquivo', arquivo);
+
+        const res = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.ANALISAR_DOCUMENTO, formData);
+        const dados = res.dados_extraidos || {};
+        const parceiro = res.parceiro_existente;
+
+        if (statusAnalise) {
+          statusAnalise.style.color = 'var(--color-success)';
+          statusAnalise.textContent = 'DADOS EXTRAÍDOS COM SUCESSO';
+        }
+
+        // Caso 1: O parceiro já existe no banco de dados
+        if (parceiro) {
+          const parceiroTipoUpper = (parceiro.tipo || '').toUpperCase();
+
+          if (parceiroTipoUpper === 'FORNECEDOR' || parceiroTipoUpper === 'AMBOS') {
+            // Já é Fornecedor: auto-seleciona e preenche
+            await selecionarFornecedorNaCombobox(parceiro.id);
+            aplicarDadosExtraidosNaNota(dados);
+            window.EMCUtils.showToast(`Fornecedor "${parceiro.nome_razao}" identificado e dados da nota preenchidos!`, 'success');
+          } else {
+            // É apenas Cliente: perguntar se deseja habilitar como Fornecedor
+            window.EMCUtils.openModal({
+              title: 'HABILITAR PARCEIRO COMO FORNECEDOR',
+              size: 'sm',
+              confirmText: 'SIM, HABILITAR',
+              cancelText: 'NÃO, CONTINUAR',
+              content: `
+                <p style="font-size: 14px; margin-bottom: 12px;">
+                  O CNPJ <strong>${window.EMCUtils.formatarCpfCnpjDinamico(parceiro.cnpj_cpf)}</strong> pertence a <strong>${window.EMCUtils.escapeHtml(parceiro.nome_razao)}</strong>, atualmente cadastrado apenas como <strong>CLIENTE</strong>.
+                </p>
+                <div class="alert-banner alert-info" style="font-size: 12px; margin-bottom: 0;">
+                  Deseja habilitar este parceiro também como <strong>FORNECEDOR</strong> (tipo: <em>Ambos</em>) para associá-lo a esta nota fiscal?
+                </div>
+              `,
+              onConfirm: async () => {
+                try {
+                  const urlHabilitar = window.CONFIG.ENDPOINTS.CADASTROS.HABILITAR_FORNECEDOR.replace('{id}', parceiro.id);
+                  await window.api.post(urlHabilitar);
+                  await selecionarFornecedorNaCombobox(parceiro.id);
+                  aplicarDadosExtraidosNaNota(dados);
+                  window.EMCUtils.showToast(`"${parceiro.nome_razao}" agora é Cliente/Fornecedor e foi selecionado!`, 'success');
+                  return true;
+                } catch (errHab) {
+                  window.EMCUtils.showToast(errHab.message || 'Erro ao habilitar fornecedor.', 'error');
+                  return false;
+                }
+              },
+              onCancel: () => {
+                aplicarDadosExtraidosNaNota(dados);
+                window.EMCUtils.showToast('Arquivo mantido. Selecione o fornecedor manualmente ou continue a edição.', 'info');
+              }
+            });
+          }
+        } else {
+          // Caso 2: CNPJ não cadastrado no sistema
+          const cnpjFormatado = dados.cnpj_emitente ? window.EMCUtils.formatarCpfCnpjDinamico(dados.cnpj_emitente) : 'não identificado';
+          window.EMCUtils.openModal({
+            title: 'FORNECEDOR NÃO ENCONTRADO',
+            size: 'sm',
+            confirmText: 'CADASTRAR FORNECEDOR',
+            cancelText: 'DEIXAR PARA DEPOIS',
+            content: `
+              <p style="font-size: 14px; margin-bottom: 12px;">
+                O CNPJ <strong>${cnpjFormatado}</strong> não foi localizado no cadastro de parceiros.
+              </p>
+              <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+                Deseja abrir o cadastro rápido agora? O formulário será pré-preenchido com os dados da nota fiscal e os dados cadastrais serão buscados automaticamente na Receita Federal.
+              </div>
+            `,
+            onConfirm: () => {
+              aplicarDadosExtraidosNaNota(dados);
+              dispararCadastroNovoFornecedor({
+                cnpj_cpf: dados.cnpj_emitente || '',
+                nome_razao: dados.razao_social_emitente || '',
+                tipo_pessoa: 'PJ',
+                tipo: 'Fornecedor'
+              });
+              return true;
+            },
+            onCancel: () => {
+              aplicarDadosExtraidosNaNota(dados);
+              window.EMCUtils.showToast('Arquivo mantido. Você pode prosseguir com o lançamento manual.', 'info');
+            }
+          });
+        }
+      } catch (errAnalise) {
+        console.warn('Erro ao analisar documento fiscal:', errAnalise);
+        if (statusAnalise) {
+          statusAnalise.style.color = 'var(--color-error)';
+          statusAnalise.textContent = 'ERRO NA ANÁLISE';
+        }
+        window.EMCUtils.showToast(errAnalise.message || 'Não foi possível extrair dados automaticamente deste arquivo. Preencha os campos manualmente.', 'warning');
+      }
+    });
 
     if (selForn) {
       window.EMCUtils.initSearchableSelect(selForn, {

@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-10 (Alinhamento Horizontal, Enquadramento Proporcional e Estilização Usinada do Modal de Compras, PWA v4.10)  
+**Última Atualização:** 2026-09-10 (Importação Inteligente de Documento Fiscal DANFE/XML com Pré-Preenchimento e Cruzamento Cadastral em Compras, PWA v4.11)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -354,6 +354,18 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Estilização Usinada de `input[type="file"]`:** Criada regra no Design System (`industrial-integrity.css`) para `<input type="file"].form-control` e `::file-selector-button` sem cantos arredondados, com altura padronizada de 42px.
   - **Homologação:** 163 testes automatizados do Django executados com 100% de aprovação (OK em 82.6s).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.10` em `frontend/sw.js` e sufixos de cache-busting `?v=4.10` em `frontend/index.html`.
+- [x] **Importação Inteligente de Documento Fiscal (DANFE/XML) com Pré-Preenchimento e Cruzamento Cadastral em Compras (PWA v4.11):**
+  - **Posicionamento no Topo do Modal:** O campo de upload da DANFE (PDF) ou XML da NF-e foi elevado para a primeira posição com destaque visual e feedback em tempo real de status da análise (`ANALISANDO DOCUMENTO...` -> `DADOS EXTRAÍDOS COM SUCESSO`).
+  - **Extração Determinística sem Dados Fantasma:** Implementadas rotinas em `apps/compras/services.py` (`extrair_dados_xml_nfe` e `extrair_dados_pdf_danfe` com `pypdf>=4.0.0`) com validação Módulo 11 da chave de 44 dígitos da NF-e e extração estrita dos campos existentes no formulário (CNPJ emitente, número da nota, data de emissão, chave e valor total).
+  - **Cruzamento Cadastral por Dígitos Limpos:** Endpoint `POST /api/documentos-fiscais-compra/analisar-documento/` cruza o CNPJ do emitente contra a base higienizando pontuações.
+  - **Fluxo com Modais Empilhados (*Stacked Modals*):**
+    - Se for **Fornecedor** (ou *Ambos*): seleciona automaticamente na combobox e preenche número, data e chave.
+    - Se for apenas **Cliente**: exibe modal de confirmação para habilitar como fornecedor (tipo *Ambos*) via `POST /api/clientes-fornecedores/{id}/habilitar-fornecedor/` sem duplicar registro; em caso afirmativo, atualiza, seleciona e preenche.
+    - Se for **Novo Emitente**: abre o modal de cadastro de fornecedor empilhado com CNPJ e Razão Social pré-preenchidos e consulta pública automática da Receita Federal; ao salvar, seleciona o novo fornecedor e fecha o modal secundário.
+    - Em caso de recusa: o arquivo permanece anexado e o formulário é liberado para edição livre.
+  - **Homologação da Bateria de Testes:** Suíte completa com 165 testes automatizados do Django executados com 100% de aprovação (OK em 75.1s).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.11` em `frontend/sw.js` e sufixos de cache-busting `?v=4.11` em `frontend/index.html`.
+
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

@@ -16,15 +16,21 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
 from apps.catalogo.models import Item
+from apps.cadastros.models import ClienteFornecedor
 from apps.compras.models import DocumentoFiscalCompra, NotaCompraItem
 from apps.compras.serializers import (
     DocumentoFiscalCompraSerializer,
     NotaCompraItemSerializer,
     HistoricoPrecoItemSerializer
 )
-from apps.compras.services import validar_arquivo_anexo_compra
+from apps.compras.services import (
+    validar_arquivo_anexo_compra,
+    extrair_dados_xml_nfe,
+    extrair_dados_pdf_danfe
+)
 from core.permissions import HasComprasAccess
 from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
+
 
 
 class DocumentoFiscalCompraViewSet(viewsets.ModelViewSet):
@@ -248,6 +254,65 @@ class DocumentoFiscalCompraViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{nome_download_limpo}"'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
+
+    @action(detail=False, methods=['post'], url_path='analisar-documento')
+    def analisar_documento(self, request):
+        """
+        Analisa previamente o documento fiscal (PDF/XML) enviado pelo usuário:
+        1. Validação profunda de Magic Bytes e extensão;
+        2. Extração determinística dos campos existentes no formulário (CNPJ, Nº Nota, Data, Chave, Valor, Razão Social);
+        3. Cruzamento cadastral por CNPJ limpo (somente números) no banco de dados;
+        4. Identificação do status do parceiro: Fornecedor existente, Cliente a ser habilitado, ou Não Encontrado.
+        """
+        arquivo = request.FILES.get('arquivo')
+        if not arquivo:
+            return Response(
+                {"status": "error", "message": "Nenhum arquivo enviado para análise."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validação de segurança (Magic Bytes, tamanho e XXE)
+        extensao = validar_arquivo_anexo_compra(arquivo)
+
+        if extensao == '.xml':
+            dados_extraidos = extrair_dados_xml_nfe(arquivo)
+        elif extensao == '.pdf':
+            dados_extraidos = extrair_dados_pdf_danfe(arquivo)
+        else:
+            return Response(
+                {"status": "error", "message": "A extração automática de dados está disponível apenas para arquivos PDF (DANFE) ou XML (NF-e)."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cnpj_limpo = limpar_apenas_digitos(dados_extraidos.get('cnpj_emitente', ''))
+        parceiro_existente = None
+
+        if cnpj_limpo and len(cnpj_limpo) == 14:
+            # Busca parceiro no banco de dados desconsiderando pontuações
+            candidatos = ClienteFornecedor.objects.filter(deleted_at__isnull=True)
+            for cand in candidatos:
+                if cand.cnpj_cpf and limpar_apenas_digitos(cand.cnpj_cpf) == cnpj_limpo:
+                    parceiro_existente = {
+                        "id": cand.id,
+                        "nome_razao": cand.nome_razao,
+                        "tipo": cand.tipo,
+                        "cnpj_cpf": cand.cnpj_cpf
+                    }
+                    break
+
+        return Response({
+            "status": "success",
+            "dados_extraidos": {
+                "cnpj_emitente": cnpj_limpo,
+                "razao_social_emitente": dados_extraidos.get('razao_social_emitente', ''),
+                "num_nota": dados_extraidos.get('num_nota', ''),
+                "data_compra": dados_extraidos.get('data_compra', ''),
+                "chave_acesso": dados_extraidos.get('chave_acesso', ''),
+                "valor_total": dados_extraidos.get('valor_total')
+            },
+            "parceiro_existente": parceiro_existente
+        }, status=status.HTTP_200_OK)
+
 
 
 class NotaCompraItemViewSet(viewsets.ModelViewSet):
