@@ -514,7 +514,7 @@ input[type="file"].form-control::file-selector-button:hover {
   box-sizing: border-box;
 }
 
-.modal-size-sm { max-width: 420px; }
+.modal-size-sm { max-width: 480px; }
 .modal-size-md { max-width: 640px; }
 .modal-size-lg { max-width: 900px; }
 .modal-size-xl { max-width: 1200px; }
@@ -562,10 +562,13 @@ input[type="file"].form-control::file-selector-button:hover {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 16px 24px;
   border-top: 1px solid var(--color-steel-gray);
   background-color: var(--color-surface-container-low);
+  box-sizing: border-box;
 }
 
 /* ==========================================================================

@@ -314,6 +314,33 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
         if cnpjs:
             cnpj_emitente = re.sub(r'\D', '', cnpjs[0])
 
+    # Se ainda não identificou o número da nota pela chave, busca padrões de NFS-e ou texto da nota
+    if not num_nota:
+        match_num = re.search(
+            r'(?:NFS-?e\s*N[º°\.\s]*|NF-?e\s*N[º°\.\s]*|Número\s*(?:da\s*Nota)?\s*[:º°\.\s]*|NOTA\s+FISCAL[^\d\n\r]{0,30}N[º°\.\s]*)\s*(\d{1,9})\b',
+            texto_completo,
+            re.IGNORECASE
+        )
+        if match_num:
+            try:
+                num_nota = str(int(match_num.group(1)))
+            except ValueError:
+                num_nota = match_num.group(1).lstrip('0')
+
+    # Fallback adicional: extrair número a partir do nome do arquivo (ex.: "NFSe 10 Associação.pdf")
+    if not num_nota:
+        nome_arquivo = getattr(arquivo, 'name', '') or ''
+        match_nome = re.search(
+            r'(?:NFS-?e?|NF-?e?|Nota|DANFE)[\s_.-]*(\d{1,9})\b',
+            nome_arquivo,
+            re.IGNORECASE
+        )
+        if match_nome:
+            try:
+                num_nota = str(int(match_nome.group(1)))
+            except ValueError:
+                num_nota = match_nome.group(1).lstrip('0')
+
     # Tentar extrair Data da Emissão se tiver ano_mes da chave
     data_compra = ""
     # Procura data no formato DD/MM/AAAA no PDF

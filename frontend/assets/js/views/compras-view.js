@@ -352,7 +352,13 @@ window.ComprasView = {
                 selForn.value = novoForn.id;
               }
             }
-            window.EMCUtils.showToast(`Fornecedor "${novoForn.nome_razao}" selecionado automaticamente!`, 'success');
+
+            // Re-aplica os dados da nota extraídos após salvar o fornecedor
+            if (this.dadosExtraidosTemp) {
+              aplicarDadosExtraidosNaNota(this.dadosExtraidosTemp);
+            }
+
+            window.EMCUtils.showToast(`Fornecedor "${novoForn.nome_razao}" selecionado automaticamente e dados da nota aplicados!`, 'success');
           } catch (e) {
             console.error('Erro ao atualizar fornecedores:', e);
           }
@@ -367,14 +373,17 @@ window.ComprasView = {
       const inputData = document.getElementById('nota-data');
       const inputChave = document.getElementById('nota-chave');
 
-      if (dados.num_nota && inputNumero && !inputNumero.value.trim()) {
+      if (dados.num_nota && inputNumero) {
         inputNumero.value = dados.num_nota;
+        inputNumero.dispatchEvent(new Event('input', { bubbles: true }));
       }
       if (dados.data_compra && inputData) {
         inputData.value = dados.data_compra;
+        inputData.dispatchEvent(new Event('input', { bubbles: true }));
       }
-      if (dados.chave_acesso && inputChave && !inputChave.value.trim()) {
-        inputChave.value = window.EMCUtils.formatarChaveNFe ? window.EMCUtils.formatarChaveNFe(dados.chave_acesso) : dados.chave_acesso;
+      if (dados.chave_acesso && inputChave) {
+        inputChave.value = window.EMCUtils.formatarChaveAcessoNfe ? window.EMCUtils.formatarChaveAcessoNfe(dados.chave_acesso) : dados.chave_acesso;
+        inputChave.dispatchEvent(new Event('input', { bubbles: true }));
       }
     };
 
@@ -436,6 +445,7 @@ window.ComprasView = {
         const res = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.ANALISAR_DOCUMENTO, formData);
         const dados = res.dados_extraidos || {};
         const parceiro = res.parceiro_existente;
+        this.dadosExtraidosTemp = dados;
 
         if (statusAnalise) {
           statusAnalise.style.color = 'var(--color-success)';
@@ -455,7 +465,7 @@ window.ComprasView = {
             // É apenas Cliente: perguntar se deseja habilitar como Fornecedor
             window.EMCUtils.openModal({
               title: 'HABILITAR PARCEIRO COMO FORNECEDOR',
-              size: 'sm',
+              size: 'md',
               confirmText: 'SIM, HABILITAR',
               cancelText: 'NÃO, CONTINUAR',
               content: `
@@ -490,7 +500,7 @@ window.ComprasView = {
           const cnpjFormatado = dados.cnpj_emitente ? window.EMCUtils.formatarCpfCnpjDinamico(dados.cnpj_emitente) : 'não identificado';
           window.EMCUtils.openModal({
             title: 'FORNECEDOR NÃO ENCONTRADO',
-            size: 'sm',
+            size: 'md',
             confirmText: 'CADASTRAR FORNECEDOR',
             cancelText: 'DEIXAR PARA DEPOIS',
             content: `
