@@ -653,3 +653,110 @@ class ComprasModuleTestCase(TestCase):
         self.cliente_apenas.refresh_from_db()
         self.assertEqual(self.cliente_apenas.tipo, 'Ambos')
 
+    def test_analisar_documento_boleto_bancario_bloqueado(self):
+        """Documentos de cobrança bancária (boletos) devem ser bloqueados na entrada de compras."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        import io
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        p.drawString(100, 750, "Autenticacao Mecanica - Ficha de Compensacao")
+        p.drawString(100, 730, "Beneficiario: NOVUS CONTABILIDADE LTDA CNPJ: 38.536.678/0001-66")
+        p.drawString(100, 710, "Pagador: ABBAC JF CENTRO CNPJ: 07.030.719/0001-14")
+        p.drawString(100, 690, "Detalhamento do Boleto - Nosso Numero: 0042698-3")
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+
+        arquivo_pdf = SimpleUploadedFile("boleto_sicoob.pdf", buffer.getvalue(), content_type="application/pdf")
+        resp = self.client.post(
+            '/api/documentos-fiscais-compra/analisar-documento/',
+            {'arquivo': arquivo_pdf},
+            format='multipart'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp.data.get('is_documento_fiscal'))
+        self.assertEqual(resp.data.get('tipo_documento'), 'BOLETO')
+        self.assertIn('Boleto Bancário', resp.data.get('message', ''))
+
+    def test_analisar_documento_danfse_50_digitos(self):
+        """DANFSe v2.0 com chave nacional de 50 dígitos deve extrair chave, prestador e número da nota."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        import io
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        p.drawString(100, 770, "DANFSe v2.0 Documento Auxiliar da NFS-e")
+        p.drawString(100, 750, "CHAVE DE ACESSO DA NFS-e")
+        p.drawString(100, 735, "31367022225805557000120000000000001026090640797349")
+        p.drawString(100, 715, "NUMERO DA NFS-e: 10")
+        p.drawString(100, 695, "DATA E HORA DA EMISSAO DA NFS-e: 09/09/2026")
+        p.drawString(100, 675, "PRESTADOR / FORNECEDOR CNPJ / CPF / NIF: 25.805.557/0001-20")
+        p.drawString(100, 655, "Nome / Nome Empresarial: MULTIPRINTERS COMERCIO E SERVICOS LTDA")
+        p.drawString(100, 635, "TOMADOR / ADQUIRENTE CNPJ: 07.030.719/0001-14")
+        p.drawString(100, 615, "VALOR TOTAL DA NFS-e: R$ 319,00")
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+
+        arquivo_pdf = SimpleUploadedFile("nfse_10.pdf", buffer.getvalue(), content_type="application/pdf")
+        resp = self.client.post(
+            '/api/documentos-fiscais-compra/analisar-documento/',
+            {'arquivo': arquivo_pdf},
+            format='multipart'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get('is_documento_fiscal'))
+        dados = resp.data.get('dados_extraidos', {})
+        self.assertEqual(dados.get('chave_acesso'), '31367022225805557000120000000000001026090640797349')
+        self.assertEqual(dados.get('cnpj_emitente'), '25805557000120')
+        self.assertEqual(dados.get('num_nota'), '10')
+        self.assertEqual(dados.get('data_compra'), '2026-09-09')
+        self.assertEqual(dados.get('valor_total'), '319.00')
+
+    def test_analisar_documento_danfe_blocos_4_digitos(self):
+        """DANFE com chave impressa em 11 blocos de 4 dígitos precedida por CNPJ e protocolo."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        import io
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        p.drawString(100, 770, "DANFE DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRONICA")
+        p.drawString(100, 750, "PROTOCOLO DE AUTORIZACAO 131267812554004 12/08/2026")
+        p.drawString(100, 730, "CNPJ / CPF 17.851.981/0001-83")
+        p.drawString(100, 710, "CHAVE DE ACESSO")
+        p.drawString(100, 690, "3126 0817 8519 8100 0183 5500 3000 1573 8315 8090 8986")
+        p.drawString(100, 670, "DESTINATARIO / REMETENTE CNPJ 07.030.719/0002-03")
+        p.drawString(100, 650, "DATA DA EMISSAO: 12/08/2026")
+        p.drawString(100, 630, "VALOR TOTAL DA NOTA: 19,80")
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+
+        arquivo_pdf = SimpleUploadedFile("danfe_rivelli.pdf", buffer.getvalue(), content_type="application/pdf")
+        resp = self.client.post(
+            '/api/documentos-fiscais-compra/analisar-documento/',
+            {'arquivo': arquivo_pdf},
+            format='multipart'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data.get('is_documento_fiscal'))
+        dados = resp.data.get('dados_extraidos', {})
+        self.assertEqual(dados.get('chave_acesso'), '31260817851981000183550030001573831580908986')
+        self.assertEqual(dados.get('cnpj_emitente'), '17851981000183')
+        self.assertEqual(dados.get('num_nota'), '157383')
+        self.assertEqual(dados.get('data_compra'), '2026-08-12')
+        self.assertEqual(dados.get('valor_total'), '19.80')
+

@@ -211,7 +211,7 @@ function formatarPlacaVeiculo(valor) {
  * @returns {string}
  */
 function formatarChaveAcessoNfe(valor) {
-  const digitos = extrairApenasDigitos(valor).slice(0, 44);
+  const digitos = extrairApenasDigitos(valor).slice(0, 50);
   return digitos.replace(/(\d{4})(?=\d)/g, '$1 ');
 }
 

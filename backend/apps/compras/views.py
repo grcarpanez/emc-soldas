@@ -28,6 +28,7 @@ from apps.compras.services import (
     extrair_dados_xml_nfe,
     extrair_dados_pdf_danfe
 )
+from apps.cadastros.utils_cnpj import consultar_cnpj_externo
 from core.permissions import HasComprasAccess
 from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
 
@@ -284,8 +285,19 @@ class DocumentoFiscalCompraViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Se o extrator identificou que o arquivo não é documento fiscal (ex: boleto bancário)
+        if dados_extraidos.get('is_documento_fiscal') is False:
+            return Response({
+                "status": "warning",
+                "is_documento_fiscal": False,
+                "tipo_documento": dados_extraidos.get("tipo_documento", "NAO_FISCAL"),
+                "message": dados_extraidos.get("mensagem", "O arquivo anexado não foi reconhecido como uma Nota Fiscal válida."),
+                "dados_extraidos": {}
+            }, status=status.HTTP_200_OK)
+
         cnpj_limpo = limpar_apenas_digitos(dados_extraidos.get('cnpj_emitente', ''))
         parceiro_existente = None
+        dados_receita = None
 
         if cnpj_limpo and len(cnpj_limpo) == 14:
             # Busca parceiro no banco de dados desconsiderando pontuações
@@ -300,17 +312,38 @@ class DocumentoFiscalCompraViewSet(viewsets.ModelViewSet):
                     }
                     break
 
+            # Se o parceiro NÃO existe na base local, consulta a Receita Federal para enriquecer o modal
+            if not parceiro_existente:
+                try:
+                    res_cnpj = consultar_cnpj_externo(cnpj_limpo)
+                    if res_cnpj.get("status") == "success" and res_cnpj.get("data"):
+                        dados_receita = res_cnpj["data"]
+                        if not dados_extraidos.get("razao_social_emitente"):
+                            dados_extraidos["razao_social_emitente"] = dados_receita.get("nome_razao", "")
+                        dados_extraidos["nome_fantasia_emitente"] = dados_receita.get("nome_fantasia", "")
+                        cidade = dados_receita.get("municipio", "")
+                        uf = dados_receita.get("uf", "")
+                        dados_extraidos["cidade_uf"] = f"{cidade} / {uf}".strip(" /")
+                except Exception as err_receita:
+                    # Falha de conexão ou indisponibilidade da API pública não deve derrubar o fluxo
+                    pass
+
         return Response({
             "status": "success",
+            "is_documento_fiscal": True,
+            "tipo_documento": dados_extraidos.get("tipo_documento", "FISCAL"),
             "dados_extraidos": {
                 "cnpj_emitente": cnpj_limpo,
                 "razao_social_emitente": dados_extraidos.get('razao_social_emitente', ''),
+                "nome_fantasia_emitente": dados_extraidos.get('nome_fantasia_emitente', ''),
+                "cidade_uf": dados_extraidos.get('cidade_uf', ''),
                 "num_nota": dados_extraidos.get('num_nota', ''),
                 "data_compra": dados_extraidos.get('data_compra', ''),
                 "chave_acesso": dados_extraidos.get('chave_acesso', ''),
                 "valor_total": dados_extraidos.get('valor_total')
             },
-            "parceiro_existente": parceiro_existente
+            "parceiro_existente": parceiro_existente,
+            "dados_receita": dados_receita
         }, status=status.HTTP_200_OK)
 
 

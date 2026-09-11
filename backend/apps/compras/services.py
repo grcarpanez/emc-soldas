@@ -246,11 +246,65 @@ def extrair_dados_xml_nfe(arquivo) -> dict:
     }
 
 
+def classificar_documento_fiscal_pdf(texto: str) -> tuple:
+    """
+    Classifica se o PDF representa uma Nota Fiscal hábil (DANFE, NFS-e, NFCom)
+    ou se é um Boleto Bancário / Ficha de Compensação / Documento Não Fiscal.
+    Retorna: (is_fiscal: bool, tipo_detectado: str, mensagem: str)
+    """
+    texto_lower = texto.lower()
+
+    termos_fiscais = [
+        'danfe', 'nfs-e', 'danfse', 'nf-e', 'nfcom',
+        'documento auxiliar da nota fiscal',
+        'documento auxiliar da nfs-e',
+        'documento auxiliar da nota fiscal de fatura',
+        'nota fiscal eletronica', 'nota fiscal eletrônica',
+        'nota fiscal de servico', 'nota fiscal de serviço',
+        'nota fiscal de faturamento', 'nota fiscal consumidor',
+        'chave de acesso da nfs-e', 'chave de acesso',
+        'protocolo de autorizacao de uso', 'protocolo de autorização de uso',
+        'dados do produto / servicos', 'dados do produto / serviços',
+        'tributacao municipal', 'tributação municipal'
+    ]
+
+    termos_boleto = [
+        'ficha de compensacao', 'ficha de compensação',
+        'bloqueto', 'boleto bancario', 'boleto bancário', 'detalhamento do boleto',
+        'autenticacao mecanica', 'autenticação mecânica',
+        'nosso numero', 'nosso número',
+        'agencia/codigo beneficiario', 'agência/código beneficiário',
+        'sacador avalista', 'pagavel em qualquer banco', 'pagável em qualquer banco'
+    ]
+
+    tem_fiscal = any(t in texto_lower for t in termos_fiscais)
+    tem_boleto = any(t in texto_lower for t in termos_boleto)
+
+    # Se contém fortes termos de boleto e não tem indicadores formais de nota fiscal
+    if tem_boleto and not tem_fiscal:
+        return False, "BOLETO", (
+            "O arquivo enviado é um Boleto Bancário ou Ficha de Compensação, e não uma Nota Fiscal. "
+            "Boletos representam cobrança e não comprovam entrada fiscal nem alimentam estoque de insumos. "
+            "Para registrar este pagamento, utilize o módulo Financeiro (Contas a Pagar) ou anexe a Nota Fiscal emitida pelo fornecedor."
+        )
+
+    # Se não tem nenhum termo fiscal inequívoco
+    if not tem_fiscal:
+        return False, "NAO_FISCAL", (
+            "O arquivo enviado não foi reconhecido como um documento fiscal válido (DANFE, NFS-e ou NFCom). "
+            "Por favor, anexe uma Nota Fiscal emitida pelo fornecedor."
+        )
+
+    return True, "FISCAL", ""
+
+
 def extrair_dados_pdf_danfe(arquivo) -> dict:
     """
-    Extrai deterministicamente os dados da NF-e a partir do PDF da DANFE via pypdf.
-    Busca a sequência de 44 dígitos da Chave de Acesso, valida o DV via Módulo 11
-    e decodifica a chave da NF-e (que contém nativamente CNPJ do emitente e Número da Nota).
+    Extrai deterministicamente os dados da NF-e / NFS-e / NFCom a partir do PDF.
+    1. Classifica previamente se o arquivo é documento fiscal hábil ou boleto/não-fiscal;
+    2. Extrai a Chave de Acesso suportando NF-e/NFCom (44 dígitos) e NFS-e Nacional (50 dígitos);
+    3. Segrega estritamente dados do Prestador/Emitente vs Tomador/Cliente;
+    4. Extrai Número da Nota, Data de Emissão e Valor Total.
     """
     import io
     from pypdf import PdfReader
@@ -268,39 +322,74 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
     except Exception as e:
         raise ValidationError(f"Não foi possível ler o texto do documento PDF: {str(e)}")
 
-    # Procura a chave de acesso de 44 dígitos (pode estar com espaços ou traços)
-    # 1. Tenta encontrar agrupamentos de 4 dígitos (ex: 3526 0912 3456 ...)
-    chave_encontrada = ""
-    candidatos = re.findall(r'(?:\d[\s.-]*){44}', texto_completo)
-    for cand in candidatos:
-        limpo = re.sub(r'\D', '', cand)
-        if len(limpo) == 44 and validar_digito_chave_nfe(limpo):
-            chave_encontrada = limpo
-            break
+    # 1. Classificação prévia do documento
+    is_fiscal, tipo_doc, msg_bloqueio = classificar_documento_fiscal_pdf(texto_completo)
+    if not is_fiscal:
+        return {
+            "is_documento_fiscal": False,
+            "tipo_documento": tipo_doc,
+            "mensagem": msg_bloqueio,
+            "cnpj_emitente": "",
+            "razao_social_emitente": "",
+            "num_nota": "",
+            "data_compra": "",
+            "chave_acesso": "",
+            "valor_total": None
+        }
 
-    # Se ainda não encontrou com regex formatada, varre sequências de dígitos contínuos
+    # 2. Busca Chave de Acesso
+    chave_encontrada = ""
+    tipo_chave = ""
+
+    # 2.1 - Chave da NFS-e Nacional (50 dígitos contínuos)
+    matches_50 = re.findall(r'\b\d{50}\b', texto_completo)
+    if matches_50:
+        chave_encontrada = matches_50[0]
+        tipo_chave = "NFSE_50"
+
+    # 2.2 - Chave em 11 blocos de 4 dígitos (44 dígitos: DANFE NF-e modelo 55, NFCom modelo 62, NFC-e 65)
+    if not chave_encontrada:
+        matches_blocos = re.findall(r'\b(?:\d{4}[\s.-]+){10}\d{4}\b', texto_completo)
+        for mb in matches_blocos:
+            limpo = re.sub(r'\D', '', mb)
+            if len(limpo) == 44 and validar_digito_chave_nfe(limpo):
+                chave_encontrada = limpo
+                tipo_chave = "NFE_44"
+                break
+
+    # 2.3 - 44 dígitos contínuos com validação de DV
     if not chave_encontrada:
         digitos_somente = re.findall(r'\b\d{44}\b', texto_completo)
         for cand in digitos_somente:
             if validar_digito_chave_nfe(cand):
                 chave_encontrada = cand
+                tipo_chave = "NFE_44"
                 break
 
+    # 2.4 - Rótulo específico no texto (ex: "CHAVE DE ACESSO DA NFS-e" ou "CHAVE DE ACESSO")
+    if not chave_encontrada:
+        match_rotulo = re.search(
+            r'CHAVE(?:\s+DE)?\s+ACESSO(?:\s+DA\s+NFS-?E)?[\s\S]{0,50}?([0-9\s.-]{44,70})',
+            texto_completo,
+            re.IGNORECASE
+        )
+        if match_rotulo:
+            limpo_rot = re.sub(r'\D', '', match_rotulo.group(1))
+            if len(limpo_rot) >= 50:
+                chave_encontrada = limpo_rot[:50]
+                tipo_chave = "NFSE_50"
+            elif len(limpo_rot) >= 44 and validar_digito_chave_nfe(limpo_rot[:44]):
+                chave_encontrada = limpo_rot[:44]
+                tipo_chave = "NFE_44"
+
+    # 3. Dados do Emitente e Identificação da Nota
     cnpj_emitente = ""
+    razao_social_emitente = ""
     num_nota = ""
     ano_mes = ""
 
-    if chave_encontrada:
-        # Posições da Chave da NF-e (44 dígitos):
-        # 0..1: UF (2 dig)
-        # 2..5: AAMM (4 dig)
-        # 6..19: CNPJ Emitente (14 dig)
-        # 20..21: Modelo (2 dig)
-        # 22..24: Série (3 dig)
-        # 25..33: Número da NF (9 dig)
-        # 34: Tipo de Emissão (1 dig)
-        # 35..42: Código Numérico (8 dig)
-        # 43: Dígito Verificador (1 dig)
+    # Se chave de 44 dígitos, decodifica posições canônicas da NF-e
+    if chave_encontrada and tipo_chave == "NFE_44":
         ano_mes = chave_encontrada[2:6]
         cnpj_emitente = chave_encontrada[6:20]
         num_nota_str = chave_encontrada[25:34]
@@ -308,16 +397,40 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
             num_nota = str(int(num_nota_str))
         except ValueError:
             num_nota = num_nota_str.lstrip('0')
-    else:
-        # Fallback: tentar extrair CNPJ diretamente do texto
-        cnpjs = re.findall(r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b', texto_completo)
-        if cnpjs:
-            cnpj_emitente = re.sub(r'\D', '', cnpjs[0])
 
-    # Se ainda não identificou o número da nota pela chave, busca padrões de NFS-e ou texto da nota
+    # Para NFS-e (DANFSe) ou fallback, busca focando no PRESTADOR / EMITENTE
+    if not cnpj_emitente:
+        # Padrão DANFSe Nacional: "PRESTADOR / FORNECEDOR" seguido de CNPJ
+        match_prestador = re.search(
+            r'(?:PRESTADOR\s*(?:/\s*FORNECEDOR)?|IDENTIFICA[ÇC][ÃA]O\s+DO\s+EMITENTE|EMITENTE\s+DA\s+NFS-?E|CNPJ\s*Emitente)[\s\S]{0,150}?(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})',
+            texto_completo,
+            re.IGNORECASE
+        )
+        if match_prestador:
+            cnpj_emitente = re.sub(r'\D', '', match_prestador.group(1))
+
+            # Tenta capturar a Razão Social do prestador logo após o rótulo
+            match_nome = re.search(
+                r'PRESTADOR[\s\S]{0,150}?Nome\s*(?:/\s*Nome\s*Empresarial)?\s*[\n\r]+\s*([^\n\r]+)',
+                texto_completo,
+                re.IGNORECASE
+            )
+            if match_nome:
+                razao_social_emitente = match_nome.group(1).strip().upper()
+
+    # Fallback segregado: busca CNPJs antes do bloco TOMADOR / DESTINATÁRIO (nunca pegar o cliente)
+    if not cnpj_emitente:
+        partes = re.split(r'(?:TOMADOR|DESTINAT[ÁA]RIO)', texto_completo, maxsplit=1, flags=re.IGNORECASE)
+        texto_prestador = partes[0] if partes else texto_completo
+        cnpjs_prestador = re.findall(r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b', texto_prestador)
+        if cnpjs_prestador:
+            cnpj_emitente = re.sub(r'\D', '', cnpjs_prestador[0])
+
+    # 4. Número da Nota
     if not num_nota:
+        # Procura padrões como "NÚMERO DA NFS-e", "NFCOM 1513144", "NFS-e Nº 10", "NF-e Nº 10"
         match_num = re.search(
-            r'(?:NFS-?e\s*N[º°\.\s]*|NF-?e\s*N[º°\.\s]*|Número\s*(?:da\s*Nota)?\s*[:º°\.\s]*|NOTA\s+FISCAL[^\d\n\r]{0,30}N[º°\.\s]*)\s*(\d{1,9})\b',
+            r'(?:N[ÚU]MERO\s+DA\s+NFS-?E|Nº?\s*NFCOM|NFS-?E\s*N[º°\.\s]*|NF-?E\s*N[º°\.\s]*|N[ÚU]MERO\s*(?:DA\s*NOTA)?\s*[:º°\.\s]*|NOTA\s+FISCAL[^\d\n\r]{0,30}N[º°\.\s]*)\s*(\d{1,9})\b',
             texto_completo,
             re.IGNORECASE
         )
@@ -327,7 +440,7 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
             except ValueError:
                 num_nota = match_num.group(1).lstrip('0')
 
-    # Fallback adicional: extrair número a partir do nome do arquivo (ex.: "NFSe 10 Associação.pdf")
+    # Fallback no nome do arquivo (ex.: "NFSe 10 Associação.pdf")
     if not num_nota:
         nome_arquivo = getattr(arquivo, 'name', '') or ''
         match_nome = re.search(
@@ -341,25 +454,32 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
             except ValueError:
                 num_nota = match_nome.group(1).lstrip('0')
 
-    # Tentar extrair Data da Emissão se tiver ano_mes da chave
+    # 5. Data de Emissão
     data_compra = ""
-    # Procura data no formato DD/MM/AAAA no PDF
-    datas_encontradas = re.findall(r'\b(\d{2})/(\d{2})/(\d{4})\b', texto_completo)
-    if datas_encontradas:
-        for d, m, y in datas_encontradas:
-            # Se bate com o AAMM da chave (ano_mes = YYMM)
-            if ano_mes and y[2:] == ano_mes[:2] and m == ano_mes[2:]:
+    # Busca por "DATA E HORA DA EMISSÃO DA NFS-e" ou "DATA DA EMISSÃO"
+    match_data_rotulo = re.search(
+        r'(?:DATA\s*(?:E\s+HORA)?\s*(?:DA)?\s*EMISS[ÃA]O)[\s\S]{0,50}?(\d{2})/(\d{2})/(\d{4})',
+        texto_completo,
+        re.IGNORECASE
+    )
+    if match_data_rotulo:
+        d, m, y = match_data_rotulo.groups()
+        data_compra = f"{y}-{m}-{d}"
+    else:
+        datas_encontradas = re.findall(r'\b(\d{2})/(\d{2})/(\d{4})\b', texto_completo)
+        if datas_encontradas:
+            for d, m, y in datas_encontradas:
+                if ano_mes and y[2:] == ano_mes[:2] and m == ano_mes[2:]:
+                    data_compra = f"{y}-{m}-{d}"
+                    break
+            if not data_compra:
+                d, m, y = datas_encontradas[0]
                 data_compra = f"{y}-{m}-{d}"
-                break
-        if not data_compra:
-            # Usa a primeira data válida encontrada
-            d, m, y = datas_encontradas[0]
-            data_compra = f"{y}-{m}-{d}"
 
-    # Tentar extrair Valor Total da Nota: busca por "VALOR TOTAL DA NOTA" seguido de valor monetário
+    # 6. Valor Total
     valor_total = None
     match_valor = re.search(
-        r'(?:VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS)[\s\S]{0,100}?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})',
+        r'(?:VALOR\s+TOTAL\s+DA\s+NFS-?E|VALOR\s+L[ÍI]QUIDO\s+DA\s+NFS-?E|VALOR\s+TOTAL\s+DA\s+NOTA|VALOR\s+TOTAL\s+DOS\s+PRODUTOS|TOTAL\s+A\s+PAGAR)[\s\S]{0,80}?(?:R\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})',
         texto_completo,
         re.IGNORECASE
     )
@@ -371,8 +491,10 @@ def extrair_dados_pdf_danfe(arquivo) -> dict:
             pass
 
     return {
+        "is_documento_fiscal": True,
+        "tipo_documento": "FISCAL",
         "cnpj_emitente": cnpj_emitente,
-        "razao_social_emitente": "",  # Em PDF a identificação do emitente varia muito, CNPJ é determinístico
+        "razao_social_emitente": razao_social_emitente,
         "num_nota": num_nota,
         "data_compra": data_compra,
         "chave_acesso": chave_encontrada,

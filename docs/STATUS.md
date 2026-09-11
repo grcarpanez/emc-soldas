@@ -363,17 +363,17 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - Se for apenas **Cliente**: exibe modal de confirmação para habilitar como fornecedor (tipo *Ambos*) via `POST /api/clientes-fornecedores/{id}/habilitar-fornecedor/` sem duplicar registro; em caso afirmativo, atualiza, seleciona e preenche.
     - Se for **Novo Emitente**: abre o modal de cadastro de fornecedor empilhado com CNPJ e Razão Social pré-preenchidos e consulta pública automática da Receita Federal; ao salvar, seleciona o novo fornecedor e fecha o modal secundário.
     - Em caso de recusa: o arquivo permanece anexado e o formulário é liberado para edição livre.
-- [x] **Calibração de Layout dos Modais, Máscara da Chave NF-e e Extração de Nº em Compras (PWA v4.12):**
-  - **Amortecimento e Espaçamento dos Modais de Diálogo:**
-    - Calibrado `.modal-size-sm` de 420px para 480px em `industrial-integrity.css` para maior respiro horizontal em caixas de diálogo pequenas.
-    - Otimizado `.modal-footer` com `padding: 16px 24px;`, `flex-wrap: wrap;` e `align-items: center;`, eliminando qualquer colisão ou quebra desarmônica de botões com textos longos ("DEIXAR PARA DEPOIS" e "CADASTRAR FORNECEDOR").
-    - Modais de confirmação de parceiro ("FORNECEDOR NÃO ENCONTRADO" e "HABILITAR PARCEIRO COMO FORNECEDOR") promovidos para tamanho `md` (640px).
-  - **Máscara da Chave de Acesso NFe em Grupos de 4 Dígitos:** Corrigida a integração com o helper do Design System, aplicando `formatarChaveAcessoNfe(dados.chave_acesso)` e disparando evento de input para que a chave de 44 dígitos fique formatada em blocos de 4 dígitos (`3126 0817 8519 ...`).
-  - **Extração Determinística de Nº de Nota em NFS-e e Nome do Arquivo:** No backend (`compras/services.py`), adicionadas regras para captura do número da nota em documentos que não possuem chave 44 (NFS-e municipais, recibos) e fallback inteligente a partir do próprio nome do arquivo (ex.: extração do número `10` a partir de `NFSe 10 Associação.pdf`).
-  - **Persistência de Dados no Fluxo Assistido:** Garantida a preservação e reaplicação dos dados extraídos da nota (`num_nota`, `data_compra`, `chave_acesso`) após o fechamento e sucesso do modal de cadastro de novo fornecedor.
-  - **Nota de Escopo Futuro (Itens da Nota / BOM):** A importação automática de itens da nota fiscal e sua respectiva conciliação/de-para com o catálogo de insumos da oficina fica formalmente documentada para implementação em versão futura, preservando a estabilidade do fluxo de entrada de compras.
-  - **Homologação:** 165 testes automatizados do Django executados com 100% de aprovação (OK em 67.2s).
-  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.12` em `frontend/sw.js` e sufixos de cache-busting `?v=4.12` em `frontend/index.html`.
+- [x] **Detecção de Boletos, Chaves NF-e/NFS-e e Card Enriquecido de Fornecedor (PWA v4.13):**
+  - **Bloqueio Impeditivo de Boletos Bancários:** Implementada classificação prévia de documentos em `apps/compras/services.py` (`classificar_documento_fiscal_pdf`). Boletos de cobrança e fichas de compensação são detectados e barrados de imediato com aviso orientativo para registro no módulo Financeiro (Contas a Pagar), impedindo o cadastro indevido de pagadores como fornecedores.
+  - **Extração Robusta de Chaves de 44 e 50 Dígitos:**
+    - Suporte formal à Chave de Acesso Nacional da NFS-e (DANFSe v2.0 com 50 dígitos numéricos).
+    - Extração à prova de falhas em DANFE NF-e 55 com busca direta pelos 11 blocos de 4 dígitos formatados, evitando colisões com números vizinhos (CNPJ/protocolos).
+    - Suporte à Nota Fiscal de Comunicação Eletrônica (NFCom modelo 62) presente em faturas de telecomunicações.
+  - **Segregação Estrita Prestador vs. Tomador:** No processamento de PDFs, o extrator prioriza os blocos de `PRESTADOR / FORNECEDOR` e `EMITENTE`, descartando estritamente os dados do `TOMADOR / ADQUIRENTE` para evitar inversão cadastral.
+  - **Card Enriquecido de Fornecedor Não Encontrado:** Ao analisar um documento cujo fornecedor ainda não existe no sistema, o backend consulta a Receita Federal em tempo real (`consultar_cnpj_externo`), e o modal *"FORNECEDOR NÃO ENCONTRADO"* exibe a Razão Social completa, Nome Fantasia, CNPJ formatado e Localidade (Cidade/UF) para conferência segura.
+  - **Expansão de Máscara de Chave NFe:** A função `formatarChaveAcessoNfe` em `utils.js` agora suporta até 50 dígitos sem truncamento, formatando blocos de 4 caracteres para NF-e e NFS-e.
+  - **Homologação da Bateria de Testes:** Suíte completa com 168 testes automatizados do Django executados com 100% de aprovação (OK em 68.3s).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.13` em `frontend/sw.js` e sufixos de cache-busting `?v=4.13` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

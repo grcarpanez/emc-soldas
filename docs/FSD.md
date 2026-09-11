@@ -798,7 +798,7 @@ A consistência nas branches evita conflitos e facilita integrações em pipelin
 ### 30.4 Regras de Ouro para Mensagens de Commit
 
 1. **Use o modo imperativo no assunto:**
-   - ✅ `feat: add payment gateway` (Adicione / Adicionar)
+   - ✅ `feat: add gateway de pagamento` (Adicione / Adicionar)
    - ❌ `feat: added payment gateway` ou `feat: adds payment gateway`
 2. **Limite o tamanho da linha de cabeçalho:** Mantenha o cabeçalho em no máximo **50 a 72 caracteres**.
 3. **Não finalize o cabeçalho com ponto final (`.`):** Seja conciso e direto.
@@ -806,6 +806,7 @@ A consistência nas branches evita conflitos e facilita integrações em pipelin
 5. **Separe o assunto do corpo com uma linha em branco:** O Git usa a primeira linha como título e o restante como descrição detalhada.
 6. **No corpo, foque no *porquê* e no *como*, não no *o quê*:** O diff do Git já mostra o que mudou; explique a razão da abordagem.
 7. **Referencie chamados e issues:** Exemplo: `Closes #124`, `Fixes JIRA-456`.
+8. **SEMPRE utilize nomenclatura em pt-BR.**
 
 ---
 

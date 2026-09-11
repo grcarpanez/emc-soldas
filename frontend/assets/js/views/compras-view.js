@@ -208,7 +208,7 @@ window.ComprasView = {
           <div style="margin-bottom: 16px;">
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
-                <label class="form-label" for="nota-chave" style="margin-bottom: 0;">Chave de Acesso NFe (44 Dígitos - Opcional)</label>
+                <label class="form-label" for="nota-chave" style="margin-bottom: 0;">Chave de Acesso (NF-e 44 Dígitos / NFS-e 50 Dígitos - Opcional)</label>
               </div>
               <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000" style="width: 100%;">
             </div>
@@ -443,6 +443,37 @@ window.ComprasView = {
         formData.append('arquivo', arquivo);
 
         const res = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.ANALISAR_DOCUMENTO, formData);
+
+        // Bloqueio de Documentos Não Fiscais (ex.: Boletos Bancários)
+        if (res.is_documento_fiscal === false) {
+          if (statusAnalise) {
+            statusAnalise.style.color = 'var(--color-error)';
+            statusAnalise.textContent = res.tipo_documento === 'BOLETO' ? 'BOLETO BANCÁRIO DETECTADO' : 'DOCUMENTO NÃO FISCAL';
+          }
+          inputArquivo.value = '';
+
+          window.EMCUtils.openModal({
+            title: res.tipo_documento === 'BOLETO' ? 'BOLETO BANCÁRIO DETECTADO (NÃO FISCAL)' : 'DOCUMENTO NÃO FISCAL DETECTADO',
+            size: 'md',
+            confirmText: 'ENTENDI',
+            showCancel: false,
+            content: `
+              <div class="alert-banner alert-danger" style="margin-bottom: 16px;">
+                <strong>DOCUMENTO DE COBRANÇA BANCÁRIA NÃO FISCAL</strong>
+              </div>
+              <p style="font-size: 14px; margin-bottom: 12px; line-height: 1.5; color: var(--color-on-surface);">
+                ${window.EMCUtils.escapeHtml(res.message || 'O arquivo selecionado é um boleto de cobrança ou ficha de compensação bancária e não possui validade de nota fiscal para registro de entrada de insumos.')}
+              </p>
+              <div class="p-12" style="background: var(--color-surface-container-low); border: 1px solid var(--color-steel-gray); font-size: 12px; line-height: 1.6;">
+                <strong style="color: var(--color-rust-orange);">COMO PROCEDER NO SISTEMA:</strong><br>
+                • Para registrar este pagamento, utilize o módulo <strong>Financeiro (Contas a Pagar)</strong>.<br>
+                • Para dar entrada fiscal e atualizar custos dos itens no estoque, anexe a respectiva <strong>Nota Fiscal (DANFE ou NFS-e)</strong> emitida pelo fornecedor.
+              </div>
+            `
+          });
+          return;
+        }
+
         const dados = res.dados_extraidos || {};
         const parceiro = res.parceiro_existente;
         this.dadosExtraidosTemp = dados;
@@ -498,24 +529,48 @@ window.ComprasView = {
         } else {
           // Caso 2: CNPJ não cadastrado no sistema
           const cnpjFormatado = dados.cnpj_emitente ? window.EMCUtils.formatarCpfCnpjDinamico(dados.cnpj_emitente) : 'não identificado';
+          const razaoSocial = dados.razao_social_emitente || 'RAZÃO SOCIAL NÃO IDENTIFICADA';
+          const nomeFantasia = dados.nome_fantasia_emitente || '';
+          const localidade = dados.cidade_uf || '';
+
           window.EMCUtils.openModal({
             title: 'FORNECEDOR NÃO ENCONTRADO',
             size: 'md',
             confirmText: 'CADASTRAR FORNECEDOR',
             cancelText: 'DEIXAR PARA DEPOIS',
             content: `
-              <p style="font-size: 14px; margin-bottom: 12px;">
-                O CNPJ <strong>${cnpjFormatado}</strong> não foi localizado no cadastro de parceiros.
+              <p style="font-size: 13px; margin-bottom: 12px; color: var(--color-on-surface);">
+                O documento fiscal foi identificado com sucesso, porém o fornecedor emissor ainda não está cadastrado na base de parceiros:
               </p>
+              
+              <div class="fornecedor-preview-card mb-16" style="background: var(--color-surface-container-high); border: 1px solid var(--color-steel-gray); border-left: 4px solid var(--color-rust-orange); padding: 14px 16px;">
+                <div class="mono-text" style="font-size: 11px; color: var(--color-brushed-metal); letter-spacing: 0.05em; margin-bottom: 6px;">
+                  DADOS DO FORNECEDOR IDENTIFICADO:
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: var(--color-on-surface); margin-bottom: 4px;">
+                  ${window.EMCUtils.escapeHtml(razaoSocial)}
+                </div>
+                ${nomeFantasia ? `
+                  <div style="font-size: 12px; color: var(--color-rust-orange); margin-bottom: 6px;">
+                    Nome Fantasia: <strong>${window.EMCUtils.escapeHtml(nomeFantasia)}</strong>
+                  </div>
+                ` : ''}
+                <div style="display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; margin-top: 6px; color: var(--color-on-surface-variant);" class="mono-text">
+                  <span>CNPJ: <strong>${cnpjFormatado}</strong></span>
+                  ${localidade ? `<span>Localidade: <strong>${window.EMCUtils.escapeHtml(localidade)}</strong></span>` : ''}
+                </div>
+              </div>
+
               <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
-                Deseja abrir o cadastro rápido agora? O formulário será pré-preenchido com os dados da nota fiscal e os dados cadastrais serão buscados automaticamente na Receita Federal.
+                Deseja abrir o cadastro rápido agora? O formulário será pré-preenchido com os dados obtidos da Receita Federal para sua conferência e confirmação.
               </div>
             `,
             onConfirm: () => {
               aplicarDadosExtraidosNaNota(dados);
               dispararCadastroNovoFornecedor({
                 cnpj_cpf: dados.cnpj_emitente || '',
-                nome_razao: dados.razao_social_emitente || '',
+                nome_razao: razaoSocial,
+                nome_fantasia: nomeFantasia,
                 tipo_pessoa: 'PJ',
                 tipo: 'Fornecedor'
               });
