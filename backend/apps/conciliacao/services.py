@@ -246,6 +246,7 @@ def processar_extrato_split_screen(
             'total_sobras_erp': total_sobras_erp,
         },
         'extrato': transacoes_processadas,
+        'transacoes': transacoes_processadas,
         'erp': erp_processados,
     }
 

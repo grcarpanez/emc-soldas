@@ -108,7 +108,7 @@ class ContaBancariaViewSet(viewsets.ModelViewSet):
     """
     queryset = ContaBancaria.objects.all()
     serializer_class = ContaBancariaSerializer
-    permission_classes = [HasCadastrosFinanceirosAccess]
+    permission_classes = [HasCadastrosFinanceirosAccess | HasTesourariaAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nome']
     ordering_fields = ['nome', 'saldo', 'limite_credito', 'id', 'created_at']

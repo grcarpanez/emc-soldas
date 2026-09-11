@@ -33,6 +33,9 @@ window.FinanceiroView = {
         <button class="tab-btn ${this.currentTab === 'cartoes' ? 'active' : ''}" id="tab-btn-fin-cartoes">
           CARTÕES CORPORATIVOS
         </button>
+        <button class="tab-btn ${this.currentTab === 'contas' ? 'active' : ''}" id="tab-btn-fin-contas">
+          CONTAS BANCÁRIAS
+        </button>
       </div>
 
       <div id="financeiro-tab-content"></div>
@@ -54,6 +57,10 @@ window.FinanceiroView = {
       this.currentTab = 'cartoes';
       this.render(container);
     });
+    document.getElementById('tab-btn-fin-contas')?.addEventListener('click', () => {
+      this.currentTab = 'contas';
+      this.render(container);
+    });
 
     document.getElementById('btn-transferencia-inter')?.addEventListener('click', () => this.abrirModalTransferencia());
     document.getElementById('btn-novo-lancamento')?.addEventListener('click', () => this.abrirModalNovoLancamento());
@@ -67,6 +74,8 @@ window.FinanceiroView = {
       this.renderContasReceber(content);
     } else if (this.currentTab === 'cartoes') {
       this.renderCartoes(content);
+    } else if (this.currentTab === 'contas') {
+      this.renderContasBancarias(content);
     }
   },
 
@@ -758,6 +767,279 @@ window.FinanceiroView = {
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao criar lançamento.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  // ==========================================================================
+  // 5. GESTÃO DE CONTAS BANCÁRIAS E CAIXAS FÍSICOS
+  // ==========================================================================
+  contasBancariasCache: [],
+
+  async renderContasBancarias(container) {
+    container.innerHTML = `
+      <!-- Cards de Métricas de Contas -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 20px;">
+        <div class="card" style="border-left: 4px solid var(--color-primary);">
+          <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">SALDO TOTAL EM CONTAS</div>
+          <div class="mono-text" id="kpi-contas-saldo" style="font-size: 22px; font-weight: 700; margin-top: 4px;">R$ 0,00</div>
+          <div style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px;">Soma de todos os saldos bancários e caixas</div>
+        </div>
+
+        <div class="card" style="border-left: 4px solid var(--color-warning);">
+          <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">LIMITE CHEQUE ESPECIAL</div>
+          <div class="mono-text" id="kpi-contas-limite" style="font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--color-warning);">R$ 0,00</div>
+          <div style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px;">Crédito contratado para tolerância negativa</div>
+        </div>
+
+        <div class="card" style="border-left: 4px solid var(--color-success);">
+          <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">DISPONÍVEL TOTAL REAL</div>
+          <div class="mono-text" id="kpi-contas-disponivel" style="font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--color-success);">R$ 0,00</div>
+          <div style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px;">Saldo Líquido + Limite de Cheque Especial</div>
+        </div>
+      </div>
+
+      <!-- Barra de Ações -->
+      <div class="card mb-16">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <input type="text" id="filtro-contas-busca" class="form-control" placeholder="BUSCAR CONTA POR NOME OU ID..." style="max-width: 380px;">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" id="btn-nova-conta-bancaria">+ NOVA CONTA BANCÁRIA</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabela de Contas Bancárias -->
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width: 70px;">ID</th>
+              <th>NOME DA CONTA / CAIXA</th>
+              <th class="text-right">SALDO ATUAL</th>
+              <th class="text-right">LIMITE CHEQUE ESPECIAL</th>
+              <th class="text-right">DISPONÍVEL TOTAL</th>
+              <th class="text-center" style="width: 160px;">AÇÕES</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-contas-bancarias">
+            <tr>
+              <td colspan="6" class="text-center" style="padding: 40px 0;">
+                <div class="loader-spinner"></div>
+                <div class="mono-text mt-8">CARREGANDO CONTAS BANCÁRIAS...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.getElementById('btn-nova-conta-bancaria')?.addEventListener('click', () => this.abrirModalContaBancaria());
+    document.getElementById('filtro-contas-busca')?.addEventListener('input', (e) => {
+      const termo = e.target.value.toLowerCase().trim();
+      const filtradas = this.contasBancariasCache.filter(c => 
+        c.nome.toLowerCase().includes(termo) || String(c.id).includes(termo)
+      );
+      this.renderLinhasContasBancarias(filtradas);
+    });
+
+    this.carregarListaContasBancarias();
+  },
+
+  async carregarListaContasBancarias() {
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
+      this.contasBancariasCache = res.results || res || [];
+      this.atualizarKpisContasBancarias(this.contasBancariasCache);
+      this.renderLinhasContasBancarias(this.contasBancariasCache);
+    } catch (err) {
+      const tbody = document.getElementById('tbody-contas-bancarias');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger" style="padding: 24px;">${window.EMCUtils.escapeHtml(err.message || 'Erro ao carregar contas')}</td></tr>`;
+      }
+    }
+  },
+
+  atualizarKpisContasBancarias(contas) {
+    let totalSaldo = 0;
+    let totalLimite = 0;
+
+    contas.forEach(c => {
+      totalSaldo += parseFloat(c.saldo) || 0;
+      totalLimite += parseFloat(c.limite_credito) || 0;
+    });
+
+    const totalDisponivel = totalSaldo + totalLimite;
+
+    const elSaldo = document.getElementById('kpi-contas-saldo');
+    const elLimite = document.getElementById('kpi-contas-limite');
+    const elDisponivel = document.getElementById('kpi-contas-disponivel');
+
+    if (elSaldo) {
+      elSaldo.textContent = window.EMCUtils.formatarMoeda(totalSaldo);
+      elSaldo.style.color = totalSaldo >= 0 ? 'var(--color-on-surface)' : 'var(--color-error)';
+    }
+    if (elLimite) {
+      elLimite.textContent = window.EMCUtils.formatarMoeda(totalLimite);
+    }
+    if (elDisponivel) {
+      elDisponivel.textContent = window.EMCUtils.formatarMoeda(totalDisponivel);
+      elDisponivel.style.color = totalDisponivel >= 0 ? 'var(--color-success)' : 'var(--color-error)';
+    }
+  },
+
+  renderLinhasContasBancarias(contas) {
+    const tbody = document.getElementById('tbody-contas-bancarias');
+    if (!tbody) return;
+
+    if (!contas.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center" style="padding: 40px 16px;">
+            <p class="mono-text" style="color: var(--color-on-surface-variant); margin-bottom: 12px;">NENHUMA CONTA BANCÁRIA OU CAIXA CADASTRADO NO MOMENTO.</p>
+            <button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalContaBancaria()">+ CADASTRAR PRIMEIRA CONTA</button>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    let html = '';
+    contas.forEach(c => {
+      const saldo = parseFloat(c.saldo) || 0;
+      const limite = parseFloat(c.limite_credito) || 0;
+      const disponivel = saldo + limite;
+      const isPositivo = saldo >= 0;
+
+      html += `
+        <tr>
+          <td class="mono-text font-bold">#${c.id}</td>
+          <td>
+            <strong>${window.EMCUtils.escapeHtml(c.nome)}</strong>
+          </td>
+          <td class="mono-text text-right" style="font-weight: 700; color: ${isPositivo ? 'var(--color-success)' : 'var(--color-error)'};">
+            ${window.EMCUtils.formatarMoeda(saldo)}
+          </td>
+          <td class="mono-text text-right" style="color: var(--color-on-surface-variant);">
+            ${window.EMCUtils.formatarMoeda(limite)}
+          </td>
+          <td class="mono-text text-right font-bold" style="color: ${disponivel >= 0 ? 'var(--color-success)' : 'var(--color-error)'};">
+            ${window.EMCUtils.formatarMoeda(disponivel)}
+          </td>
+          <td class="text-center">
+            <div style="display: flex; justify-content: center; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.abrirModalContaBancaria(${c.id})">EDITAR</button>
+              <button class="btn btn-danger btn-sm" onclick="window.FinanceiroView.excluirContaBancaria(${c.id}, '${window.EMCUtils.escapeHtml(c.nome)}')">EXCLUIR</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+  },
+
+  async abrirModalContaBancaria(contaId = null) {
+    let conta = null;
+    if (contaId) {
+      conta = this.contasBancariasCache.find(c => c.id === contaId);
+      if (!conta) {
+        try {
+          conta = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS}${contaId}/`);
+        } catch (e) {
+          window.EMCUtils.showToast('Erro ao carregar dados da conta.', 'error');
+          return;
+        }
+      }
+    }
+
+    const isEdicao = !!conta;
+    const saldoAtual = isEdicao ? parseFloat(conta.saldo) || 0 : 0;
+    const limiteAtual = isEdicao ? parseFloat(conta.limite_credito) || 0 : 0;
+
+    window.EMCUtils.openModal({
+      title: isEdicao ? `EDITAR CONTA BANCÁRIA: #${conta.id}` : 'NOVA CONTA BANCÁRIA OU CAIXA',
+      size: 'md',
+      confirmText: isEdicao ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR CONTA',
+      content: `
+        <form id="form-conta-bancaria">
+          <div class="form-group">
+            <label class="form-label">Nome da Conta / Banco / Caixa *</label>
+            <input type="text" id="cb-nome" class="form-control" placeholder="EX: BANCO BRADESCO S.A. AG: 2868 CC: 59729-5" value="${isEdicao ? window.EMCUtils.escapeHtml(conta.nome) : ''}" required>
+            <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">Identificação oficial utilizada em extratos, relatórios e conciliação bancária.</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label">${isEdicao ? 'Saldo Atual (R$)' : 'Saldo Inicial (R$)'} *</label>
+              <input type="text" id="cb-saldo" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(saldoAtual)}" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Limite de Cheque Especial (R$)</label>
+              <input type="text" id="cb-limite" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(limiteAtual)}">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">Tolerância máxima permitida para saldo negativo.</span>
+            </div>
+          </div>
+        </form>
+      `,
+      onConfirm: async () => {
+        const nome = document.getElementById('cb-nome')?.value.trim();
+        const saldo = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cb-saldo')?.value || '0');
+        const limite_credito = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cb-limite')?.value || '0');
+
+        if (!nome) {
+          window.EMCUtils.showToast('Informe o nome da conta bancária.', 'warning');
+          return false;
+        }
+
+        try {
+          if (isEdicao) {
+            await window.api.patch(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS}${conta.id}/`, {
+              nome,
+              saldo,
+              limite_credito
+            });
+            window.EMCUtils.showToast('Conta bancária atualizada com sucesso!', 'success');
+          } else {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS, {
+              nome,
+              saldo,
+              limite_credito
+            });
+            window.EMCUtils.showToast('Conta bancária cadastrada com sucesso!', 'success');
+          }
+          await this.carregarListaContasBancarias();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao salvar conta bancária.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async excluirContaBancaria(id, nome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAÇÃO DE INATIVAÇÃO DE CONTA',
+      size: 'sm',
+      confirmText: 'INATIVAR CONTA',
+      content: `
+        <p>Tem certeza que deseja inativar a conta bancária <strong>${window.EMCUtils.escapeHtml(nome)}</strong> (#${id})?</p>
+        <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-top: 8px;">
+          A conta não será excluída fisicamente (governança de Soft Delete), mas ficará oculta para novas operações de caixa e conciliação bancária.
+        </p>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS}${id}/`);
+          window.EMCUtils.showToast('Conta bancária inativada com sucesso.', 'success');
+          await this.carregarListaContasBancarias();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao inativar conta bancária.', 'error');
           return false;
         }
       }

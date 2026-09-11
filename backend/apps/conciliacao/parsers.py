@@ -6,6 +6,7 @@ import re
 import csv
 import io
 import hashlib
+import unicodedata
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
 from typing import Dict, List, Any, Optional
@@ -202,10 +203,38 @@ def parse_ofx_content(content: str) -> Dict[str, Any]:
     }
 
 
+def normalizar_termo_cabecalho(texto: Any) -> str:
+    """
+    Normaliza termos de cabeçalho removendo acentuações, caracteres especiais e espaços extras.
+    Exemplo: 'Descrição / Histórico (R$)' -> 'descricao historico r'
+    """
+    if not texto:
+        return ""
+    nfkd = unicodedata.normalize('NFKD', str(texto).strip().lower())
+    sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    limpo = re.sub(r'[^a-z0-9\s]', ' ', sem_acento)
+    return " ".join(limpo.split())
+
+
+def tentar_parsear_data(valor_str: str) -> Optional[date]:
+    """Tenta converter strings em date considerando múltiplos formatos brasileiros e internacionais."""
+    if not valor_str:
+        return None
+    limpo = str(valor_str).strip().split('T')[0].split(' ')[0]
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%Y', '%d.%m.%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(limpo, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def parse_csv_content(content: str) -> Dict[str, Any]:
     """
-    Realiza o parsing de extratos bancários em formato CSV com detecção inteligente de colunas.
-    Suporta exportações comuns de bancos brasileiros (Data, Histórico, Documento, Valor, Saldo).
+    Realiza o parsing de extratos bancários em formato CSV com motor universal em 3 camadas:
+    1. Dicionário amplo de sinônimos com normalização fonética e sem acentos de todos os bancos brasileiros.
+    2. Detecção heurística de tipos de dados por amostragem das linhas (Inspection by Sampling).
+    3. Filtro automático de ruídos e linhas administrativas (saldo anterior, totalizadores).
     """
     meta: Dict[str, Any] = {
         'banco_codigo': '',
@@ -222,13 +251,13 @@ def parse_csv_content(content: str) -> Dict[str, Any]:
     delimitador = ';'
     if primeiras_linhas.count(';') < primeiras_linhas.count(',') and primeiras_linhas.count(',') > 0:
         delimitador = ','
-    elif primeiras_linhas.count('\t') > primeiras_linhas.count(';'):
+    elif primeiras_linhas.count('\t') > primeiras_linhas.count(';') and primeiras_linhas.count('\t') > primeiras_linhas.count(','):
         delimitador = '\t'
 
     f = io.StringIO(content)
     reader = csv.reader(f, delimiter=delimitador)
 
-    linhas = list(reader)
+    linhas = [list(r) for r in reader if any(field.strip() for field in r)]
     if not linhas:
         return {
             'formato': 'CSV',
@@ -237,7 +266,6 @@ def parse_csv_content(content: str) -> Dict[str, Any]:
             'total_transacoes': 0,
         }
 
-    # Busca a linha de cabeçalho
     idx_cabecalho = -1
     col_data = -1
     col_descricao = -1
@@ -247,68 +275,140 @@ def parse_csv_content(content: str) -> Dict[str, Any]:
     col_doc = -1
     col_tipo = -1
 
-    keywords_data = ['data', 'dt', 'data lancamento', 'data movimento', 'data_lancamento', 'date']
-    keywords_desc = ['historico', 'descricao', 'detalhes', 'memo', 'lancamento', 'historico / descricao', 'description']
-    keywords_valor = ['valor', 'valor (r$)', 'valor r$', 'amount', 'val']
-    keywords_debito = ['debito', 'saida', 'debito (r$)', 'saidas']
-    keywords_credito = ['credito', 'entrada', 'credito (r$)', 'entradas']
-    keywords_doc = ['documento', 'docto', 'doc', 'num doc', 'n documento', 'numero documento']
-    keywords_tipo = ['tipo', 'd/c', 'd_c', 'natureza']
+    # Dicionário Amplo de Sinônimos (Normalizados sem acento)
+    keywords_data = ['data', 'dt', 'data lancamento', 'data movimento', 'data mov', 'date', 'data transacao', 'dia']
+    keywords_desc = ['historico', 'descricao', 'detalhes', 'memo', 'lancamento', 'historico descricao', 'description', 'transacao', 'complemento', 'narrativa', 'identificacao', 'movimentacao']
+    keywords_valor = ['valor', 'amount', 'val', 'valor r', 'valor rs', 'valor bruto', 'valor liquido']
+    keywords_debito = ['debito', 'debitos', 'saida', 'saidas', 'valor debito', 'debito r', 'debito rs']
+    keywords_credito = ['credito', 'creditos', 'entrada', 'entradas', 'valor credito', 'credito r', 'credito rs']
+    keywords_doc = ['documento', 'docto', 'doc', 'num doc', 'n documento', 'numero documento', 'identificador', 'id', 'uuid', 'fitid', 'transacao id', 'codigo', 'n doc']
+    keywords_tipo = ['tipo', 'natureza', 'd c', 'dc', 'operacao', 'debito credito']
 
+    # 1. Varredura do Cabeçalho
     for idx, row in enumerate(linhas[:15]):
-        row_lower = [str(c).strip().lower() for c in row]
-        for col_idx, col_name in enumerate(row_lower):
-            if any(k == col_name or k in col_name for k in keywords_data) and col_data == -1:
-                col_data = col_idx
-            if any(k == col_name or k in col_name for k in keywords_desc) and col_descricao == -1:
-                col_descricao = col_idx
-            if any(k == col_name or k in col_name for k in keywords_valor) and col_valor == -1:
-                col_valor = col_idx
-            if any(k == col_name or k in col_name for k in keywords_debito) and col_debito == -1:
-                col_debito = col_idx
-            if any(k == col_name or k in col_name for k in keywords_credito) and col_credito == -1:
-                col_credito = col_idx
-            if any(k == col_name or k in col_name for k in keywords_doc) and col_doc == -1:
-                col_doc = col_idx
-            if any(k == col_name or k in col_name for k in keywords_tipo) and col_tipo == -1:
-                col_tipo = col_idx
+        norm_row = [normalizar_termo_cabecalho(c) for c in row]
+        c_data = -1
+        c_desc = -1
+        c_val = -1
+        c_deb = -1
+        c_cred = -1
+        c_doc = -1
+        c_tipo = -1
 
-        # Se encontrou ao menos data e (valor ou débito/crédito)
-        if col_data != -1 and (col_valor != -1 or (col_debito != -1 and col_credito != -1)):
+        for col_idx, col_norm in enumerate(norm_row):
+            if not col_norm:
+                continue
+            if c_data == -1 and any(k == col_norm or k in col_norm for k in keywords_data):
+                c_data = col_idx
+            elif c_desc == -1 and any(k == col_norm or k in col_norm for k in keywords_desc):
+                c_desc = col_idx
+            elif c_deb == -1 and any(k == col_norm or k in col_norm for k in keywords_debito):
+                c_deb = col_idx
+            elif c_cred == -1 and any(k == col_norm or k in col_norm for k in keywords_credito):
+                c_cred = col_idx
+            elif c_val == -1 and any(k == col_norm or k in col_norm for k in keywords_valor):
+                c_val = col_idx
+            elif c_doc == -1 and any(k == col_norm or k in col_norm for k in keywords_doc):
+                c_doc = col_idx
+            elif c_tipo == -1 and any(k == col_norm or k in col_norm for k in keywords_tipo):
+                c_tipo = col_idx
+
+        # Considera linha de cabeçalho válida se encontrou Data e (Valor ou Débito/Crédito)
+        if c_data != -1 and (c_val != -1 or (c_deb != -1 and c_cred != -1) or c_desc != -1):
             idx_cabecalho = idx
+            col_data = c_data
+            col_descricao = c_desc
+            col_valor = c_val
+            col_debito = c_deb
+            col_credito = c_cred
+            col_doc = c_doc
+            col_tipo = c_tipo
             break
 
-    # Fallback caso não tenha cabeçalho explícito: assume colunas 0=data, 1=descrição, 2=valor
     linhas_dados = linhas[idx_cabecalho + 1:] if idx_cabecalho != -1 else linhas
-    if col_data == -1:
-        col_data = 0
-    if col_descricao == -1 and len(linhas_dados) > 0 and len(linhas_dados[0]) > 1:
-        col_descricao = 1
-    if col_valor == -1 and col_debito == -1 and len(linhas_dados) > 0 and len(linhas_dados[0]) > 2:
-        col_valor = 2
+
+    # 2. Heurística por Amostragem de Dados (Inspection by Sampling) se faltou alguma coluna vital
+    if col_data == -1 or (col_valor == -1 and col_debito == -1) or col_descricao == -1:
+        amostra = linhas_dados[:10]
+        if amostra:
+            num_cols = max(len(r) for r in amostra)
+            colunas_usadas = {col_data, col_valor, col_debito, col_credito, col_descricao, col_doc, col_tipo} - {-1}
+
+            # Tenta descobrir Data se não achou
+            if col_data == -1:
+                for c_idx in range(num_cols):
+                    if c_idx in colunas_usadas:
+                        continue
+                    datas_validas = sum(1 for r in amostra if len(r) > c_idx and tentar_parsear_data(r[c_idx]) is not None)
+                    if datas_validas >= len(amostra) * 0.6:
+                        col_data = c_idx
+                        colunas_usadas.add(c_idx)
+                        break
+
+            # Tenta descobrir Valor se não achou
+            if col_valor == -1 and col_debito == -1:
+                for c_idx in range(num_cols):
+                    if c_idx in colunas_usadas:
+                        continue
+                    valores_validos = 0
+                    for r in amostra:
+                        if len(r) > c_idx:
+                            try:
+                                v = converter_valor_decimal(r[c_idx])
+                                if v != Decimal('0.00'):
+                                    valores_validos += 1
+                            except Exception:
+                                pass
+                    if valores_validos >= len(amostra) * 0.6:
+                        col_valor = c_idx
+                        colunas_usadas.add(c_idx)
+                        break
+
+            # Tenta descobrir Descrição entre as colunas remanescentes (coluna com maior texto)
+            if col_descricao == -1:
+                melhor_c = -1
+                maior_len_medio = 0
+                for c_idx in range(num_cols):
+                    if c_idx in colunas_usadas:
+                        continue
+                    lens = [len(str(r[c_idx]).strip()) for r in amostra if len(r) > c_idx]
+                    if lens:
+                        media = sum(lens) / len(lens)
+                        if media > maior_len_medio:
+                            maior_len_medio = media
+                            melhor_c = c_idx
+                if melhor_c != -1:
+                    col_descricao = melhor_c
+                    colunas_usadas.add(melhor_c)
+
+    # Termos de Ruído e Linhas Administrativas para Ignorar
+    TERMOS_IGNORAR = [
+        'saldo anterior', 'saldo do dia', 'saldo final', 'saldo atual',
+        'saldo disponivel', 'saldo contabil', 'total de lancamentos',
+        'total lancamentos', 'totalizador', 'saldo transportado',
+        'total creditos', 'total debitos', 'saldo bloqueado', 'saldo em conta'
+    ]
 
     for idx, row in enumerate(linhas_dados):
-        if not row or len(row) <= col_data:
+        if not row:
+            continue
+        if col_data != -1 and len(row) <= col_data:
             continue
 
-        raw_date = row[col_data].strip()
-        dt_obj: Optional[date] = None
-
-        # Tenta formatos comuns de data
-        for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%Y', '%d.%m.%Y'):
-            try:
-                dt_obj = datetime.strptime(raw_date, fmt).date()
-                break
-            except ValueError:
-                continue
-
+        raw_date = row[col_data].strip() if col_data != -1 and len(row) > col_data else ""
+        dt_obj = tentar_parsear_data(raw_date)
         if not dt_obj:
             continue
 
         descricao_raw = row[col_descricao].strip() if col_descricao != -1 and len(row) > col_descricao else ""
         documento = row[col_doc].strip() if col_doc != -1 and len(row) > col_doc else ""
 
-        # Determinação do valor
+        # Filtro de linhas administrativas (ex: Saldo Anterior)
+        desc_lower = normalizar_termo_cabecalho(descricao_raw)
+        if any(t in desc_lower for t in TERMOS_IGNORAR):
+            continue
+
+        # Determinação do valor financeiro
         valor = Decimal('0.00')
         if col_debito != -1 and col_credito != -1 and len(row) > max(col_debito, col_credito):
             val_deb = row[col_debito].strip()
@@ -321,12 +421,11 @@ def parse_csv_content(content: str) -> Dict[str, Any]:
             val_str = row[col_valor].strip()
             if val_str:
                 valor = converter_valor_decimal(val_str)
-                # Verifica coluna de tipo D/C se houver
                 if col_tipo != -1 and len(row) > col_tipo:
                     tipo_char = row[col_tipo].strip().upper()
-                    if tipo_char == 'D' and valor > 0:
+                    if tipo_char in ('D', 'DEBITO') and valor > 0:
                         valor = -valor
-                    elif tipo_char == 'C' and valor < 0:
+                    elif tipo_char in ('C', 'CREDITO') and valor < 0:
                         valor = abs(valor)
 
         if valor == Decimal('0.00'):
@@ -334,10 +433,13 @@ def parse_csv_content(content: str) -> Dict[str, Any]:
 
         tipo = 'ENTRADA' if valor > 0 else 'SAIDA'
         descricao = sanitizar_texto_maiusculo(descricao_raw) if descricao_raw else "TRANSACAO BANCARIA CSV"
-        
-        # Gera FITID hash determinístico para o CSV
-        hash_seed = f"CSV-{dt_obj.isoformat()}-{idx}-{valor}-{descricao_raw}"
-        fitid = hashlib.md5(hash_seed.encode('utf-8')).hexdigest()[:16].upper()
+
+        # Captura ou gera FITID determinístico
+        if documento and len(documento) >= 8 and not re.search(r'\s', documento):
+            fitid = documento
+        else:
+            hash_seed = f"CSV-{dt_obj.isoformat()}-{idx}-{valor}-{descricao_raw}"
+            fitid = hashlib.md5(hash_seed.encode('utf-8')).hexdigest()[:16].upper()
 
         transacoes.append({
             'fitid': fitid,

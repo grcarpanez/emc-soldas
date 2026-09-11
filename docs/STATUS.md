@@ -378,9 +378,9 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
-- [ ] **Gestão de Contas Bancárias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
-  - *Situação atual:* Tabela 18 do FSD. Usada em seletores de quitação, despesas e conciliação bancária, mas sem tela de listagem, inclusão, edição de saldo inicial/limite de cheque especial e inativação de contas.
-  - *Local sugerido:* Nova aba "CONTAS BANCÁRIAS" na Tesouraria (`#/financeiro`) ou na Central Administrativa.
+- [x] **Gestão de Contas Bancárias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
+  - *Situação:* **Concluída**. Implementada aba dedicada "CONTAS BANCÁRIAS" no módulo Tesouraria & Caixa (`financeiro-view.js`), com cards de KPI (Saldo Total, Limite Cheque Especial, Disponível Real), listagem de contas, modal de cadastro e edição de saldos/limites, e inativação por soft delete.
+  - *Permissão:* Acessível por colaboradores com `cadastros_financeiros` ou `acesso_tesouraria`.
 - [ ] **Gestão da Árvore Hierárquica de Categorias Financeiras DRE (`apps/financeiro` - `/api/categorias-financeiras/`):**
   - *Situação atual:* Tabela 21 do FSD. Suporta tipos `RECEITA`, `DESPESA`, `CUSTO_FIXO`, `CUSTO_VARIAVEL` e subcategorias pai/filho. Usada nos lançamentos e no relatório DRE, mas sem interface visual para o administrador gerenciar a árvore de categorias.
   - *Local sugerido:* Subaba na Tesouraria ou na Central Administrativa.

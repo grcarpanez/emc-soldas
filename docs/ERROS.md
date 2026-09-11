@@ -318,13 +318,18 @@ Utilize o padrão abaixo para cada novo erro registrado:
   3. Instituição de regra mandatória na Seção 6 e 7 do `AGENTS.md` tornando obrigatório o incremento de versão no `sw.js` e `index.html` em toda alteração de frontend, acompanhado de instrução de reload forçado (`Ctrl + Shift + R`).
 - **Como evitar no futuro:** Nunca alterar arquivos JS/CSS em PWAs com Service Worker sem simultaneamente incrementar a versão em `sw.js` e atualizar os sufixos `?v=X.Y` no `index.html`.
 
+---
 
+## 2026-09-11 - Falha na Leitura de Extratos CSV Acentuados e Incompatibilidade de Contrato de Dados na Conciliação Bancária
 
-
-
-
-
-
-
-
-
+- **Sintoma:** Ao realizar upload de extrato bancário CSV na tela de Conciliação Bancária Split-Screen, a aplicação exibia mensagem de sucesso mas nenhuma transação era exibida (`0 TRANSAÇÕES` e `Nenhuma transação encontrada no arquivo`), além de os valores numéricos serem lidos como descrição. Adicionalmente, o sistema não possuía tela no frontend para criação e gestão de contas bancárias.
+- **Causa:**
+  1. O parser de CSV buscava apenas por termos sem acento (`descricao`), falhando no match em cabeçalhos como `Data,Valor,Identificador,Descrição` e acionando fallback que selecionava a coluna 1 (`Valor`) como descrição.
+  2. O backend retornava o extrato na chave `res.extrato`, enquanto o frontend lia `res.transacoes || []` (`undefined`).
+  3. Ausência de tela de Contas Bancárias na Tesouraria para associar aos extratos e aos lançamentos.
+- **Solução aplicada:**
+  1. Criação da aba dedicada "CONTAS BANCÁRIAS" em `financeiro-view.js` com cards de KPIs, listagem, cadastro e edição de saldos/limites.
+  2. Implementação de motor universal de CSV em 3 camadas em `parsers.py` (normalização fonética sem acento via `NFKD`, sinônimos multi-banco, heurística de inspeção por amostragem e filtro de ruído de saldo anterior).
+  3. Compatibilização de chaves no backend e no frontend (`res.extrato || res.transacoes`), adição de seletor de conta bancária na conciliação e inclusão de categoria contábil no modal de lançamento rápido.
+  4. Incremento de versão do Service Worker PWA para `v4.15` e cache-busting no `index.html`.
+- **Como evitar no futuro:** Sempre normalizar e sanitizar termos de arquivos de terceiros (como bancos) e manter contratos de API documentados e sincronizados com os handlers de frontend.
