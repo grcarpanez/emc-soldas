@@ -371,9 +371,9 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - Suporte à Nota Fiscal de Comunicação Eletrônica (NFCom modelo 62) presente em faturas de telecomunicações.
   - **Segregação Estrita Prestador vs. Tomador:** No processamento de PDFs, o extrator prioriza os blocos de `PRESTADOR / FORNECEDOR` e `EMITENTE`, descartando estritamente os dados do `TOMADOR / ADQUIRENTE` para evitar inversão cadastral.
   - **Card Enriquecido de Fornecedor Não Encontrado:** Ao analisar um documento cujo fornecedor ainda não existe no sistema, o backend consulta a Receita Federal em tempo real (`consultar_cnpj_externo`), e o modal *"FORNECEDOR NÃO ENCONTRADO"* exibe a Razão Social completa, Nome Fantasia, CNPJ formatado e Localidade (Cidade/UF) para conferência segura.
-  - **Expansão de Máscara de Chave NFe:** A função `formatarChaveAcessoNfe` em `utils.js` agora suporta até 50 dígitos sem truncamento, formatando blocos de 4 caracteres para NF-e e NFS-e.
-  - **Homologação da Bateria de Testes:** Suíte completa com 168 testes automatizados do Django executados com 100% de aprovação (OK em 68.3s).
-  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.13` em `frontend/sw.js` e sufixos de cache-busting `?v=4.13` em `frontend/index.html`.
+  - **Máscara Especializada da Chave NFS-e (50 dígitos):** A função `formatarChaveAcessoNfe` em `utils.js` agora aplica a máscara canônica da NFS-e Nacional (`9999999 9 99999999999999 99999 999999999999999 9999999 9`) quando o documento possui 50 dígitos, e preserva o padrão de 11 grupos de 4 dígitos para as chaves com 44 dígitos (NF-e, NFCom).
+  - **Homologação da Bateria de Testes:** Suíte completa com 168 testes automatizados do Django executados com 100% de aprovação (OK em 67.6s).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.14` em `frontend/sw.js` e sufixos de cache-busting `?v=4.14` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

@@ -212,6 +212,21 @@ function formatarPlacaVeiculo(valor) {
  */
 function formatarChaveAcessoNfe(valor) {
   const digitos = extrairApenasDigitos(valor).slice(0, 50);
+
+  // Máscara da NFS-e Nacional de 50 dígitos: 9999999 9 99999999999999 99999 999999999999999 9999999 9
+  if (digitos.length > 44) {
+    const partes = [];
+    if (digitos.length > 0) partes.push(digitos.slice(0, 7));
+    if (digitos.length > 7) partes.push(digitos.slice(7, 8));
+    if (digitos.length > 8) partes.push(digitos.slice(8, 22));
+    if (digitos.length > 22) partes.push(digitos.slice(22, 27));
+    if (digitos.length > 27) partes.push(digitos.slice(27, 42));
+    if (digitos.length > 42) partes.push(digitos.slice(42, 49));
+    if (digitos.length > 49) partes.push(digitos.slice(49, 50));
+    return partes.filter(Boolean).join(' ');
+  }
+
+  // Padrão canônico da NF-e / NFCom / NFC-e de 44 dígitos: 11 grupos de 4 dígitos
   return digitos.replace(/(\d{4})(?=\d)/g, '$1 ');
 }
 
