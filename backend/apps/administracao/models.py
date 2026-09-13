@@ -23,6 +23,18 @@ class ConfiguracaoGlobal(models.Model):
         default=80.00,
         verbose_name="Taxa de Mão de Obra por Hora (R$)"
     )
+    aliquota_iss = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=3.00,
+        verbose_name="Alíquota Padrão de ISS Retido (%)"
+    )
+    aliquota_simples_nacional = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=8.50,
+        verbose_name="Alíquota Padrão Simples Nacional (%) - Informativa"
+    )
     razao_social = models.CharField(
         max_length=255,
         default='EMC Soldas LTDA',

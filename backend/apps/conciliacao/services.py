@@ -8,14 +8,172 @@ from decimal import Decimal
 from itertools import combinations
 from typing import Dict, List, Any, Optional
 
+import re
+import logging
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError, NotFound
 
 from apps.financeiro.models import LancamentoFinanceiro, ContaBancaria, CategoriaFinanceira, MeioPagamento
+from apps.cadastros.models import ClienteFornecedor
+from apps.administracao.models import ConfiguracaoGlobal
+from apps.faturamento.models import Fatura
+from apps.faturamento.services import receber_pagamento_fatura
 from apps.conciliacao.parsers import parse_extrato_arquivo
-from core.utils import sanitizar_texto_maiusculo
+from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
+
+logger = logging.getLogger(__name__)
+
+
+def enriquecer_transacao_inteligencia(
+    trn: Dict[str, Any],
+    conta_id: Optional[int],
+    config_global: Optional[ConfiguracaoGlobal],
+    parceiros_map: Dict[str, ClienteFornecedor],
+    categorias_despesa: List[CategoriaFinanceira],
+    categorias_receita: List[CategoriaFinanceira]
+) -> Dict[str, Any]:
+    """
+    Enriquece uma transação de extrato com inteligência heurística:
+    1. Prevenção de duplicidade por FITID ou combinação defensiva;
+    2. Identificação de Cliente/Fornecedor por CNPJ/CPF no histórico;
+    3. Cruzamento com Faturas em Aberto (com cálculo de ISS Retido e tolerância de 5 centavos);
+    4. Sugestão automática de Categorias DRE (Tarifas, Tributos, Receitas).
+    """
+    fitid = trn.get('fitid') or ''
+    tipo = trn.get('tipo', 'ENTRADA')
+    valor_abs = abs(Decimal(str(trn.get('valor', 0))))
+    data_obj = trn.get('data_obj') or date.fromisoformat(trn['data'])
+    descricao = trn.get('descricao', '')
+
+    duplicidade = False
+    duplicidade_motivo = ''
+    lancamento_duplicado_id = None
+
+    # 1. Checagem de Duplicidade
+    if fitid:
+        lanc_existente = LancamentoFinanceiro.objects.filter(
+            fitid=fitid,
+            deleted_at__isnull=True
+        ).first()
+        if lanc_existente:
+            duplicidade = True
+            duplicidade_motivo = f"Transação com FITID '{fitid}' já registrada no ERP (Lançamento #{lanc_existente.id})"
+            lancamento_duplicado_id = lanc_existente.id
+
+    if not duplicidade and conta_id:
+        # Checagem defensiva por valor idêntico e data próxima (±2 dias) já conciliado
+        lanc_conciliado = LancamentoFinanceiro.objects.filter(
+            conta_id=conta_id,
+            tipo_lancamento=tipo,
+            valor=valor_abs,
+            data_pagamento__date__range=[data_obj - timedelta(days=2), data_obj + timedelta(days=2)],
+            is_conciliado=True,
+            deleted_at__isnull=True
+        ).first()
+        if lanc_conciliado:
+            duplicidade = True
+            duplicidade_motivo = f"Lançamento idêntico já conciliado nesta conta (Lançamento #{lanc_conciliado.id})"
+            lancamento_duplicado_id = lanc_conciliado.id
+
+    # 2. Reconhecimento de Parceiro por CNPJ/CPF na descrição
+    parceiro_identificado = None
+    cnpjs_cpfs = re.findall(r'\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b|\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b', descricao)
+
+    if cnpjs_cpfs:
+        doc_limpo = limpar_apenas_digitos(cnpjs_cpfs[0])
+        cli = parceiros_map.get(doc_limpo)
+        if not cli:
+            cli = ClienteFornecedor.objects.filter(
+                Q(cnpj_cpf=doc_limpo) | Q(cnpj_cpf=cnpjs_cpfs[0]),
+                deleted_at__isnull=True
+            ).first()
+            if cli:
+                parceiros_map[doc_limpo] = cli
+
+        if cli:
+            parceiro_identificado = {
+                'id': cli.id,
+                'nome_razao': cli.nome_razao,
+                'tipo': cli.tipo,
+                'cnpj_cpf': cli.cnpj_cpf,
+                'iss_retido': getattr(cli, 'iss_retido', False)
+            }
+
+    # 3. Cruzamento com Faturas em Aberto (com ISS Retido e tolerância de 5 centavos)
+    fatura_sugerida = None
+    if tipo == 'ENTRADA' and parceiro_identificado and str(parceiro_identificado['tipo']).upper() in ['CLIENTE', 'AMBOS']:
+        faturas_candidatas = Fatura.objects.filter(
+            cliente_id=parceiro_identificado['id'],
+            status='FATURADA',
+            deleted_at__isnull=True
+        ).order_by('data_fechamento', 'id')
+
+        aliquota_iss = config_global.aliquota_iss if (config_global and parceiro_identificado.get('iss_retido')) else Decimal('0.00')
+
+        for fatura in faturas_candidatas:
+            val_fatura = fatura.valor_total_faturado
+            val_iss = (val_fatura * (aliquota_iss / Decimal('100.00'))).quantize(Decimal('0.01'))
+            val_liquido = val_fatura - val_iss
+
+            # Tolerância de 5 centavos
+            if abs(valor_abs - val_liquido) <= Decimal('0.05'):
+                fatura_sugerida = {
+                    'id': fatura.id,
+                    'numero': fatura.id,
+                    'valor_fatura': float(val_fatura),
+                    'valor_iss': float(val_iss),
+                    'valor_liquido': float(val_liquido),
+                    'iss_retido_aplicado': bool(aliquota_iss > Decimal('0.00')),
+                    'aliquota_iss': float(aliquota_iss),
+                    'detalhe': f"Fatura #{fatura.id} com retenção de ISS ({aliquota_iss}%)"
+                }
+                break
+            elif abs(valor_abs - val_fatura) <= Decimal('0.05'):
+                fatura_sugerida = {
+                    'id': fatura.id,
+                    'numero': fatura.id,
+                    'valor_fatura': float(val_fatura),
+                    'valor_iss': 0.0,
+                    'valor_liquido': float(val_fatura),
+                    'iss_retido_aplicado': False,
+                    'aliquota_iss': 0.0,
+                    'detalhe': f"Fatura #{fatura.id} valor integral"
+                }
+                break
+
+    # 4. Classificação Heurística de Categorias DRE
+    categoria_sugerida = None
+    desc_upper = descricao.upper()
+
+    if tipo == 'SAIDA':
+        # Tarifas Bancárias
+        if any(w in desc_upper for w in ['TAR ', 'TARIFA', 'MANUT', 'IOF', 'DOC/TED', 'TAXA TRANSF', 'TAXA MAQ', 'CESTA BANC']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['TARIFA', 'BANCAR', 'DESPESAS FINANCEIRAS'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # Tributos e Encargos
+        elif any(w in desc_upper for w in ['DAS ', 'SIMPLES NACIONAL', 'GPS', 'FGTS', 'DARF', 'TRIBUTO', 'ARRECADACAO', 'RECEITA FEDERAL', 'PREFEITURA', 'INSS', 'IPTU', 'IPVA']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['TRIBUTO', 'IMPOSTO', 'ENCARGO'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+    elif tipo == 'ENTRADA':
+        if parceiro_identificado or fatura_sugerida:
+            cat = next((c for c in categorias_receita if any(k in c.nome.upper() for k in ['SERVICO', 'SOLDA', 'REFORMA', 'RECEITA OPERACIONAL'])), None)
+            if not cat and categorias_receita:
+                cat = categorias_receita[0]
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+
+    return {
+        'duplicidade': duplicidade,
+        'duplicidade_motivo': duplicidade_motivo,
+        'lancamento_duplicado_id': lancamento_duplicado_id,
+        'parceiro_identificado': parceiro_identificado,
+        'fatura_sugerida': fatura_sugerida,
+        'categoria_sugerida': categoria_sugerida
+    }
 
 
 def processar_extrato_split_screen(
@@ -109,6 +267,12 @@ def processar_extrato_split_screen(
                 'detalhe': 'NAO LOCALIZADO NO EXTRATO'
             }
 
+    # Cache de categorias, parceiros e configuração global para enriquecimento com inteligência
+    config_global = ConfiguracaoGlobal.objects.first()
+    parceiros_map = {}
+    categorias_despesa = list(CategoriaFinanceira.objects.filter(tipo='DESPESA', deleted_at__isnull=True))
+    categorias_receita = list(CategoriaFinanceira.objects.filter(tipo='RECEITA', deleted_at__isnull=True))
+
     # Executa algoritmo de matching para cada transação do extrato
     for trn in transacoes_extrato:
         trn_valor = trn['valor_decimal']
@@ -116,41 +280,67 @@ def processar_extrato_split_screen(
         trn_tipo = trn['tipo'] # 'ENTRADA' ou 'SAIDA'
         trn_data = trn['data_obj']
         fitid = trn['fitid']
+        descricao = trn.get('descricao', '')
+
+        # Enriquecimento com inteligência avançada (duplicidade, CNPJ/CPF, ISS retido, faturas e categorias)
+        info_inteligencia = enriquecer_transacao_inteligencia(
+            trn=trn,
+            conta_id=conta_id,
+            config_global=config_global,
+            parceiros_map=parceiros_map,
+            categorias_despesa=categorias_despesa,
+            categorias_receita=categorias_receita
+        )
 
         match_encontrado = False
         match_tipo = 'NAO_CONCILIADO'
         lancamentos_sugeridos = []
 
-        # 1. Match Automático 1:1
-        for lanc in lancamentos_erp:
-            if lanc.id in lancamentos_usados_ids:
-                continue
+        # Se detectou duplicidade direta no ERP
+        if info_inteligencia['duplicidade']:
+            match_encontrado = True
+            match_tipo = 'CONCILIADO' if 'CONCILIADO' in info_inteligencia['duplicidade_motivo'] else 'SUGESTAO_1_1'
+            dup_id = info_inteligencia.get('lancamento_duplicado_id')
+            if dup_id:
+                lancamentos_usados_ids.add(dup_id)
+                lancamentos_sugeridos.append(dup_id)
+                lancamentos_status_map[dup_id] = {
+                    'status_conciliacao': 'CONCILIADO' if match_tipo == 'CONCILIADO' else 'SUGESTAO_MATCH',
+                    'sugestao_fitid': fitid,
+                    'detalhe': info_inteligencia['duplicidade_motivo']
+                }
 
-            # Checa correspondência de tipo e valor exato
-            if lanc.tipo_lancamento == trn_tipo and lanc.valor == trn_valor_abs:
-                # Proximidade de data (±3 dias)
-                ref_date = lanc.data_pagamento.date() if lanc.data_pagamento else lanc.data_vencimento
-                diff_dias = abs((ref_date - trn_data).days)
-                if diff_dias <= 3:
-                    match_encontrado = True
-                    lancamentos_usados_ids.add(lanc.id)
-                    lancamentos_sugeridos.append(lanc.id)
+        # 1. Match Automático 1:1 (caso não tenha sido detectada duplicidade prévia)
+        if not match_encontrado:
+            for lanc in lancamentos_erp:
+                if lanc.id in lancamentos_usados_ids:
+                    continue
 
-                    if lanc.is_conciliado:
-                        match_tipo = 'CONCILIADO'
-                        lancamentos_status_map[lanc.id] = {
-                            'status_conciliacao': 'CONCILIADO',
-                            'sugestao_fitid': fitid,
-                            'detalhe': 'CONCILIADO COM ESTA TRANSACAO'
-                        }
-                    else:
-                        match_tipo = 'SUGESTAO_1_1'
-                        lancamentos_status_map[lanc.id] = {
-                            'status_conciliacao': 'SUGESTAO_MATCH',
-                            'sugestao_fitid': fitid,
-                            'detalhe': f'MATCH 1:1 SUGERIDO (DIFERENCA DE {diff_dias} DIA(S))'
-                        }
-                    break
+                # Checa correspondência de tipo e valor exato
+                if lanc.tipo_lancamento == trn_tipo and lanc.valor == trn_valor_abs:
+                    # Proximidade de data (±3 dias)
+                    ref_date = lanc.data_pagamento.date() if lanc.data_pagamento else lanc.data_vencimento
+                    diff_dias = abs((ref_date - trn_data).days)
+                    if diff_dias <= 3:
+                        match_encontrado = True
+                        lancamentos_usados_ids.add(lanc.id)
+                        lancamentos_sugeridos.append(lanc.id)
+
+                        if lanc.is_conciliado:
+                            match_tipo = 'CONCILIADO'
+                            lancamentos_status_map[lanc.id] = {
+                                'status_conciliacao': 'CONCILIADO',
+                                'sugestao_fitid': fitid,
+                                'detalhe': 'CONCILIADO COM ESTA TRANSACAO'
+                            }
+                        else:
+                            match_tipo = 'SUGESTAO_1_1'
+                            lancamentos_status_map[lanc.id] = {
+                                'status_conciliacao': 'SUGESTAO_MATCH',
+                                'sugestao_fitid': fitid,
+                                'detalhe': f'MATCH 1:1 SUGERIDO (DIFERENCA DE {diff_dias} DIA(S))'
+                            }
+                        break
 
         # 2. Match Múltiplo (1:N) se não encontrou 1:1
         if not match_encontrado:
@@ -188,10 +378,15 @@ def processar_extrato_split_screen(
             'valor': trn['valor'],
             'valor_absoluto': trn['valor_absoluto'],
             'tipo': trn_tipo,
-            'descricao': trn['descricao'],
+            'descricao': descricao,
             'documento': trn['documento'],
             'status_match': match_tipo,
             'lancamentos_sugeridos_ids': lancamentos_sugeridos,
+            'duplicidade': info_inteligencia['duplicidade'],
+            'duplicidade_motivo': info_inteligencia['duplicidade_motivo'],
+            'parceiro_identificado': info_inteligencia['parceiro_identificado'],
+            'fatura_sugerida': info_inteligencia['fatura_sugerida'],
+            'categoria_sugerida': info_inteligencia['categoria_sugerida'],
         })
 
     # Formata lista de lançamentos do ERP
@@ -666,11 +861,50 @@ def executar_importacao_lote(
             else:
                 total_saidas += valor
 
-            # Cria lançamento já liquidado e conciliado
+            # Se for vinculação com Fatura em aberto, executa baixa de fatura
+            fatura_id = item.get('fatura_id')
+            if fatura_id and tipo == 'ENTRADA':
+                try:
+                    fatura_obj = Fatura.objects.get(id=fatura_id, status='FATURADA', deleted_at__isnull=True)
+                    # Executa baixa via serviço de faturamento
+                    receber_pagamento_fatura(
+                        fatura=fatura_obj,
+                        valor=valor,
+                        conta_id=conta.id,
+                        meio_pagamento_id=meio.id if meio else None,
+                        data_pagamento=dt_pagto,
+                        user=user
+                    )
+                    # Marca os lançamentos da fatura como conciliados e atribui fitid
+                    lancs_fatura = fatura_obj.lancamentos_financeiros.filter(
+                        status_pagamento='PAGO',
+                        is_conciliado=False
+                    )
+                    for lf in lancs_fatura:
+                        lf.is_conciliado = True
+                        lf.data_conciliacao = now
+                        lf.conciliado_por = user
+                        if item.get('fitid'):
+                            lf.fitid = item.get('fitid')
+                        lf.save(update_fields=['is_conciliado', 'data_conciliacao', 'conciliado_por', 'fitid', 'updated_at'])
+                        lancamentos_criados.append(lf)
+                    
+                    # Como receber_pagamento_fatura já credita conta.saldo, não duplicamos o crédito no final
+                    total_entradas -= valor
+                    continue
+                except Fatura.DoesNotExist:
+                    pass
+
+            # Cria lançamento já liquidado e conciliado (Receita/Despesa direta, suportando cliente/fornecedor e fitid)
+            cli_forn_id = item.get('cliente_fornecedor_id')
+            fitid_val = item.get('fitid') or None
+
             lanc = LancamentoFinanceiro.objects.create(
                 conta=conta,
                 categoria=categoria,
                 meio_pagamento=meio,
+                cliente_fornecedor_id=cli_forn_id,
+                fitid=fitid_val,
                 tipo_lancamento=tipo,
                 descricao=descricao,
                 valor=valor,

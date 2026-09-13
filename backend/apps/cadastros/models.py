@@ -118,6 +118,10 @@ class ClienteFornecedor(BaseModel):
         blank=True,
         verbose_name="UF"
     )
+    iss_retido = models.BooleanField(
+        default=False,
+        verbose_name="Tomador com Retenção de ISS na Fonte"
+    )
 
     class Meta:
         db_table = 'clientes_fornecedores'

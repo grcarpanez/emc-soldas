@@ -105,6 +105,8 @@ class ItemImportacaoLoteSerializer(serializers.Serializer):
     documento = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     fitid = serializers.CharField(max_length=150, required=False, allow_blank=True, allow_null=True)
     meio_pagamento_id = serializers.IntegerField(required=False, allow_null=True)
+    cliente_fornecedor_id = serializers.IntegerField(required=False, allow_null=True)
+    fatura_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class ImportacaoLoteSerializer(serializers.Serializer):

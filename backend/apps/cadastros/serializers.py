@@ -75,6 +75,7 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
             'bairro',
             'cidade',
             'uf',
+            'iss_retido',
             'contatos',
             'quantidade_equipamentos_ativos',
             'created_at',

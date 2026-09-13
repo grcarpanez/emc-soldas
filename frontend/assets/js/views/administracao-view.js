@@ -158,6 +158,24 @@ window.AdministracaoView = {
               </div>
             </div>
 
+            <!-- Parâmetros Fiscais & Tributários (ISS Retido e Simples Nacional) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; border-top: 1px solid var(--color-steel-gray); padding-top: 16px;">
+              <div class="form-group">
+                <label class="form-label" for="cfg-aliquota-iss">Alíquota ISS (%) * <span class="status-chip info" style="font-size: 10px;">CONCILIAÇÃO / FATURAS</span></label>
+                <input type="number" id="cfg-aliquota-iss" class="form-control mono-text" min="0" max="100" step="0.01" value="${config.aliquota_iss ?? 3.00}" required>
+                <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">
+                  Alíquota municipal utilizada para deduzir o ISS retido dos clientes tomadores e conciliar o valor líquido recebido no extrato bancário.
+                </small>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="cfg-aliquota-simples">Alíquota Simples Nacional (%) <span class="status-chip neutral" style="font-size: 10px;">INFORMATIVO</span></label>
+                <input type="number" id="cfg-aliquota-simples" class="form-control mono-text" min="0" max="100" step="0.01" value="${config.aliquota_simples_nacional ?? 8.50}">
+                <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-top: 4px;">
+                  Alíquota informativa para cálculo de provisão de impostos DAS e DRE gerencial.
+                </small>
+              </div>
+            </div>
+
             <div class="text-right mt-16">
               <button type="submit" class="btn btn-primary" id="btn-salvar-config">SALVAR PARÂMETROS</button>
             </div>
@@ -202,7 +220,9 @@ window.AdministracaoView = {
             taxa_mao_de_obra_hora: window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cfg-taxa-mo').value),
             validade_orcamento_dias: parseInt(document.getElementById('cfg-validade').value, 10),
             tempo_ociosidade_minutos: parseInt(document.getElementById('cfg-ociosidade').value, 10),
-            retencao_logs_dias: parseInt(document.getElementById('cfg-retencao-logs').value, 10)
+            retencao_logs_dias: parseInt(document.getElementById('cfg-retencao-logs').value, 10),
+            aliquota_iss: parseFloat(document.getElementById('cfg-aliquota-iss').value) || 0.0,
+            aliquota_simples_nacional: parseFloat(document.getElementById('cfg-aliquota-simples').value) || 0.0
           };
 
           await window.api.put(`${window.CONFIG.ENDPOINTS.ADMINISTRACAO.CONFIGURACOES_GLOBAIS}1/`, payload);

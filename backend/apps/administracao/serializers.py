@@ -42,6 +42,8 @@ class ConfiguracaoGlobalSerializer(serializers.ModelSerializer):
             'endereco_oficina',
             'logo_empresa_url',
             'taxa_mao_de_obra_hora',
+            'aliquota_iss',
+            'aliquota_simples_nacional',
             'validade_orcamento_dias',
             'tempo_ociosidade_minutos',
             'tempo_expiracao_sessao_dias',

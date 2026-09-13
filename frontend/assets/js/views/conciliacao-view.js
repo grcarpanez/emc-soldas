@@ -234,9 +234,21 @@ window.ConciliacaoView = {
   },
 
   prepararPreLancamentosImportacao() {
-    // Para cada transação do extrato que ainda não é conciliada, cria um pré-lançamento
+    // Para cada transação do extrato, cria um pré-lançamento enriquecido com a inteligência
     this.preLancamentosImportacao = this.transacoesExtrato.map((t, idx) => {
       const isEntrada = t.tipo === 'ENTRADA' || (parseFloat(t.valor) || 0) > 0;
+      const isDuplicado = !!t.duplicidade;
+      const categoriaSugeridaId = t.categoria_sugerida ? t.categoria_sugerida.id : null;
+      const parceiroId = t.parceiro_identificado ? t.parceiro_identificado.id : null;
+      const faturaId = t.fatura_sugerida ? t.fatura_sugerida.id : null;
+
+      // Se identificou parceiro ou fatura, enriquece a descrição padrão
+      let descEfetiva = t.descricao || t.memo || 'MOVIMENTAÇÃO BANCÁRIA';
+      if (t.fatura_sugerida && t.parceiro_identificado) {
+        descEfetiva = `FATURA #${t.fatura_sugerida.numero} - ${t.parceiro_identificado.nome_razao}`;
+      } else if (t.parceiro_identificado) {
+        descEfetiva = `${descEfetiva} - ${t.parceiro_identificado.nome_razao}`;
+      }
 
       return {
         id_temp: idx,
@@ -244,19 +256,31 @@ window.ConciliacaoView = {
         data: t.data,
         valor: t.valor_absoluto !== undefined ? parseFloat(t.valor_absoluto) : Math.abs(parseFloat(t.valor) || 0),
         tipo_lancamento: isEntrada ? 'ENTRADA' : 'SAIDA',
-        descricao: t.descricao || t.memo || 'MOVIMENTAÇÃO BANCÁRIA',
+        descricao: descEfetiva,
         documento: t.documento || '',
-        categoria_id: null,
-        descartado: false
+        categoria_id: categoriaSugeridaId,
+        categoria_sugerida_nome: t.categoria_sugerida ? t.categoria_sugerida.nome : null,
+        cliente_fornecedor_id: parceiroId,
+        parceiro_identificado: t.parceiro_identificado,
+        fatura_id: faturaId,
+        fatura_sugerida: t.fatura_sugerida,
+        duplicidade: isDuplicado,
+        duplicidade_motivo: t.duplicidade_motivo,
+        descartado: isDuplicado // Se já existe no ERP, descarta por padrão para proteger contra duplicidades
       };
     });
 
-    // No modo importação, traçamos as conexões 1:1 entre cada item do extrato e sua proposta
-    this.conexoesMatch = this.preLancamentosImportacao.map((p, idx) => ({
-      extratoIndex: idx,
-      preIndex: idx,
-      tipo: 'CONFIRMADO'
-    }));
+    // No modo importação, traçamos as conexões 1:1 apenas entre itens válidos (não descartados / não duplicados)
+    this.conexoesMatch = [];
+    this.preLancamentosImportacao.forEach((p, idx) => {
+      if (!p.descartado) {
+        this.conexoesMatch.push({
+          extratoIndex: idx,
+          preIndex: idx,
+          tipo: 'CONFIRMADO'
+        });
+      }
+    });
 
     this.renderListaPreLancamentos();
     this.atualizarBotaoGerarLote();
@@ -340,8 +364,19 @@ window.ConciliacaoView = {
       const isMatched = !!conexao;
       const isConfirmado = conexao && conexao.tipo === 'CONFIRMADO';
 
+      // Badges de Inteligência
+      let badgeInteligencia = '';
+      if (t.duplicidade) {
+        badgeInteligencia = `<span class="status-chip neutral" style="font-size: 9px; padding: 2px 5px; background-color: #2e3035; color: #a5a9b4; border: 1px solid #71797e;">🔒 ${window.EMCUtils.escapeHtml(t.duplicidade_motivo || 'JÁ NO ERP')}</span>`;
+      } else if (t.fatura_sugerida) {
+        const descIss = t.fatura_sugerida.iss_retido_aplicado ? ` (ISS ${t.fatura_sugerida.aliquota_iss}% RETIDO)` : '';
+        badgeInteligencia = `<span class="status-chip info" style="font-size: 9px; padding: 2px 5px; background-color: #0d2744; color: #4ba3e3; border: 1px solid #1a5690;">📄 FATURA #${t.fatura_sugerida.numero}${descIss}</span>`;
+      } else if (t.parceiro_identificado) {
+        badgeInteligencia = `<span class="status-chip warning" style="font-size: 9px; padding: 2px 5px; background-color: #3b2806; color: #f5a623; border: 1px solid #7a520d;">🏢 ${window.EMCUtils.escapeHtml(t.parceiro_identificado.nome_razao)}</span>`;
+      }
+
       html += `
-        <div class="split-item ${isSelected ? 'selected' : ''} ${isMatched ? 'matched' : ''}" 
+        <div class="split-item ${isSelected ? 'selected' : ''} ${isMatched ? 'matched' : ''} ${t.duplicidade ? 'duplicado-erp' : ''}" 
              data-extrato-index="${idx}" 
              onclick="window.ConciliacaoView.selectExtratoItem(${idx})"
              onmouseenter="window.ConciliacaoView.destacarConexao(${idx})"
@@ -350,8 +385,9 @@ window.ConciliacaoView = {
           <div class="anchor-node right ${isMatched ? (isConfirmado ? 'matched' : 'suggested') : ''}"></div>
 
           <div style="flex: 1; padding-right: 12px;">
-            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">
-              ${window.EMCUtils.formatarDataPtBr(t.data)} • ID: ${window.EMCUtils.escapeHtml(t.fitid || t.documento || '-')}
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span>${window.EMCUtils.formatarDataPtBr(t.data)} • ID: ${window.EMCUtils.escapeHtml(t.fitid || t.documento || '-')}</span>
+              ${badgeInteligencia}
             </div>
             <strong>${window.EMCUtils.escapeHtml(t.descricao || t.memo || 'Transação')}</strong>
           </div>
@@ -369,7 +405,7 @@ window.ConciliacaoView = {
                   ${isConfirmado ? 'MATCH 100%' : 'SUGESTÃO'}
                 </span>
               ` : `
-                <span class="status-chip secondary" style="font-size: 9px; padding: 2px 4px;">PENDENTE</span>
+                <span class="status-chip secondary" style="font-size: 9px; padding: 2px 4px;">${t.duplicidade ? 'JÁ CONCILIADO' : 'PENDENTE'}</span>
               `}
             </div>
           </div>
@@ -463,8 +499,31 @@ window.ConciliacaoView = {
         optionsCat += `<option value="${cat.id}" ${cat.id === p.categoria_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(cat.nome)}</option>`;
       });
 
+      // Informações contextuais de inteligência
+      let infoExtraInteligencia = '';
+      if (p.duplicidade) {
+        infoExtraInteligencia = `
+          <div class="mono-text" style="font-size: 11px; color: #ffb4ab; background: rgba(186, 26, 26, 0.2); padding: 4px 8px; border-left: 2px solid var(--color-error); margin-bottom: 4px;">
+            🔒 <strong>DETECTADA DUPLICIDADE:</strong> ${window.EMCUtils.escapeHtml(p.duplicidade_motivo || 'Lançamento já existente no sistema')}. Descartado por segurança.
+          </div>
+        `;
+      } else if (p.fatura_sugerida) {
+        const descIss = p.fatura_sugerida.iss_retido_aplicado ? ` (ISS ${p.fatura_sugerida.aliquota_iss}% RETIDO: R$ ${window.EMCUtils.formatarMoeda(p.fatura_sugerida.valor_iss)})` : '';
+        infoExtraInteligencia = `
+          <div class="mono-text" style="font-size: 11px; color: #a5d8ff; background: rgba(13, 39, 68, 0.4); padding: 4px 8px; border-left: 2px solid #1a5690; margin-bottom: 4px;">
+            📄 <strong>LIQUIDAÇÃO DE FATURA:</strong> Fatura #${p.fatura_sugerida.numero} de ${window.EMCUtils.escapeHtml(p.parceiro_identificado?.nome_razao || 'Cliente')}${descIss}.
+          </div>
+        `;
+      } else if (p.parceiro_identificado) {
+        infoExtraInteligencia = `
+          <div class="mono-text" style="font-size: 11px; color: #ffe2a8; background: rgba(59, 40, 6, 0.4); padding: 4px 8px; border-left: 2px solid #f5a623; margin-bottom: 4px;">
+            🏢 <strong>PARCEIRO IDENTIFICADO:</strong> ${window.EMCUtils.escapeHtml(p.parceiro_identificado.nome_razao)} (${window.EMCUtils.formatarCpfCnpjDinamico(p.parceiro_identificado.cnpj_cpf)}).
+          </div>
+        `;
+      }
+
       html += `
-        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''}" data-pre-index="${idx}">
+        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
           <!-- Linha 1 (Cabeçalho): Identificador/Data na esquerda e Valor com Botão ✕ Alinhado na direita -->
@@ -487,6 +546,9 @@ window.ConciliacaoView = {
               `}
             </div>
           </div>
+
+          <!-- Linha Contextual de Inteligência Fiscal e Parceiros -->
+          ${infoExtraInteligencia}
 
           <!-- Linha 2 (Inputs): Grid com Descrição e Select de Categoria DRE -->
           <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; width: 100%;">
@@ -613,7 +675,9 @@ window.ConciliacaoView = {
               categoria_id: p.categoria_id,
               data_pagamento: p.data,
               documento: p.documento,
-              fitid: p.fitid
+              fitid: p.fitid,
+              cliente_fornecedor_id: p.cliente_fornecedor_id || null,
+              fatura_id: p.fatura_id || null
             }))
           };
 

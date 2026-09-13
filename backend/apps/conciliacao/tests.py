@@ -443,3 +443,110 @@ VERSION:102
         self.assertEqual(l2.valor, Decimal('2500.00'))
         self.assertEqual(l2.tipo_lancamento, 'ENTRADA')
 
+    def test_reconhecimento_parceiro_fatura_iss_retido_e_duplicidade(self):
+        """Testa enriquecimento com CNPJ, fatura com retenção de ISS (tolerância R$ 0,05) e bloqueio de duplicidade."""
+        from apps.cadastros.models import ClienteFornecedor
+        from apps.faturamento.models import Fatura
+        from apps.administracao.models import ConfiguracaoGlobal
+
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        # Configura Alíquota de ISS Global em 3.00%
+        cfg, _ = ConfiguracaoGlobal.objects.get_or_create(id=1)
+        cfg.aliquota_iss = Decimal('3.00')
+        cfg.save()
+
+        # Cadastra cliente com retenção de ISS
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao='PETRA MINERACAO LTDA',
+            cnpj_cpf='02329307000166',
+            tipo='CLIENTE',
+            tipo_pessoa='PJ',
+            iss_retido=True
+        )
+
+        # Fatura de R$ 10.000,00 -> ISS 3% = R$ 300,00 -> Líquido esperado = R$ 9.700,00
+        fatura = Fatura.objects.create(
+            cliente=cliente,
+            status='FATURADA',
+            valor_bruto=Decimal('10000.00'),
+            valor_total_faturado=Decimal('10000.00'),
+            data_fechamento=timezone.localdate()
+        )
+
+        # Simula extrato com recebimento de R$ 9.700,03 (dentro da margem de 5 centavos)
+        hoje = timezone.localdate()
+        ofx_content = f"""OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>CREDIT
+            <DTPOSTED>{hoje.strftime('%Y%m%d')}120000
+            <TRNAMT>9700.03
+            <FITID>PETRA_PIX_01
+            <MEMO>02.329.307/0001-66 - PETRA MINERACAO LTDA
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>"""
+        arquivo = SimpleUploadedFile("extrato_petra.ofx", ofx_content.encode('utf-8'), content_type="text/plain")
+
+        response = self.client.post(
+            '/api/conciliacao/upload-extrato/',
+            {'arquivo': arquivo, 'conta_id': self.conta.id},
+            format='multipart'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        dados = response.json()
+        trn = dados['extrato'][0]
+
+        # Valida parceiro identificado
+        self.assertIsNotNone(trn['parceiro_identificado'])
+        self.assertEqual(trn['parceiro_identificado']['id'], cliente.id)
+        self.assertTrue(trn['parceiro_identificado']['iss_retido'])
+
+        # Valida fatura sugerida com cálculo de ISS retido
+        self.assertIsNotNone(trn['fatura_sugerida'])
+        self.assertEqual(trn['fatura_sugerida']['id'], fatura.id)
+        self.assertTrue(trn['fatura_sugerida']['iss_retido_aplicado'])
+        self.assertEqual(trn['fatura_sugerida']['valor_iss'], 300.0)
+
+        # Importa em lote com vinculação à fatura e parceiro
+        payload_lote = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'fitid': 'PETRA_PIX_01',
+                    'data_pagamento': hoje.isoformat(),
+                    'descricao': 'FATURA #1 - PETRA MINERACAO LTDA',
+                    'valor': '9700.03',
+                    'tipo_lancamento': 'ENTRADA',
+                    'categoria_id': self.categoria_receita.id,
+                    'cliente_fornecedor_id': cliente.id,
+                    'fatura_id': fatura.id
+                }
+            ]
+        }
+        res_lote = self.client.post('/api/conciliacao/importacao-lote/', payload_lote, format='json')
+        self.assertEqual(res_lote.status_code, status.HTTP_201_CREATED)
+
+        # Testa que se re-enviarmos o mesmo extrato, o FITID dispara DUPLICIDADE
+        arquivo_dup = SimpleUploadedFile("extrato_petra_dup.ofx", ofx_content.encode('utf-8'), content_type="text/plain")
+        res_dup = self.client.post(
+            '/api/conciliacao/upload-extrato/',
+            {'arquivo': arquivo_dup, 'conta_id': self.conta.id},
+            format='multipart'
+        )
+        self.assertEqual(res_dup.status_code, status.HTTP_200_OK)
+        trn_dup = res_dup.json()['extrato'][0]
+        self.assertTrue(trn_dup['duplicidade'])
+        self.assertIn('PETRA_PIX_01', trn_dup['duplicidade_motivo'])
+

@@ -405,6 +405,22 @@ class LancamentoFinanceiro(BaseModel):
         db_column='conciliado_por_id',
         verbose_name="Conciliado por"
     )
+    fitid = models.CharField(
+        max_length=150,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Identificador Único Bancário (FITID)"
+    )
+    cliente_fornecedor = models.ForeignKey(
+        'cadastros.ClienteFornecedor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lancamentos_financeiros',
+        db_column='cliente_fornecedor_id',
+        verbose_name="Cliente ou Fornecedor Vinculado"
+    )
 
     class Meta:
         db_table = 'lancamentos_financeiros'
@@ -415,6 +431,7 @@ class LancamentoFinanceiro(BaseModel):
             models.Index(fields=['data_vencimento'], name='idx_lanc_vencimento'),
             models.Index(fields=['data_pagamento'], name='idx_lanc_pagamento'),
             models.Index(fields=['status_pagamento'], name='idx_lanc_status_pagto'),
+            models.Index(fields=['fitid'], name='idx_lanc_fitid'),
         ]
 
     def __str__(self):

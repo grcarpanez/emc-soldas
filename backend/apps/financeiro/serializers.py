@@ -308,12 +308,16 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     categoria_nome = serializers.CharField(source='categoria.nome', read_only=True)
     categoria_tipo = serializers.CharField(source='categoria.tipo', read_only=True)
     conciliado_por_nome = serializers.CharField(source='conciliado_por.nome', read_only=True, allow_null=True)
+    cliente_fornecedor_nome = serializers.CharField(source='cliente_fornecedor.nome_razao', read_only=True, allow_null=True)
 
     class Meta:
         model = LancamentoFinanceiro
         fields = [
             'id',
             'fatura',
+            'cliente_fornecedor',
+            'cliente_fornecedor_nome',
+            'fitid',
             'conta',
             'conta_nome',
             'conta_destino',

@@ -405,8 +405,18 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Alinhamento do Botão de Descarte e Categoria DRE Obrigatória em Branco (PWA v4.21):**
   - **Reestruturação Vertical do Pré-Lançamento:** Eliminação do esmagamento horizontal com `display: flex !important; flex-direction: column !important; gap: 8px !important;` no `.pre-lancamento-card`, organizando o card em cabeçalho superior (título na esquerda, valor e botão `✕` de 26x24px alinhados no centro à direita) e grid de edição inferior (descrição e select).
   - **Categoria DRE Inicial em Branco:** Inicialização de `categoria_id: null` com a opção `-- SELECIONE A CATEGORIA DRE * --` no topo do select e destaque de aviso sutil (`.select-categoria-pendente`).
-  - **Validação Proativa no Botão de Lote:** Bloqueio automático do botão `⚡ GERAR E CONCILIAR EM LOTE` enquanto houver itens ativos sem classificação contábil (`⚡ SELECIONE AS CATEGORIAS (N PENDENTES)`), prevenindo emissão de lançamentos sem destino no DRE.
-  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.21` em `frontend/sw.js` e sufixos de cache-busting `?v=4.21` em `frontend/index.html`.
+- [x] **Inteligência na Conciliação Bancária, Prevenção de Duplicidade, Reconhecimento de Parceiros, Retenção de ISS e Carga Histórica (PWA v4.22):**
+  - **Prevenção Robusta de Duplicidades:** Algoritmo defensivo checando se as transações do extrato já existem no ERP (por FITID bancário único ou por combinação de valor idêntico e proximidade de ±2 dias já conciliada na conta), sinalizando visualmente com badge `[🔒 JÁ NO ERP]` e descartando compulsoriamente por padrão na mesa de triagem para impedir duplicações de saldo.
+  - **Reconhecimento Automático de Parceiros por CNPJ/CPF:** Parser com extração regex de documentos na descrição da transação (ex: `02.329.307/0001-66 - PETRA MG`), cruzando instantaneamente com `ClienteFornecedor` e exibindo badge semântico `[🏢 PARCEIRO IDENTIFICADO]`.
+  - **Cruzamento Inteligente com Faturas em Aberto & Retenção de ISS:**
+    - Flag `iss_retido` no modelo `ClienteFornecedor` com checkbox no modal de cadastro completo.
+    - Parâmetros Fiscais em `ConfiguracaoGlobal`: campos editáveis `aliquota_iss` (padrão 3.00%) e `aliquota_simples_nacional` (informativo, padrão 8.50%) na aba de Administração.
+    - Cruzamento com faturas do cliente (`status='FATURADA'`): se o cliente possui retenção de ISS, o sistema calcula o valor líquido esperado (`valor_fatura - (valor_fatura * aliquota_iss / 100)`) e compara com a transação bancária considerando **tolerância de até 5 centavos (R$ 0,05)** para variações de arredondamento bancário.
+    - Sugestão automática e baixa imediata de faturas na importação via `receber_pagamento_fatura`, sem duplicar crédito de saldo e carimbando FITID e conciliação nos títulos.
+  - **Carga Histórica sem Orçamentos/Faturas Retroativas:** Adição das colunas `cliente_fornecedor_id` e `fitid` em `LancamentoFinanceiro`, permitindo que receitas e despesas de períodos anteriores sejam associadas diretamente aos clientes/fornecedores reais sem exigir orçamentos fictícios, alimentando perfeitamente o DRE e o Dossiê do Cliente.
+  - **Classificação Heurística de Categorias DRE:** Sugestão automática de categorias contábeis para Tarifas Bancárias (`TAR`, `IOF`, `DOC/TED`, etc.), Tributos/Guias (`DAS`, `GPS`, `FGTS`, `DARF`, etc.) e Receitas Operacionais para clientes identificados.
+  - **Testes Automatizados:** Suíte de conciliação enriquecida (`test_reconhecimento_parceiro_fatura_iss_retido_e_duplicidade`) com 100% de aprovação (72 testes automatizados acumulados em conciliação, cadastros, administração e financeiro).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.22` em `frontend/sw.js` e sufixos de cache-busting `?v=4.22` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

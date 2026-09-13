@@ -601,6 +601,14 @@ window.CadastrosView = {
             </div>
           </div>
 
+          <!-- Configurações Fiscais: ISS Retido na Fonte -->
+          <div class="card mb-16" style="padding: 10px 14px; background: var(--color-surface-container-low); border-left: 3px solid var(--color-rust-orange);">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 0; font-weight: 600; font-size: 13px;">
+              <input type="checkbox" id="comp-iss-retido" ${clienteEfetivo?.iss_retido ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--color-rust-orange);">
+              <span>Tomador com Retenção de ISS na Fonte (Calcula desconto automático do ISS em Faturas e Conciliação)</span>
+            </label>
+          </div>
+
           <div style="display: grid; grid-template-columns: 140px 1fr 100px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-cep">CEP</label>
@@ -709,6 +717,7 @@ window.CadastrosView = {
           bairro: document.getElementById('comp-bairro').value.trim(),
           cidade: document.getElementById('comp-cidade').value.trim(),
           uf: document.getElementById('comp-uf').value.trim().toUpperCase(),
+          iss_retido: !!document.getElementById('comp-iss-retido')?.checked,
           contatos: contatosPayload
         };
 
