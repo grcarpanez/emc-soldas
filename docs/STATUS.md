@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-13 (Normatização de Espaços e Responsividade Mandatória de Modais no Design System, Reestruturação do Modal de Lançamento no Extrato Real, PWA v4.17)  
+**Última Atualização:** 2026-09-13 (Unificação de Ações de Lançamento e Expansão das Comboboxes de Filtro no Extrato Real, PWA v4.18)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -382,6 +382,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Reestruturação Funcional do Modal de Lançamento no Extrato (`financeiro-view.js`):** Modal reconfigurado para `size: 'lg'`, banner de aviso compacto, grid `1fr 160px` para Categoria + Data de Pagamento (garantindo espaço amplo para nomes longos) e `1.2fr 1fr` para Conta Bancária + Meio de Pagamento, mantendo 100% dos botões visíveis sem transbordo.
   - **Correção Responsiva na Media Query 768px:** Substituição de classe legada por `.modal-card` com `width: 96vw; max-width: 96vw; max-height: 92vh; margin: auto;` e colapso automático de todos os grids para coluna única (`1fr !important; gap: 10px !important;`).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.17` em `frontend/sw.js` e sufixos de cache-busting `?v=4.17` em `frontend/index.html`.
+- [x] **Unificação de Ações de Lançamento e Expansão das Comboboxes de Filtro no Extrato Real (PWA v4.18):**
+  - **Eliminação de Redundância Operacional:** Remoção do botão secundário duplicado `+ LANÇAMENTO AVULSO` da barra de filtros do Extrato Real em `financeiro-view.js`.
+  - **Centralização Limpa no Topo:** Preservação estrita dos dois botões canônicos no topo da view (`+ TRANSFERÊNCIA INTER-CONTAS` e `+ NOVO LANÇAMENTO`), com detecção inteligente de contexto ativando automaticamente o modo de Caixa Real quando a aba ativa for o Extrato.
+  - **Expansão Dimensional das Comboboxes de Filtro:**
+    - Seletor de Contas Bancárias (`#wrapper-extrato-conta`): ampliado de `220px` para `270px` (min-width `240px`), eliminando reticências e exibindo `"TODAS AS CONTAS BANCÁRIAS"` por extenso com folga.
+    - Seletor de Tipo de Movimentação (`#filtro-extrato-tipo`): ampliado de `160px` para `190px` (min-width `175px`), acomodando com folga `"TODOS OS TIPOS"`, `"RECEITAS (+)"` e `"DESPESAS (-)"`.
+    - Campo de Busca Textual (`#filtro-extrato-busca`): expansivo (`flex: 1; min-width: 200px;`) preenchendo o espaço remanescente com equilíbrio visual.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.18` em `frontend/sw.js` e sufixos de cache-busting `?v=4.18` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

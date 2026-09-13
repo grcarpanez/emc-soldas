@@ -91,18 +91,17 @@ window.FinanceiroView = {
       <div class="card mb-16">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
           <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO, CATEGORIA, CONTA OU ID..." style="flex: 1; min-width: 200px;">
-          <div style="width: 220px; min-width: 180px; flex-shrink: 0;" id="wrapper-extrato-conta">
+          <div style="width: 270px; min-width: 240px; flex-shrink: 0;" id="wrapper-extrato-conta">
             <select id="filtro-extrato-conta" class="form-control">
               <option value="">TODAS AS CONTAS BANCÁRIAS</option>
             </select>
           </div>
-          <select id="filtro-extrato-tipo" class="form-control" style="width: 160px; min-width: 150px; flex-shrink: 0;">
+          <select id="filtro-extrato-tipo" class="form-control" style="width: 190px; min-width: 175px; flex-shrink: 0;">
             <option value="">TODOS OS TIPOS</option>
             <option value="ENTRADA">RECEITAS (+)</option>
             <option value="SAIDA">DESPESAS (-)</option>
           </select>
-          <span id="total-extrato-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 LANÇAMENTOS</span>
-          <button class="btn btn-primary" id="btn-novo-extrato-avulso" style="white-space: nowrap; flex-shrink: 0;">+ LANÇAMENTO AVULSO</button>
+          <span id="total-extrato-badge" class="status-chip secondary mono-text" style="padding: 7px 14px; flex-shrink: 0;">0 LANÇAMENTOS</span>
         </div>
       </div>
 
@@ -147,7 +146,6 @@ window.FinanceiroView = {
 
     document.getElementById('filtro-extrato-tipo')?.addEventListener('change', () => this.carregarListaExtrato());
     document.getElementById('filtro-extrato-busca')?.addEventListener('input', () => this.carregarListaExtrato());
-    document.getElementById('btn-novo-extrato-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('SAIDA', 'extrato'));
 
     this.carregarListaExtrato();
   },
