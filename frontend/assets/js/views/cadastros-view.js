@@ -612,9 +612,9 @@ window.CadastrosView = {
           <div style="display: grid; grid-template-columns: 140px 1fr 100px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-cep">CEP</label>
-              <div style="position: relative;">
-                <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" placeholder="00000-000" title="Ao preencher 8 dígitos e sair do campo, o endereço é buscado automaticamente" value="${clienteEfetivo?.cep ? window.EMCUtils.formatarCep(clienteEfetivo.cep) : ''}">
-                <div id="cep-spinner" class="loader-spinner" style="position: absolute; right: 10px; top: 10px; display: none; width: 18px; height: 18px;"></div>
+              <div style="position: relative; width: 100%;">
+                <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" placeholder="00000-000" style="width: 100%; padding-right: 32px;" title="Ao preencher 8 dígitos e sair do campo, o endereço é buscado automaticamente" value="${clienteEfetivo?.cep ? window.EMCUtils.formatarCep(clienteEfetivo.cep) : ''}">
+                <div id="cep-spinner" class="loader-spinner" style="position: absolute; right: 8px; top: 12px; display: none; width: 16px; height: 16px; pointer-events: none;"></div>
               </div>
             </div>
             <div class="form-group">
