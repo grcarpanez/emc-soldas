@@ -612,7 +612,10 @@ window.CadastrosView = {
           <div style="display: grid; grid-template-columns: 140px 1fr 100px; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="comp-cep">CEP</label>
-              <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" value="${clienteEfetivo?.cep ? window.EMCUtils.formatarCep(clienteEfetivo.cep) : ''}">
+              <div style="position: relative;">
+                <input type="text" id="comp-cep" class="form-control mono-text" data-mask="cep" placeholder="00000-000" title="Ao preencher 8 dígitos e sair do campo, o endereço é buscado automaticamente" value="${clienteEfetivo?.cep ? window.EMCUtils.formatarCep(clienteEfetivo.cep) : ''}">
+                <div id="cep-spinner" class="loader-spinner" style="position: absolute; right: 10px; top: 10px; display: none; width: 18px; height: 18px;"></div>
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label" for="comp-logradouro">Logradouro / Endereço</label>
@@ -895,6 +898,57 @@ window.CadastrosView = {
 
     docInput?.addEventListener('blur', handleAutoConsultaDocumento);
     docInput?.addEventListener('change', handleAutoConsultaDocumento);
+
+    // Auto-consulta de Endereço via CEP ao sair do campo (blur / exit)
+    const cepSpinner = document.getElementById('cep-spinner');
+    const cepInput = document.getElementById('comp-cep');
+    let ultimoCepConsultado = '';
+
+    const handleAutoConsultaCep = async () => {
+      if (!cepInput) return;
+      const cep = window.EMCUtils.extrairApenasDigitos(cepInput.value);
+      if (!cep || cep.length !== 8) return;
+      if (cep === ultimoCepConsultado) return;
+      ultimoCepConsultado = cep;
+
+      if (cepSpinner) cepSpinner.style.display = 'block';
+
+      try {
+        const endpoint = window.CONFIG.ENDPOINTS.CADASTROS.CONSULTA_CEP.replace('{cep}', cep);
+        const res = await window.api.get(endpoint);
+        const data = res?.data || res;
+
+        if (data && (data.logradouro || data.bairro || data.cidade || data.uf)) {
+          const logradouroInput = document.getElementById('comp-logradouro');
+          const numeroInput = document.getElementById('comp-numero');
+          const bairroInput = document.getElementById('comp-bairro');
+          const cidadeInput = document.getElementById('comp-cidade');
+          const ufInput = document.getElementById('comp-uf');
+
+          if (logradouroInput && data.logradouro) logradouroInput.value = data.logradouro;
+          if (bairroInput && data.bairro) bairroInput.value = data.bairro;
+          if (cidadeInput && data.cidade) cidadeInput.value = data.cidade;
+          if (ufInput && data.uf) ufInput.value = data.uf;
+
+          // Se o campo de número estiver vazio, foca diretamente nele para digitação fluida
+          if (numeroInput && !numeroInput.value.trim()) {
+            numeroInput.focus();
+          }
+
+          window.EMCUtils.showToast(`Endereço preenchido via ${data.origem || 'CEP'}!`, 'success');
+        } else {
+          window.EMCUtils.showToast('CEP não encontrado nas bases oficiais.', 'warning');
+        }
+      } catch (err) {
+        console.warn('[AutoConsulta CEP]', err);
+        window.EMCUtils.showToast(err.message || 'Não foi possível consultar o CEP.', 'warning');
+      } finally {
+        if (cepSpinner) cepSpinner.style.display = 'none';
+      }
+    };
+
+    cepInput?.addEventListener('blur', handleAutoConsultaCep);
+    cepInput?.addEventListener('change', handleAutoConsultaCep);
   },
 
   async editarCliente(id) {

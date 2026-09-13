@@ -10,6 +10,7 @@ from apps.cadastros.views import (
     ClienteEquipamentoViewSet,
     AnexoGeralClienteViewSet,
     ConsultaCnpjAPIView,
+    ConsultaCepAPIView,
     VerificarDocumentoAPIView
 )
 
@@ -27,5 +28,6 @@ urlpatterns = [
 
     # Rotas utilitárias de validação e consultas públicas
     re_path(r'^utilitarios/consulta-cnpj/(?P<cnpj>.+?)/?$', ConsultaCnpjAPIView.as_view(), name='consulta-cnpj'),
+    re_path(r'^utilitarios/consulta-cep/(?P<cep>.+?)/?$', ConsultaCepAPIView.as_view(), name='consulta-cep'),
     path('utilitarios/verificar-documento/', VerificarDocumentoAPIView.as_view(), name='verificar-documento'),
 ]

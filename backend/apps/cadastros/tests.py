@@ -738,6 +738,83 @@ class UtilitariosConsultaAPITestCase(CadastrosBaseTestCase):
         self.assertEqual(response.data['data']['cidade'], 'SAO PAULO')
         self.assertEqual(response.data['data']['uf'], 'SP')
 
+    @patch('apps.cadastros.utils_cep.urllib.request.urlopen')
+    def test_consulta_cep_brasilapi_mock(self, mock_urlopen):
+        """Valida o endpoint proxy de consulta de CEP com resposta bem-sucedida da BrasilAPI."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        mock_response_data = {
+            "cep": "29168011",
+            "state": "ES",
+            "city": "Serra",
+            "neighborhood": "Jardim Limoeiro",
+            "street": "Avenida Lourival Nunes"
+        }
+
+        mock_cm = mock_urlopen.return_value.__enter__.return_value
+        mock_cm.status = 200
+        mock_cm.read.return_value = json.dumps(mock_response_data).encode('utf-8')
+
+        response = self.client.get('/api/utilitarios/consulta-cep/29168-011/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertEqual(response.data['data']['cep'], '29168011')
+        self.assertEqual(response.data['data']['logradouro'], 'AVENIDA LOURIVAL NUNES')
+        self.assertEqual(response.data['data']['bairro'], 'JARDIM LIMOEIRO')
+        self.assertEqual(response.data['data']['cidade'], 'SERRA')
+        self.assertEqual(response.data['data']['uf'], 'ES')
+        self.assertEqual(response.data['data']['origem'], 'BrasilAPI')
+
+    @patch('apps.cadastros.utils_cep.urllib.request.urlopen')
+    def test_consulta_cep_fallback_viacep_mock(self, mock_urlopen):
+        """Valida o fallback automático para ViaCEP quando a BrasilAPI falha."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        # 1ª chamada (BrasilAPI) gera exceção, 2ª chamada (ViaCEP) tem sucesso
+        mock_viacep_data = {
+            "cep": "01310-100",
+            "logradouro": "Avenida Paulista",
+            "complemento": "lado ímpar",
+            "bairro": "Bela Vista",
+            "localidade": "São Paulo",
+            "uf": "SP"
+        }
+
+        mock_cm = mock_urlopen.return_value.__enter__.return_value
+        mock_cm.status = 200
+        mock_cm.read.return_value = json.dumps(mock_viacep_data).encode('utf-8')
+
+        # Configura side_effect: primeira chamada falha, segunda tem sucesso
+        import urllib.error
+        mock_urlopen.side_effect = [
+            urllib.error.URLError("BrasilAPI indisponível temporariamente"),
+            mock_urlopen.return_value
+        ]
+
+        response = self.client.get('/api/utilitarios/consulta-cep/01310100/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertEqual(response.data['data']['cep'], '01310100')
+        self.assertEqual(response.data['data']['logradouro'], 'AVENIDA PAULISTA')
+        self.assertEqual(response.data['data']['bairro'], 'BELA VISTA')
+        self.assertEqual(response.data['data']['cidade'], 'SAO PAULO')
+        self.assertEqual(response.data['data']['uf'], 'SP')
+        self.assertEqual(response.data['data']['origem'], 'ViaCEP')
+
+    def test_consulta_cep_invalido(self):
+        """Valida rejeição de CEP com formato ou quantidade de dígitos inválida."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        response = self.client.get('/api/utilitarios/consulta-cep/1234/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['status'], 'error')
+
+    def test_consulta_cep_nao_autenticado(self):
+        """Valida bloqueio 401 para requisições anônimas à consulta de CEP."""
+        self.client.logout()
+        response = self.client.get('/api/utilitarios/consulta-cep/29168011/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_soft_delete_equipamento(self):
         """Verifica que o soft delete inativa o equipamento e desativa vínculos ativos de frota."""
         self.client.force_authenticate(user=self.operador_comercial)

@@ -42,6 +42,7 @@ const CONFIG = {
       DICIONARIO_UOM: '/dicionario-uom/',
       DICIONARIO_ATRIBUTOS: '/dicionario-atributos/',
       CONSULTA_CNPJ: '/utilitarios/consulta-cnpj/{cnpj}/',
+      CONSULTA_CEP: '/utilitarios/consulta-cep/{cep}/',
       VERIFICAR_DOCUMENTO: '/utilitarios/verificar-documento/',
       HABILITAR_FORNECEDOR: '/clientes-fornecedores/{id}/habilitar-fornecedor/'
     },

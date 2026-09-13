@@ -37,6 +37,7 @@ from apps.cadastros.serializers import (
     AnexoGeralClienteSerializer
 )
 from apps.cadastros.utils_cnpj import consultar_cnpj_externo
+from apps.cadastros.utils_cep import consultar_cep_externo
 
 
 class ConsultaCnpjAPIView(APIView):
@@ -48,6 +49,22 @@ class ConsultaCnpjAPIView(APIView):
 
     def get(self, request, cnpj):
         resultado = consultar_cnpj_externo(cnpj)
+        
+        if resultado.get("status") == "error":
+            return Response(resultado, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(resultado, status=status.HTTP_200_OK)
+
+
+class ConsultaCepAPIView(APIView):
+    """
+    Endpoint Proxy Utilitário para Consulta de CEP público com Fallback Gracioso (BrasilAPI + ViaCEP).
+    Rota: GET /api/utilitarios/consulta-cep/<str:cep>/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, cep):
+        resultado = consultar_cep_externo(cep)
         
         if resultado.get("status") == "error":
             return Response(resultado, status=status.HTTP_400_BAD_REQUEST)

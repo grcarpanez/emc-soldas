@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-13 (Limpeza Operacional do Banco de Dados para Carga Real do Zero, PWA v4.24)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
+**Última Atualização:** 2026-09-13 (Busca e Preenchimento Automático por CEP via BrasilAPI/ViaCEP, PWA v4.25)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -97,12 +97,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 
 ### Fase 5 - Módulo de Clientes, Fornecedores e Equipamentos
 - [x] Criar endpoint proxy para consulta de CNPJ pública (BrasilAPI/ReceitaWS) com fallback gracioso (`/api/utilitarios/consulta-cnpj/<cnpj>/`).
+- [x] Criar endpoint proxy para consulta de CEP pública com fallback gracioso BrasilAPI / ViaCEP (`/api/utilitarios/consulta-cep/<cep>/`) e preenchimento automático no evento `blur`/`exit`.
 - [x] Implementar validação matemática de CPF (módulo 11), CNPJ e checagem antecipada de duplicidade no `onBlur` (`/api/utilitarios/verificar-documento/`).
 - [x] Implementar CRUD de `ClienteFornecedor` com suporte a PF/PJ, cadastro rápido ágil (apenas Nome + Telefone), dossiê comercial e soft delete.
 - [x] Implementar CRUD de `Equipamento` com suporte a placas antigas/Mercosul, identificação técnica e soft delete.
 - [x] Implementar CRUD de `ClienteEquipamento` com transferência segura (desativação do vínculo anterior e ativação do novo) preservando o histórico para não quebrar orçamentos passados.
 - [x] Implementar gestão e download seguro de anexos de clientes (`AnexoGeralCliente`) com validação de extensões permitidas e cabeçalhos forçados.
-- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (46 testes no total acumulado).
+- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (23 testes dedicados em cadastros, 181 testes no acumulado do sistema).
 
 ### Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)
 - [x] Implementar cadastro de Itens com atributos técnicos dinâmicos (`ItemAtributoValor`), fator de conversão de unidades e cálculo de custo fracionado de consumo (`/api/itens/`).
