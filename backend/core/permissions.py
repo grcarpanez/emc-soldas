@@ -81,3 +81,22 @@ class HasGestaoEquipeAccess(HasPermissionToggle):
 
 class HasAuditoriaLogsAccess(HasPermissionToggle):
     required_toggle = 'auditoria_logs_recovery'
+
+
+class HasCadastrosFinanceirosOuLeituraTesouraria(permissions.BasePermission):
+    """
+    Permite leitura (GET, HEAD, OPTIONS) para usuários com acesso à Tesouraria ou Cadastros Financeiros.
+    Exige cadastros_financeiros (ou Admin) para criação, alteração e exclusão.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        role = getattr(request.user, 'role', 'Operador')
+        if role == 'Admin' or getattr(request.user, 'is_superuser', False):
+            return True
+        permissoes = getattr(request.user, 'permissoes', None)
+        if not permissoes:
+            return False
+        if request.method in permissions.SAFE_METHODS:
+            return getattr(permissoes, 'acesso_tesouraria', False) or getattr(permissoes, 'cadastros_financeiros', False)
+        return getattr(permissoes, 'cadastros_financeiros', False)

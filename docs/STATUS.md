@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-10 (Importação Inteligente de Documento Fiscal DANFE/XML com Pré-Preenchimento e Cruzamento Cadastral em Compras, PWA v4.11)  
+**Última Atualização:** 2026-09-13 (CRUD de Categorias Financeiras DRE na Administração com Governança, Filtro Dinâmico e Correção do Extrato Real, PWA v4.16)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -380,10 +380,10 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
 - [x] **Gestão de Contas Bancárias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
   - *Situação:* **Concluída**. Implementada aba dedicada "CONTAS BANCÁRIAS" no módulo Tesouraria & Caixa (`financeiro-view.js`), com cards de KPI (Saldo Total, Limite Cheque Especial, Disponível Real), listagem de contas, modal de cadastro e edição de saldos/limites, e inativação por soft delete.
-  - *Permissão:* Acessível por colaboradores com `cadastros_financeiros` ou `acesso_tesouraria`.
-- [ ] **Gestão da Árvore Hierárquica de Categorias Financeiras DRE (`apps/financeiro` - `/api/categorias-financeiras/`):**
-  - *Situação atual:* Tabela 21 do FSD. Suporta tipos `RECEITA`, `DESPESA`, `CUSTO_FIXO`, `CUSTO_VARIAVEL` e subcategorias pai/filho. Usada nos lançamentos e no relatório DRE, mas sem interface visual para o administrador gerenciar a árvore de categorias.
-  - *Local sugerido:* Subaba na Tesouraria ou na Central Administrativa.
+- [x] **Gestão de Categorias Financeiras DRE na Administração (`apps/financeiro` - `/api/categorias-financeiras/`):**
+  - *Situação:* **Concluída**. Implementada aba dedicada "CATEGORIAS FINANCEIRAS (DRE)" na Central Administrativa (`administracao-view.js`) com suporte a tipos `RECEITA`, `DESPESA`, `AMBOS` (cadastral) e `TRANSFERENCIA`, status Ativo/Inativo, seleção de categoria pai, modal com aviso de governança contábil, e exclusão protegida com bloqueio se houver lançamentos ou subcategorias ativas.
+  - *Extrato Real & Tesouraria:* Correção do modal de lançamento avulso no Extrato Real (`status_pagamento='PAGO'`, conta obrigatória e atualização imediata de saldo), resolução da ingestão de chaves `_id` no DRF, filtro dinâmico de categorias em tempo real de acordo com a operação (`SAIDA` -> despesa/ambos; `ENTRADA` -> receita/ambos), coluna de categoria na tabela, busca por categoria e modal de reclassificação/edição de lançamentos.
+  - *Permissão:* Acessível por administradores ou colaboradores com permissão `cadastros_financeiros` (leitura liberada para tesouraria).
 - [ ] **Gestão de Cartões de Crédito Corporativos & Fechamento de Faturas (`apps/financeiro` - `/api/cartoes/` e `/api/faturas-cartao/`):**
   - *Situação atual:* Tabelas 19 e 20 do FSD. Cartões e faturas mensais modelados no backend, mas geridos hoje apenas via modal auxiliar no lançamento de despesas.
   - *Local sugerido:* Aba dedicada na Tesouraria.

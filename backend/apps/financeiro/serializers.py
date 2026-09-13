@@ -26,6 +26,7 @@ class CategoriaFinanceiraSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     subcategorias_count = serializers.SerializerMethodField()
+    tipo_display = serializers.SerializerMethodField()
 
     class Meta:
         model = CategoriaFinanceira
@@ -33,6 +34,8 @@ class CategoriaFinanceiraSerializer(serializers.ModelSerializer):
             'id',
             'nome',
             'tipo',
+            'tipo_display',
+            'ativo',
             'categoria_pai',
             'categoria_pai_nome',
             'subcategorias_count',
@@ -44,11 +47,32 @@ class CategoriaFinanceiraSerializer(serializers.ModelSerializer):
     def get_subcategorias_count(self, obj):
         return obj.subcategorias.filter(deleted_at__isnull=True).count()
 
+    def get_tipo_display(self, obj):
+        mapping = {
+            'RECEITA': 'ENTRADA (RECEITA)',
+            'DESPESA': 'SAÍDA (DESPESA)',
+            'AMBOS': 'AMBOS (ENTRADA E SAÍDA)',
+            'TRANSFERENCIA': 'TRANSFERÊNCIA',
+        }
+        return mapping.get(obj.tipo, obj.tipo)
+
     def validate_nome(self, value):
         nome_sanitizado = sanitizar_texto_maiusculo(value)
         if not nome_sanitizado:
             raise serializers.ValidationError("O nome da categoria financeira é obrigatório.")
         return nome_sanitizado
+
+    def validate_tipo(self, value):
+        val = sanitizar_texto_maiusculo(value)
+        if val in ['ENTRADA', 'RECEITA']:
+            return 'RECEITA'
+        if val in ['SAIDA', 'SAÍDA', 'DESPESA']:
+            return 'DESPESA'
+        if val == 'AMBOS':
+            return 'AMBOS'
+        if val in ['TRANSFERENCIA', 'TRANSFERÊNCIA']:
+            return 'TRANSFERENCIA'
+        return val
 
     def validate(self, attrs):
         categoria_pai = attrs.get('categoria_pai')
@@ -68,6 +92,31 @@ class CategoriaFinanceiraSerializer(serializers.ModelSerializer):
                         "categoria_pai": "Esta seleção geraria um ciclo hierárquico inválido."
                     })
                 pai_atual = pai_atual.categoria_pai
+
+        # Matriz de Governança: Restrições de alteração de tipo com lançamentos existentes
+        if self.instance and 'tipo' in attrs:
+            novo_tipo = attrs['tipo']
+            tipo_atual = self.instance.tipo
+            if novo_tipo != tipo_atual:
+                lancamentos = self.instance.lancamentos.filter(deleted_at__isnull=True)
+                if lancamentos.exists():
+                    # Bloqueio de inversão direta (RECEITA <-> DESPESA)
+                    if (tipo_atual == 'RECEITA' and novo_tipo == 'DESPESA') or (tipo_atual == 'DESPESA' and novo_tipo == 'RECEITA'):
+                        raise serializers.ValidationError({
+                            "tipo": "Não é possível inverter uma categoria de RECEITA para DESPESA (ou vice-versa) pois existem movimentações financeiras vinculadas a ela."
+                        })
+                    # Restrição de AMBOS para RECEITA
+                    if tipo_atual == 'AMBOS' and novo_tipo == 'RECEITA':
+                        if lancamentos.filter(tipo_lancamento='SAIDA').exists():
+                            raise serializers.ValidationError({
+                                "tipo": "Não é possível restringir esta categoria para RECEITA pois ela possui lançamentos históricos de SAÍDA (DESPESA)."
+                            })
+                    # Restrição de AMBOS para DESPESA
+                    if tipo_atual == 'AMBOS' and novo_tipo == 'DESPESA':
+                        if lancamentos.filter(tipo_lancamento='ENTRADA').exists():
+                            raise serializers.ValidationError({
+                                "tipo": "Não é possível restringir esta categoria para DESPESA pois ela possui lançamentos históricos de ENTRADA (RECEITA)."
+                            })
 
         return attrs
 
@@ -300,6 +349,20 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
 
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'categoria_id' in data and 'categoria' not in data:
+            data['categoria'] = data['categoria_id']
+        if 'conta_id' in data and 'conta' not in data:
+            data['conta'] = data['conta_id']
+        if 'meio_pagamento_id' in data and 'meio_pagamento' not in data:
+            data['meio_pagamento'] = data['meio_pagamento_id']
+        if 'cartao_credito_id' in data and 'cartao_credito' not in data:
+            data['cartao_credito'] = data['cartao_credito_id']
+        if 'fatura_cartao_id' in data and 'fatura_cartao' not in data:
+            data['fatura_cartao'] = data['fatura_cartao_id']
+        return super().to_internal_value(data)
+
     def validate_descricao(self, value):
         if value:
             return sanitizar_texto_maiusculo(value)
@@ -315,6 +378,18 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
         status_pagto = attrs.get('status_pagamento', getattr(self.instance, 'status_pagamento', 'A_VENCER'))
         conta = attrs.get('conta', getattr(self.instance, 'conta', None))
         cartao = attrs.get('cartao_credito', getattr(self.instance, 'cartao_credito', None))
+        categoria = attrs.get('categoria', getattr(self.instance, 'categoria', None))
+
+        # Validação de compatibilidade da categoria com o tipo de lançamento
+        if categoria and tipo:
+            if tipo == 'SAIDA' and categoria.tipo == 'RECEITA':
+                raise serializers.ValidationError({
+                    "categoria": "A categoria selecionada é exclusiva para ENTRADA (RECEITA) e não pode ser usada em um lançamento de SAÍDA."
+                })
+            if tipo == 'ENTRADA' and categoria.tipo == 'DESPESA':
+                raise serializers.ValidationError({
+                    "categoria": "A categoria selecionada é exclusiva para SAÍDA (DESPESA) e não pode ser usada em um lançamento de ENTRADA."
+                })
 
         # Se já criado como PAGO, conta bancária é obrigatória (a menos que seja fatura de cartão em aberto)
         if status_pagto == 'PAGO' and not conta and not cartao:

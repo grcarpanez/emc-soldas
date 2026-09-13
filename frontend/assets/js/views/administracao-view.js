@@ -24,6 +24,9 @@ window.AdministracaoView = {
         <button class="tab-btn ${this.currentTab === 'pagamento' ? 'active' : ''}" id="tab-btn-adm-pagamento">
           FORMAS & REGRAS DE PAGAMENTO
         </button>
+        <button class="tab-btn ${this.currentTab === 'categorias' ? 'active' : ''}" id="tab-btn-adm-categorias">
+          CATEGORIAS FINANCEIRAS (DRE)
+        </button>
         <button class="tab-btn ${this.currentTab === 'dicionarios' ? 'active' : ''}" id="tab-btn-adm-dicionarios">
           DICIONÁRIOS MESTRES (UOM & ATRIBUTOS)
         </button>
@@ -53,6 +56,10 @@ window.AdministracaoView = {
       this.currentTab = 'pagamento';
       this.render(container);
     });
+    document.getElementById('tab-btn-adm-categorias')?.addEventListener('click', () => {
+      this.currentTab = 'categorias';
+      this.render(container);
+    });
     document.getElementById('tab-btn-adm-dicionarios')?.addEventListener('click', () => {
       this.currentTab = 'dicionarios';
       this.render(container);
@@ -77,6 +84,8 @@ window.AdministracaoView = {
       this.renderSmtp(content);
     } else if (this.currentTab === 'pagamento') {
       this.renderFormasPagamento(content);
+    } else if (this.currentTab === 'categorias') {
+      this.renderCategoriasFinanceiras(content);
     } else if (this.currentTab === 'dicionarios') {
       this.renderDicionariosMestres(content);
     } else if (this.currentTab === 'equipe') {
@@ -753,6 +762,273 @@ window.AdministracaoView = {
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Não foi possível inativar esta regra de pagamento.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  // ==========================================================================
+  // 2.2 CATEGORIAS FINANCEIRAS (ÁRVORE DRE & FLUXO DE CAIXA)
+  // ==========================================================================
+  async renderCategoriasFinanceiras(container) {
+    container.innerHTML = `
+      <div class="card mb-24" style="width: 100%;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3>CATEGORIAS FINANCEIRAS (DRE & FLUXO DE CAIXA)</h3>
+            <p class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">ÁRVORE DE CLASSIFICAÇÃO DE RECEITAS (ENTRADAS), DESPESAS (SAÍDAS) E AMBOS</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-nova-categoria">+ NOVA CATEGORIA</button>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+          <input type="text" id="filtro-cat-busca" class="form-control" placeholder="BUSCAR CATEGORIA POR NOME..." style="flex: 1; min-width: 200px;">
+          <select id="filtro-cat-tipo" class="form-control" style="width: 220px; min-width: 180px; flex-shrink: 0;">
+            <option value="">TODAS AS APLICAÇÕES</option>
+            <option value="RECEITA">ENTRADA (RECEITA)</option>
+            <option value="DESPESA">SAÍDA (DESPESA)</option>
+            <option value="AMBOS">AMBOS (ENTRADA OU SAÍDA)</option>
+            <option value="TRANSFERENCIA">TRANSFERÊNCIA</option>
+          </select>
+          <select id="filtro-cat-status" class="form-control" style="width: 180px; min-width: 150px; flex-shrink: 0;">
+            <option value="">TODOS OS STATUS</option>
+            <option value="true" selected>SOMENTE ATIVAS</option>
+            <option value="false">SOMENTE INATIVAS</option>
+          </select>
+          <span id="total-cat-badge" class="status-chip secondary mono-text" style="padding: 7px 12px; flex-shrink: 0;">0 CATEGORIAS</span>
+        </div>
+
+        <div class="table-container" style="max-height: 520px; overflow-y: auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">ID</th>
+                <th>NOME DA CATEGORIA</th>
+                <th style="width: 190px;">APLICAÇÃO PERMITIDA</th>
+                <th>CATEGORIA PAI</th>
+                <th style="width: 130px; text-align: center;">SUBCATEGORIAS</th>
+                <th style="width: 110px;">STATUS</th>
+                <th style="text-align: right; width: 160px;">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="lista-categorias-tbody">
+              <tr><td colspan="7" class="text-center"><div class="loader-spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-nova-categoria')?.addEventListener('click', () => this.abrirModalCategoria());
+    document.getElementById('filtro-cat-busca')?.addEventListener('input', () => this.carregarCategoriasFinanceiras());
+    document.getElementById('filtro-cat-tipo')?.addEventListener('change', () => this.carregarCategoriasFinanceiras());
+    document.getElementById('filtro-cat-status')?.addEventListener('change', () => this.carregarCategoriasFinanceiras());
+
+    await this.carregarCategoriasFinanceiras();
+  },
+
+  categoriasFinanceirasCache: [],
+
+  async carregarCategoriasFinanceiras() {
+    const tbody = document.getElementById('lista-categorias-tbody');
+    if (!tbody) return;
+
+    const busca = document.getElementById('filtro-cat-busca')?.value.trim().toUpperCase() || '';
+    const tipoFiltro = document.getElementById('filtro-cat-tipo')?.value || '';
+    const statusFiltro = document.getElementById('filtro-cat-status')?.value || '';
+
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS);
+      const lista = res.results || res || [];
+      this.categoriasFinanceirasCache = lista;
+
+      let filtradas = lista.filter((c) => {
+        if (busca && !c.nome.toUpperCase().includes(busca)) return false;
+        if (tipoFiltro && c.tipo !== tipoFiltro) return false;
+        if (statusFiltro !== '') {
+          const isAtivo = statusFiltro === 'true';
+          if (c.ativo !== isAtivo) return false;
+        }
+        return true;
+      });
+
+      const badge = document.getElementById('total-cat-badge');
+      if (badge) {
+        badge.textContent = `${filtradas.length} ${filtradas.length === 1 ? 'CATEGORIA' : 'CATEGORIAS'}`;
+      }
+
+      if (!filtradas.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="padding: 24px; color: var(--color-on-surface-variant);">Nenhuma categoria financeira encontrada.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      filtradas.forEach((cat) => {
+        let chipClass = 'secondary';
+        let chipLabel = 'OUTROS';
+        if (cat.tipo === 'RECEITA') {
+          chipClass = 'success';
+          chipLabel = 'ENTRADA (RECEITA)';
+        } else if (cat.tipo === 'DESPESA') {
+          chipClass = 'danger';
+          chipLabel = 'SAÍDA (DESPESA)';
+        } else if (cat.tipo === 'AMBOS') {
+          chipClass = 'info';
+          chipLabel = 'AMBOS (ENTRADA / SAÍDA)';
+        } else if (cat.tipo === 'TRANSFERENCIA') {
+          chipClass = 'secondary';
+          chipLabel = 'TRANSFERÊNCIA';
+        }
+
+        const statusBadge = cat.ativo
+          ? '<span class="status-chip success" style="font-size: 10px;">ATIVO</span>'
+          : '<span class="status-chip secondary" style="font-size: 10px;">INATIVO</span>';
+
+        const paiNome = cat.categoria_pai_nome || '-';
+        const subCount = cat.subcategorias_count || 0;
+
+        html += `
+          <tr>
+            <td class="mono-text">#${cat.id}</td>
+            <td><strong>${window.EMCUtils.escapeHtml(cat.nome)}</strong></td>
+            <td><span class="status-chip ${chipClass}" style="font-size: 10px;">${chipLabel}</span></td>
+            <td>${window.EMCUtils.escapeHtml(paiNome)}</td>
+            <td style="text-align: center;"><span class="status-chip secondary mono-text" style="font-size: 10px;">${subCount}</span></td>
+            <td>${statusBadge}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 11px; margin-right: 4px;" onclick='window.AdministracaoView.abrirModalCategoria(${JSON.stringify(cat).replace(/'/g, "&apos;")})'>EDITAR</button>
+              <button class="btn btn-danger btn-sm" style="padding: 2px 6px; font-size: 11px;" onclick="window.AdministracaoView.confirmarExclusaoCategoria(${cat.id}, '${window.EMCUtils.escapeHtml(cat.nome)}')">EXCLUIR</button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+    }
+  },
+
+  async abrirModalCategoria(cat = null) {
+    const isEdit = Boolean(cat && cat.id);
+    const title = isEdit ? `EDITAR CATEGORIA FINANCEIRA #${cat.id}` : 'NOVA CATEGORIA FINANCEIRA';
+
+    // Lista categorias disponíveis para categoria pai (evitando a própria)
+    let todasCategorias = this.categoriasFinanceirasCache;
+    if (!todasCategorias || !todasCategorias.length) {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS).catch(() => []);
+      todasCategorias = res.results || res || [];
+    }
+
+    let optionsPai = '<option value="">NENHUMA (CATEGORIA RAIZ / NÍVEL SUPERIOR)</option>';
+    todasCategorias.forEach((c) => {
+      if (!isEdit || c.id !== cat.id) {
+        const selected = isEdit && cat.categoria_pai === c.id ? 'selected' : '';
+        optionsPai += `<option value="${c.id}" ${selected}>${window.EMCUtils.escapeHtml(c.nome)} (${c.tipo})</option>`;
+      }
+    });
+
+    const tipoAtual = isEdit ? cat.tipo : 'DESPESA';
+
+    window.EMCUtils.openModal({
+      title,
+      size: 'md',
+      confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
+      content: `
+        ${isEdit ? `
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+            ⚠️ <strong>Aviso de Auditoria:</strong> Alterar o nome da categoria atualizará a visualização em relatórios e lançamentos passados. Inversões de natureza (Receita ⇄ Despesa) em categorias com histórico de movimentações são estritamente bloqueadas para proteger o DRE.
+          </div>
+        ` : ''}
+
+        <div class="form-group">
+          <label class="form-label" for="cat-nome">Nome da Categoria Financeira *</label>
+          <input type="text" id="cat-nome" class="form-control" value="${isEdit ? window.EMCUtils.escapeHtml(cat.nome) : ''}" placeholder="EX: COMBUSTIVEL, ENERGIA ELETRICA, SERVICOS PRESTADOS" required autofocus>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+          <div class="form-group">
+            <label class="form-label" for="cat-tipo">Aplicação Permitida (Natureza) *</label>
+            <select id="cat-tipo" class="form-control" required>
+              <option value="DESPESA" ${tipoAtual === 'DESPESA' ? 'selected' : ''}>SAÍDA (DESPESA)</option>
+              <option value="RECEITA" ${tipoAtual === 'RECEITA' ? 'selected' : ''}>ENTRADA (RECEITA)</option>
+              <option value="AMBOS" ${tipoAtual === 'AMBOS' ? 'selected' : ''}>AMBOS (ENTRADA OU SAÍDA)</option>
+              <option value="TRANSFERENCIA" ${tipoAtual === 'TRANSFERENCIA' ? 'selected' : ''}>TRANSFERÊNCIA (NEUTRA)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="cat-pai">Categoria Pai (Hierarquia)</label>
+            <select id="cat-pai" class="form-control">
+              ${optionsPai}
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; background-color: var(--color-surface-container); padding: 12px; border: 1px solid var(--color-steel-gray);">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="cat-ativo" ${!isEdit || cat.ativo ? 'checked' : ''}>
+            <span style="font-size: 13px; font-weight: 600;">Categoria Ativa no Sistema</span>
+          </label>
+          <p style="font-size: 11px; color: var(--color-on-surface-variant); margin: 4px 0 0 24px;">
+            Categorias inativas não são exibidas em novos lançamentos, preservando intactos o histórico, extratos passados e DRE.
+          </p>
+        </div>
+      `,
+      onConfirm: async () => {
+        const nome = document.getElementById('cat-nome')?.value.trim();
+        const tipo = document.getElementById('cat-tipo')?.value;
+        const categoria_pai = document.getElementById('cat-pai')?.value ? parseInt(document.getElementById('cat-pai').value, 10) : null;
+        const ativo = document.getElementById('cat-ativo')?.checked ?? true;
+
+        if (!nome) {
+          window.EMCUtils.showToast('Informe o nome da categoria financeira.', 'warning');
+          return false;
+        }
+
+        const payload = { nome, tipo, categoria_pai, ativo };
+
+        try {
+          if (isEdit) {
+            await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}${cat.id}/`, payload);
+            window.EMCUtils.showToast('Categoria financeira atualizada com sucesso!', 'success');
+          } else {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS, payload);
+            window.EMCUtils.showToast('Categoria financeira cadastrada com sucesso!', 'success');
+          }
+          this.carregarCategoriasFinanceiras();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao salvar categoria financeira.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async confirmarExclusaoCategoria(id, nome) {
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAR EXCLUSÃO DE CATEGORIA',
+      size: 'sm',
+      confirmText: 'EXCLUIR CATEGORIA',
+      content: `
+        <div style="padding: 8px 0;">
+          <p style="font-size: 13.5px; line-height: 1.6; margin-bottom: 12px;">
+            Deseja excluir a categoria financeira <strong>${nome}</strong> (#${id})?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px; line-height: 1.5;">
+            Categorias que possuam subcategorias filhas ou lançamentos financeiros históricos vinculados são estritamente bloqueadas contra exclusão. Caso deseje apenas descontinuar o uso futuro, edite e marque-a como <strong>INATIVA</strong>.
+          </div>
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}${id}/`);
+          window.EMCUtils.showToast(`Categoria ${nome} excluída com sucesso!`, 'success');
+          this.carregarCategoriasFinanceiras();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Não foi possível excluir esta categoria.', 'error');
           return false;
         }
       }

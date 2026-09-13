@@ -675,3 +675,193 @@ class CartoesCorporativosTestCase(TestCase):
         self.assertIsNotNone(rollover_lanc)
         self.assertEqual(rollover_lanc.valor, Decimal("600.00"))
         self.assertEqual(rollover_lanc.status_pagamento, 'A_VENCER')
+
+
+class CategoriasGovernancaETesourariaTestCase(TestCase):
+    """Bateria de testes para a Matriz de Governança de Categorias, indicação AMBOS e Lançamento no Extrato."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = Usuario.objects.create_user(
+            email="admin.cat@emcsoldas.com.br",
+            password="adminpassword123",
+            role="Admin"
+        )
+        self.operador_tesouraria = Usuario.objects.create_user(
+            email="operador.tes@emcsoldas.com.br",
+            password="operadorpassword123",
+            role="Operador"
+        )
+        self.operador_tesouraria.permissoes.acesso_tesouraria = True
+        self.operador_tesouraria.permissoes.save()
+
+        self.conta = ContaBancaria.objects.create(
+            nome="ITAU PRINCIPAL",
+            saldo=Decimal("5000.00"),
+            limite_credito=Decimal("2000.00")
+        )
+        self.meio = MeioPagamento.objects.create(nome="PIX", ativo=True)
+
+        self.cat_receita = CategoriaFinanceira.objects.create(
+            nome="RECEITA DE SERVICOS",
+            tipo="RECEITA"
+        )
+        self.cat_despesa = CategoriaFinanceira.objects.create(
+            nome="DESPESA COM ENERGIA",
+            tipo="DESPESA"
+        )
+        self.cat_ambos = CategoriaFinanceira.objects.create(
+            nome="AJUSTE DE CAIXA",
+            tipo="AMBOS"
+        )
+
+    def test_operador_tesouraria_pode_ler_categorias_mas_nao_modificar(self):
+        self.client.force_authenticate(user=self.operador_tesouraria)
+        # Leitura permitida
+        response = self.client.get('/api/categorias-financeiras/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Mutação proibida (precisa de cadastros_financeiros ou Admin)
+        response = self.client.post('/api/categorias-financeiras/', {
+            "nome": "NOVA CATEGORIA TESTE",
+            "tipo": "DESPESA"
+        })
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_criacao_categoria_com_ambos_e_ativo(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post('/api/categorias-financeiras/', {
+            "nome": "RECLASSIFICACAO DIVERSA",
+            "tipo": "AMBOS",
+            "ativo": True
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['tipo'], 'AMBOS')
+        self.assertEqual(response.data['tipo_display'], 'AMBOS (ENTRADA E SAÍDA)')
+        self.assertTrue(response.data['ativo'])
+
+    def test_filtro_dinamico_por_aplicacao(self):
+        self.client.force_authenticate(user=self.admin)
+
+        # Filtro SAIDA deve trazer DESPESA e AMBOS (não traz RECEITA)
+        resp_saida = self.client.get('/api/categorias-financeiras/?aplicacao=SAIDA')
+        self.assertEqual(resp_saida.status_code, status.HTTP_200_OK)
+        nomes_saida = [c['nome'] for c in resp_saida.data.get('results', resp_saida.data)]
+        self.assertIn("DESPESA COM ENERGIA", nomes_saida)
+        self.assertIn("AJUSTE DE CAIXA", nomes_saida)
+        self.assertNotIn("RECEITA DE SERVICOS", nomes_saida)
+
+        # Filtro ENTRADA deve trazer RECEITA e AMBOS (não traz DESPESA)
+        resp_entrada = self.client.get('/api/categorias-financeiras/?aplicacao=ENTRADA')
+        self.assertEqual(resp_entrada.status_code, status.HTTP_200_OK)
+        nomes_entrada = [c['nome'] for c in resp_entrada.data.get('results', resp_entrada.data)]
+        self.assertIn("RECEITA DE SERVICOS", nomes_entrada)
+        self.assertIn("AJUSTE DE CAIXA", nomes_entrada)
+        self.assertNotIn("DESPESA COM ENERGIA", nomes_entrada)
+
+    def test_bloqueio_inversao_tipo_categoria_com_lancamentos(self):
+        self.client.force_authenticate(user=self.admin)
+
+        # Cria lançamento vinculado à categoria de receita
+        LancamentoFinanceiro.objects.create(
+            tipo_lancamento="ENTRADA",
+            descricao="RECEBIMENTO CLIENTE TESTE",
+            valor=Decimal("300.00"),
+            categoria=self.cat_receita,
+            conta=self.conta,
+            data_vencimento=timezone.localdate(),
+            status_pagamento="PAGO"
+        )
+
+        # Tentar alterar cat_receita para DESPESA deve ser bloqueado
+        response = self.client.patch(f'/api/categorias-financeiras/{self.cat_receita.id}/', {
+            "tipo": "DESPESA"
+        })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Não é possível inverter uma categoria de RECEITA para DESPESA", str(response.data))
+
+        # Mas expandir para AMBOS deve ser permitido
+        response_ambos = self.client.patch(f'/api/categorias-financeiras/{self.cat_receita.id}/', {
+            "tipo": "AMBOS"
+        })
+        self.assertEqual(response_ambos.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_ambos.data['tipo'], 'AMBOS')
+
+    def test_bloqueio_exclusao_categoria_com_lancamentos(self):
+        self.client.force_authenticate(user=self.admin)
+
+        LancamentoFinanceiro.objects.create(
+            tipo_lancamento="SAIDA",
+            descricao="PAGAMENTO ENERGIA",
+            valor=Decimal("150.00"),
+            categoria=self.cat_despesa,
+            conta=self.conta,
+            data_vencimento=timezone.localdate(),
+            status_pagamento="PAGO"
+        )
+
+        # Tentar deletar categoria vinculada deve retornar erro 400
+        response = self.client.delete(f'/api/categorias-financeiras/{self.cat_despesa.id}/')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("possui 1 lançamento(s) financeiro(s) associado(s)", str(response.data))
+
+        # Categoria não usada (cat_ambos) pode ser excluída via soft delete
+        response_del = self.client.delete(f'/api/categorias-financeiras/{self.cat_ambos.id}/')
+        self.assertEqual(response_del.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_criacao_lancamento_via_categoria_id_e_modo_extrato(self):
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        saldo_anterior = self.conta.saldo # 5000.00
+        valor_despesa = Decimal("250.00")
+
+        # Frontend submete com chaves terminadas em _id (categoria_id, conta_id, meio_pagamento_id)
+        payload = {
+            "tipo_lancamento": "SAIDA",
+            "descricao": "TAXA CARTORIO TESTE",
+            "valor": str(valor_despesa),
+            "categoria_id": self.cat_despesa.id,
+            "conta_id": self.conta.id,
+            "meio_pagamento_id": self.meio.id,
+            "data_vencimento": str(timezone.localdate()),
+            "status_pagamento": "PAGO"
+        }
+
+        response = self.client.post('/api/lancamentos-financeiros/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['categoria'], self.cat_despesa.id)
+        self.assertEqual(response.data['conta'], self.conta.id)
+        self.assertEqual(response.data['status_pagamento'], 'PAGO')
+
+        # Verifica débito imediato no saldo da conta bancária
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, saldo_anterior - valor_despesa)
+
+    def test_busca_no_extrato_por_nome_de_categoria_e_reclassificacao(self):
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        lanc = LancamentoFinanceiro.objects.create(
+            tipo_lancamento="SAIDA",
+            descricao="GASTO DIVERSO",
+            valor=Decimal("120.00"),
+            categoria=self.cat_despesa,
+            conta=self.conta,
+            data_vencimento=timezone.localdate(),
+            status_pagamento="PAGO"
+        )
+
+        # Busca por nome da categoria na rota de lançamentos
+        response_busca = self.client.get(f'/api/lancamentos-financeiros/?search={self.cat_despesa.nome}')
+        self.assertEqual(response_busca.status_code, status.HTTP_200_OK)
+        ids_encontrados = [l['id'] for l in response_busca.data.get('results', response_busca.data)]
+        self.assertIn(lanc.id, ids_encontrados)
+
+        # Reclassifica o lançamento para a categoria AMBOS
+        response_patch = self.client.patch(f'/api/lancamentos-financeiros/{lanc.id}/', {
+            "categoria_id": self.cat_ambos.id,
+            "descricao": "GASTO RECLASSIFICADO"
+        }, format='json')
+        self.assertEqual(response_patch.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_patch.data['categoria'], self.cat_ambos.id)
+        self.assertEqual(response_patch.data['descricao'], "GASTO RECLASSIFICADO")
+

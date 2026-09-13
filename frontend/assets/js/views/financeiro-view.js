@@ -63,7 +63,11 @@ window.FinanceiroView = {
     });
 
     document.getElementById('btn-transferencia-inter')?.addEventListener('click', () => this.abrirModalTransferencia());
-    document.getElementById('btn-novo-lancamento')?.addEventListener('click', () => this.abrirModalNovoLancamento());
+    document.getElementById('btn-novo-lancamento')?.addEventListener('click', () => {
+      const tipo = this.currentTab === 'receber' ? 'ENTRADA' : 'SAIDA';
+      const modo = this.currentTab === 'extrato' ? 'extrato' : 'competencia';
+      this.abrirModalNovoLancamento(tipo, modo);
+    });
 
     const content = document.getElementById('financeiro-tab-content');
     if (this.currentTab === 'extrato') {
@@ -86,7 +90,7 @@ window.FinanceiroView = {
     container.innerHTML = `
       <div class="card mb-16">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
-          <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO OU ID..." style="flex: 1; min-width: 200px;">
+          <input type="text" id="filtro-extrato-busca" class="form-control" placeholder="BUSCAR POR HISTÓRICO, CATEGORIA, CONTA OU ID..." style="flex: 1; min-width: 200px;">
           <div style="width: 220px; min-width: 180px; flex-shrink: 0;" id="wrapper-extrato-conta">
             <select id="filtro-extrato-conta" class="form-control">
               <option value="">TODAS AS CONTAS BANCÁRIAS</option>
@@ -109,6 +113,7 @@ window.FinanceiroView = {
               <th>ID</th>
               <th>DATA PAGTO</th>
               <th>DESCRIÇÃO / HISTÓRICO</th>
+              <th>CATEGORIA</th>
               <th>CONTA BANCÁRIA</th>
               <th>MEIO</th>
               <th>TIPO</th>
@@ -117,7 +122,7 @@ window.FinanceiroView = {
             </tr>
           </thead>
           <tbody id="lista-extrato-tbody">
-            <tr><td colspan="8" class="text-center"><div class="loader-spinner"></div></td></tr>
+            <tr><td colspan="9" class="text-center"><div class="loader-spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -142,7 +147,7 @@ window.FinanceiroView = {
 
     document.getElementById('filtro-extrato-tipo')?.addEventListener('change', () => this.carregarListaExtrato());
     document.getElementById('filtro-extrato-busca')?.addEventListener('input', () => this.carregarListaExtrato());
-    document.getElementById('btn-novo-extrato-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento());
+    document.getElementById('btn-novo-extrato-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('SAIDA', 'extrato'));
 
     this.carregarListaExtrato();
   },
@@ -172,7 +177,7 @@ window.FinanceiroView = {
       }
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
         return;
       }
 
@@ -187,13 +192,15 @@ window.FinanceiroView = {
             <td class="mono-text">#${l.id}</td>
             <td class="mono-text">${window.EMCUtils.formatarDataHoraPtBr(l.data_pagamento || l.data_vencimento)}</td>
             <td><strong>${window.EMCUtils.escapeHtml(l.descricao || 'Lançamento')}</strong></td>
+            <td><span class="status-chip secondary" style="font-size: 11px;">${window.EMCUtils.escapeHtml(l.categoria_nome || 'GERAL')}</span></td>
             <td>${window.EMCUtils.escapeHtml(l.conta_nome || 'Conta')}</td>
             <td><span class="status-chip info">${window.EMCUtils.escapeHtml(l.meio_pagamento_nome || 'PIX/TED')}</span></td>
             <td><span class="status-chip ${isEntrada ? 'success' : 'danger'}">${l.tipo_lancamento}</span></td>
             <td class="mono-text" style="font-weight: 700; color: ${corValor}; font-size: 15px;">
               ${sinal} ${window.EMCUtils.formatarMoeda(l.valor)}
             </td>
-            <td style="text-align: right;">
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" style="margin-right: 4px;" onclick="window.FinanceiroView.abrirModalEditarLancamento(${l.id})">EDITAR</button>
               <button class="btn btn-danger btn-sm" onclick="window.FinanceiroView.abrirModalEstorno(${l.id})">ESTORNAR</button>
             </td>
           </tr>
@@ -201,7 +208,7 @@ window.FinanceiroView = {
       });
       tbody.innerHTML = html;
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   },
 
@@ -676,10 +683,11 @@ window.FinanceiroView = {
     });
   },
 
-  async abrirModalNovoLancamento(defaultTipo = 'SAIDA') {
+  async abrirModalNovoLancamento(defaultTipo = 'SAIDA', modo = 'competencia') {
+    const isExtrato = modo === 'extrato' || this.currentTab === 'extrato';
     const [contas, categorias, meios] = await Promise.all([
       window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS),
-      window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS),
+      window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}?ativo=true`),
       window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO)
     ]);
 
@@ -687,83 +695,126 @@ window.FinanceiroView = {
     const listaCat = categorias.results || categorias || [];
     const listaMeios = meios.results || meios || [];
 
-    let optionsContas = '<option value="">SELECIONE A CONTA...</option>';
-    listaContas.forEach((c) => { optionsContas += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)}</option>`; });
-
-    let optionsCat = '<option value="">SELECIONE A CATEGORIA DRE...</option>';
-    listaCat.forEach((cat) => { optionsCat += `<option value="${cat.id}">${window.EMCUtils.escapeHtml(cat.nome)} (${cat.tipo})</option>`; });
+    let optionsContas = `<option value="">${isExtrato ? 'SELECIONE A CONTA BANCÁRIA / CAIXA *' : 'SELECIONE A CONTA (OPCIONAL)...'}</option>`;
+    listaContas.forEach((c) => { optionsContas += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)} (SALDO: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`; });
 
     let optionsMeios = '<option value="">SELECIONE O MEIO...</option>';
     listaMeios.forEach((m) => { optionsMeios += `<option value="${m.id}">${window.EMCUtils.escapeHtml(m.nome)}</option>`; });
 
-    window.EMCUtils.openModal({
-      title: defaultTipo === 'ENTRADA' ? 'NOVO TÍTULO A RECEBER (AVULSO)' : (defaultTipo === 'SAIDA' ? 'NOVA DESPESA A PAGAR (AVULSA)' : 'NOVO LANÇAMENTO AVULSO'),
+    let modalTitle = 'NOVO LANÇAMENTO AVULSO';
+    if (isExtrato) {
+      modalTitle = 'NOVO LANÇAMENTO AVULSO NO EXTRATO (CAIXA REAL)';
+    } else if (defaultTipo === 'ENTRADA') {
+      modalTitle = 'NOVO TÍTULO A RECEBER (AVULSO)';
+    } else if (defaultTipo === 'SAIDA') {
+      modalTitle = 'NOVA DESPESA A PAGAR (AVULSA)';
+    }
+
+    const modalId = window.EMCUtils.openModal({
+      title: modalTitle,
       size: 'md',
       confirmText: 'SALVAR LANÇAMENTO',
       content: `
+        ${isExtrato ? `
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+            ⚡ <strong>Regime de Caixa:</strong> Este lançamento registrará uma movimentação já <strong>LIQUIDADA (PAGA)</strong> no Extrato Real, creditando ou debitando o saldo da conta selecionada instantaneamente.
+          </div>
+        ` : ''}
+
         <form id="form-novo-lanc">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
-              <label class="form-label">Tipo de Movimentação *</label>
+              <label class="form-label" for="nl-tipo">Tipo de Movimentação *</label>
               <select id="nl-tipo" class="form-control">
                 <option value="SAIDA" ${defaultTipo === 'SAIDA' ? 'selected' : ''}>SAÍDA (DESPESA)</option>
                 <option value="ENTRADA" ${defaultTipo === 'ENTRADA' ? 'selected' : ''}>ENTRADA (RECEITA)</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Valor (R$) *</label>
+              <label class="form-label" for="nl-valor">Valor (R$) *</label>
               <input type="text" id="nl-valor" class="form-control mono-text" data-mask="moeda-atm" value="R$ 0,00" required>
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Descrição / Histórico *</label>
-            <input type="text" id="nl-desc" class="form-control" placeholder="EX: PAGAMENTO ENERGIA ELÉTRICA OFICINA" required>
+          <div class="form-group" style="margin-top: 10px;">
+            <label class="form-label" for="nl-desc">Descrição / Histórico *</label>
+            <input type="text" id="nl-desc" class="form-control" placeholder="EX: PAGAMENTO ENERGIA ELETRICA OFICINA" required>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
             <div class="form-group">
-              <label class="form-label">Categoria Financeira (DRE) *</label>
-              <select id="nl-cat" class="form-control" required>${optionsCat}</select>
+              <label class="form-label" for="nl-cat">Categoria Financeira (DRE) *</label>
+              <select id="nl-cat" class="form-control" required>
+                <option value="">SELECIONE A CATEGORIA...</option>
+              </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Data de Vencimento *</label>
+              <label class="form-label" for="nl-venc">${isExtrato ? 'Data do Pagamento / Movimentação *' : 'Data de Vencimento *'}</label>
               <input type="date" id="nl-venc" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
             <div class="form-group">
-              <label class="form-label">Conta Bancária</label>
-              <select id="nl-conta" class="form-control">${optionsContas}</select>
+              <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
+              <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
             </div>
             <div class="form-group">
-              <label class="form-label">Meio de Pagamento</label>
+              <label class="form-label" for="nl-meio">Meio de Pagamento</label>
               <select id="nl-meio" class="form-control">${optionsMeios}</select>
             </div>
           </div>
         </form>
       `,
       onConfirm: async () => {
-        const tipo_lancamento = document.getElementById('nl-tipo').value;
-        const valor = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor').value);
-        const descricao = document.getElementById('nl-desc').value.trim();
-        const categoria_id = document.getElementById('nl-cat').value;
-        const data_vencimento = document.getElementById('nl-venc').value;
-        const conta_id = document.getElementById('nl-conta').value || null;
-        const meio_pagamento_id = document.getElementById('nl-meio').value || null;
+        const tipo_lancamento = document.getElementById('nl-tipo')?.value;
+        const valor = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
+        const descricao = document.getElementById('nl-desc')?.value.trim();
+        const categoria_id = document.getElementById('nl-cat')?.value;
+        const data_vencimento = document.getElementById('nl-venc')?.value;
+        const conta_id = document.getElementById('nl-conta')?.value || null;
+        const meio_pagamento_id = document.getElementById('nl-meio')?.value || null;
 
         if (!descricao || valor <= 0 || !categoria_id) {
-          window.EMCUtils.showToast('Preencha os campos obrigatórios.', 'warning');
+          window.EMCUtils.showToast('Preencha os campos obrigatórios (Descrição, Valor e Categoria).', 'warning');
           return false;
         }
 
+        if (isExtrato && !conta_id) {
+          window.EMCUtils.showToast('Selecione a Conta Bancária / Caixa para o lançamento no Extrato.', 'warning');
+          return false;
+        }
+
+        const payload = {
+          tipo_lancamento,
+          valor,
+          descricao,
+          categoria: parseInt(categoria_id, 10),
+          categoria_id: parseInt(categoria_id, 10),
+          data_vencimento,
+          conta: conta_id ? parseInt(conta_id, 10) : null,
+          conta_id: conta_id ? parseInt(conta_id, 10) : null,
+          meio_pagamento: meio_pagamento_id ? parseInt(meio_pagamento_id, 10) : null,
+          meio_pagamento_id: meio_pagamento_id ? parseInt(meio_pagamento_id, 10) : null
+        };
+
+        if (isExtrato) {
+          payload.status_pagamento = 'PAGO';
+          payload.data_pagamento = `${data_vencimento}T12:00:00`;
+        }
+
         try {
-          await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS, {
-            tipo_lancamento, valor, descricao, categoria_id, data_vencimento, conta_id, meio_pagamento_id
-          });
+          await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS, payload);
           window.EMCUtils.showToast('Lançamento cadastrado com sucesso!', 'success');
-          this.render(document.getElementById('app-root'));
+          if (this.currentTab === 'extrato') {
+            this.carregarListaExtrato();
+          } else if (this.currentTab === 'pagar') {
+            this.carregarListaContasPagar();
+          } else if (this.currentTab === 'receber') {
+            this.carregarListaContasReceber();
+          } else {
+            this.render(document.getElementById('app-root'));
+          }
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao criar lançamento.', 'error');
@@ -771,6 +822,130 @@ window.FinanceiroView = {
         }
       }
     });
+
+    // Função de Filtragem Dinâmica de Categorias com base no Tipo de Movimentação selecionado
+    const atualizarCategoriasDinamicas = (tipoMov) => {
+      const selCat = document.getElementById('nl-cat');
+      if (!selCat) return;
+
+      const valorAnterior = selCat.value;
+      let filtradas = [];
+
+      if (tipoMov === 'SAIDA') {
+        filtradas = listaCat.filter((c) => c.tipo === 'DESPESA' || c.tipo === 'AMBOS');
+      } else if (tipoMov === 'ENTRADA') {
+        filtradas = listaCat.filter((c) => c.tipo === 'RECEITA' || c.tipo === 'AMBOS');
+      } else {
+        filtradas = listaCat;
+      }
+
+      let opts = '<option value="">SELECIONE A CATEGORIA...</option>';
+      filtradas.forEach((cat) => {
+        const tag = cat.tipo === 'AMBOS' ? '[AMBOS]' : (cat.tipo === 'RECEITA' ? '[ENTRADA]' : '[SAÍDA]');
+        opts += `<option value="${cat.id}">${window.EMCUtils.escapeHtml(cat.nome)} ${tag}</option>`;
+      });
+      selCat.innerHTML = opts;
+
+      // Mantém a categoria selecionada se ela for permitida no novo tipo
+      if (valorAnterior && filtradas.some((c) => String(c.id) === String(valorAnterior))) {
+        selCat.value = valorAnterior;
+      }
+    };
+
+    // Popula imediatamente no início e adiciona o evento de troca
+    atualizarCategoriasDinamicas(defaultTipo);
+    document.getElementById('nl-tipo')?.addEventListener('change', (e) => {
+      atualizarCategoriasDinamicas(e.target.value);
+    });
+  },
+
+  async abrirModalEditarLancamento(lancamentoId) {
+    try {
+      const [lancamento, categorias] = await Promise.all([
+        window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}${lancamentoId}/`),
+        window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}?ativo=true`)
+      ]);
+
+      const listaCat = categorias.results || categorias || [];
+      const tipoLanc = lancamento.tipo_lancamento;
+      let catsPermitidas = [];
+
+      if (tipoLanc === 'SAIDA') {
+        catsPermitidas = listaCat.filter((c) => c.tipo === 'DESPESA' || c.tipo === 'AMBOS');
+      } else if (tipoLanc === 'ENTRADA') {
+        catsPermitidas = listaCat.filter((c) => c.tipo === 'RECEITA' || c.tipo === 'AMBOS');
+      } else {
+        catsPermitidas = listaCat;
+      }
+
+      let optionsCat = '<option value="">SELECIONE A CATEGORIA...</option>';
+      catsPermitidas.forEach((c) => {
+        const selected = lancamento.categoria === c.id ? 'selected' : '';
+        const tag = c.tipo === 'AMBOS' ? '[AMBOS]' : (c.tipo === 'RECEITA' ? '[ENTRADA]' : '[SAÍDA]');
+        optionsCat += `<option value="${c.id}" ${selected}>${window.EMCUtils.escapeHtml(c.nome)} ${tag}</option>`;
+      });
+
+      window.EMCUtils.openModal({
+        title: `EDITAR / RECLASSIFICAR LANÇAMENTO #${lancamento.id}`,
+        size: 'md',
+        confirmText: 'SALVAR ALTERAÇÕES',
+        content: `
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+            💡 <strong>Reclassificação Contábil:</strong> Altere a categoria deste lançamento para organizar seu fluxo de caixa ou para viabilizar a exclusão de uma categoria que será descontinuada.
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+            <span class="status-chip ${tipoLanc === 'ENTRADA' ? 'success' : 'danger'}">${tipoLanc}</span>
+            <span class="status-chip secondary mono-text">VALOR: ${window.EMCUtils.formatarMoeda(lancamento.valor)}</span>
+            <span class="status-chip info mono-text">CONTA: ${window.EMCUtils.escapeHtml(lancamento.conta_nome || 'NÃO INFORMADA')}</span>
+            <span class="status-chip secondary mono-text">STATUS: ${lancamento.status_pagamento}</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-lanc-desc">Descrição / Histórico *</label>
+            <input type="text" id="edit-lanc-desc" class="form-control" value="${window.EMCUtils.escapeHtml(lancamento.descricao || '')}" required>
+          </div>
+
+          <div class="form-group" style="margin-top: 12px;">
+            <label class="form-label" for="edit-lanc-cat">Categoria Financeira (DRE) *</label>
+            <select id="edit-lanc-cat" class="form-control" required>
+              ${optionsCat}
+            </select>
+          </div>
+        `,
+        onConfirm: async () => {
+          const descricao = document.getElementById('edit-lanc-desc')?.value.trim();
+          const categoria = parseInt(document.getElementById('edit-lanc-cat')?.value, 10);
+
+          if (!descricao || !categoria) {
+            window.EMCUtils.showToast('Preencha a descrição e selecione a categoria.', 'warning');
+            return false;
+          }
+
+          try {
+            await window.api.patch(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}${lancamentoId}/`, {
+              descricao,
+              categoria,
+              categoria_id: categoria
+            });
+            window.EMCUtils.showToast('Lançamento atualizado com sucesso!', 'success');
+            if (this.currentTab === 'extrato') {
+              this.carregarListaExtrato();
+            } else if (this.currentTab === 'pagar') {
+              this.carregarListaContasPagar();
+            } else if (this.currentTab === 'receber') {
+              this.carregarListaContasReceber();
+            }
+            return true;
+          } catch (err) {
+            window.EMCUtils.showToast(err.message || 'Erro ao atualizar lançamento.', 'error');
+            return false;
+          }
+        }
+      });
+    } catch (err) {
+      window.EMCUtils.showToast(err.message || 'Erro ao carregar dados do lançamento.', 'error');
+    }
   },
 
   // ==========================================================================

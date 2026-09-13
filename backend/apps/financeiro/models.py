@@ -138,8 +138,9 @@ class CategoriaFinanceira(BaseModel):
     Árvore Hierárquica de Categorias e Subcategorias para DRE e Classificação Financeira.
     """
     TIPO_CHOICES = [
-        ('RECEITA', 'RECEITA'),
-        ('DESPESA', 'DESPESA'),
+        ('RECEITA', 'RECEITA (ENTRADA)'),
+        ('DESPESA', 'DESPESA (SAÍDA)'),
+        ('AMBOS', 'AMBOS (ENTRADA E SAÍDA)'),
         ('TRANSFERENCIA', 'TRANSFERÊNCIA (NEUTRA PRO DRE)'),
     ]
 
@@ -161,6 +162,10 @@ class CategoriaFinanceira(BaseModel):
         related_name='subcategorias',
         db_column='categoria_pai_id',
         verbose_name="Categoria Pai"
+    )
+    ativo = models.BooleanField(
+        default=True,
+        verbose_name="Categoria Ativa"
     )
 
     class Meta:

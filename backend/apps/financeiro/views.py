@@ -54,7 +54,8 @@ from apps.financeiro.services_cartao import (
 )
 from core.permissions import (
     HasCadastrosFinanceirosAccess,
-    HasTesourariaAccess
+    HasTesourariaAccess,
+    HasCadastrosFinanceirosOuLeituraTesouraria
 )
 
 
@@ -62,13 +63,14 @@ class CategoriaFinanceiraViewSet(viewsets.ModelViewSet):
     """
     CRUD completo da Árvore de Categorias Financeiras.
     Protegido pelo toggle 'cadastros_financeiros' e governança de Soft Delete.
+    Permite leitura segura para usuários com toggle 'acesso_tesouraria'.
     """
     queryset = CategoriaFinanceira.objects.all().select_related('categoria_pai')
     serializer_class = CategoriaFinanceiraSerializer
-    permission_classes = [HasCadastrosFinanceirosAccess]
+    permission_classes = [HasCadastrosFinanceirosOuLeituraTesouraria]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['nome']
-    ordering_fields = ['nome', 'tipo', 'id', 'created_at']
+    ordering_fields = ['nome', 'tipo', 'ativo', 'id', 'created_at']
     ordering = ['nome']
 
     def get_queryset(self):
@@ -76,6 +78,23 @@ class CategoriaFinanceiraViewSet(viewsets.ModelViewSet):
         tipo = self.request.query_params.get('tipo')
         if tipo:
             qs = qs.filter(tipo=tipo.upper())
+
+        # Filtro por aplicação permitida (SAIDA -> DESPESA/AMBOS; ENTRADA -> RECEITA/AMBOS)
+        aplicacao = self.request.query_params.get('aplicacao') or self.request.query_params.get('tipo_lancamento')
+        if aplicacao:
+            app_upper = aplicacao.upper()
+            if app_upper in ['SAIDA', 'SAÍDA', 'DESPESA']:
+                qs = qs.filter(tipo__in=['DESPESA', 'AMBOS'])
+            elif app_upper in ['ENTRADA', 'RECEITA']:
+                qs = qs.filter(tipo__in=['RECEITA', 'AMBOS'])
+            elif app_upper == 'TRANSFERENCIA':
+                qs = qs.filter(tipo='TRANSFERENCIA')
+
+        # Filtro por status ativo
+        ativo = self.request.query_params.get('ativo')
+        if ativo is not None:
+            is_ativo = str(ativo).lower() in ['true', '1', 't']
+            qs = qs.filter(ativo=is_ativo)
 
         categoria_pai = self.request.query_params.get('categoria_pai')
         if categoria_pai:
@@ -87,14 +106,17 @@ class CategoriaFinanceiraViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_destroy(self, instance):
-        if instance.subcategorias.filter(deleted_at__isnull=True).exists():
+        sub_count = instance.subcategorias.filter(deleted_at__isnull=True).count()
+        if sub_count > 0:
             raise ValidationError(
-                "Não é possível inativar esta Categoria Financeira pois existem subcategorias ativas vinculadas a ela."
+                f"Não é possível excluir a categoria '{instance.nome}' pois existem {sub_count} subcategorias ativas vinculadas a ela."
             )
 
-        if instance.lancamentos.filter(deleted_at__isnull=True).exists():
+        lanc_count = instance.lancamentos.filter(deleted_at__isnull=True).count()
+        if lanc_count > 0:
             raise ValidationError(
-                "Não é possível inativar esta Categoria Financeira pois ela possui lançamentos financeiros associados."
+                f"Não é possível excluir a categoria '{instance.nome}' pois ela possui {lanc_count} lançamento(s) financeiro(s) associado(s). "
+                "Para descontinuá-la com segurança, inative a categoria ou reclassifique seus lançamentos."
             )
 
         user_id = self.request.user.id if self.request.user and self.request.user.is_authenticated else None
@@ -366,7 +388,7 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
     serializer_class = LancamentoFinanceiroSerializer
     permission_classes = [HasTesourariaAccess]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['descricao', 'categoria__nome', 'conta__nome', 'motivo_cancelamento']
+    search_fields = ['=id', 'descricao', 'categoria__nome', 'conta__nome', 'motivo_cancelamento']
     ordering_fields = ['data_vencimento', 'data_pagamento', 'valor', 'status_pagamento', 'id', 'created_at']
     ordering = ['-data_vencimento', '-id']
 
