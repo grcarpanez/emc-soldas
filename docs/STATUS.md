@@ -390,6 +390,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - Seletor de Tipo de Movimentação (`#filtro-extrato-tipo`): ampliado de `160px` para `190px` (min-width `175px`), acomodando com folga `"TODOS OS TIPOS"`, `"RECEITAS (+)"` e `"DESPESAS (-)"`.
     - Campo de Busca Textual (`#filtro-extrato-busca`): expansivo (`flex: 1; min-width: 200px;`) preenchendo o espaço remanescente com equilíbrio visual.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.18` em `frontend/sw.js` e sufixos de cache-busting `?v=4.18` em `frontend/index.html`.
+- [x] **Conciliação Bancária Visual com Linhas de Match Bézier e Operação Dual-Mode (PWA v4.19):**
+  - **Motor SVG Nativo de Conexões Curvas (Bézier Cúbicas):** Implementação de overlay responsivo com cálculo dinâmico via `getBoundingClientRect()` conectando nós industriais das transações do extrato aos cards correspondentes do ERP.
+  - **Feedback Semântico Visual:** Linhas verdes contínuas para correspondências confirmadas, linhas âmbar tracejadas para sugestões prováveis e realce instantâneo no hover/foco. Ocultação automática em telas menores (<900px) para ergonomia mobile.
+  - **Operação Dual-Mode (Modo Duplo):**
+    - *Modo 1 (Conferência & Match):* Conciliação de lançamentos já existentes no ERP, com suporte a Auto-Match 1:1, seleção manual, desconciliação e criação de lançamento rápido no ato para sobras do extrato.
+    - *Modo 2 (Importação Total & Lote):* Espelhamento automático de todas as linhas do extrato como pré-lançamentos do ERP com linhas conectivas, permitindo ajuste inline da descrição e Categoria DRE, descarte individual com botão `✕` (e restauração `↩`), e geração em lote com 1 clique.
+  - **Endpoint e Atomicidade no Backend:** Criação da rota `POST /api/conciliacao/importacao-lote/` com `ImportacaoLoteSerializer`, validação contra o limite de cheque especial da conta bancária, execução atômica via `transaction.atomic()`, quitação imediata (`status_pagamento='PAGO'`), marcação `is_conciliado=True` e auditoria perpétua.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.19` em `frontend/sw.js` e sufixos de cache-busting `?v=4.19` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

@@ -598,3 +598,116 @@ def obter_relatorio_divergencias(
             'itens': sobras_erp,
         },
     }
+
+
+def executar_importacao_lote(
+    conta_id: int,
+    lancamentos_dados: List[Dict[str, Any]],
+    user=None
+) -> Dict[str, Any]:
+    """
+    Cria, liquida e concilia em lote uma lista de movimentações bancárias geradas
+    a partir do extrato (Modo Importação Total & Geração em Lote).
+    Opera em transação atômica, atualiza o saldo real da conta bancária e registra
+    auditoria perpétua.
+    """
+    if not lancamentos_dados:
+        raise ValidationError({"lancamentos": "Nenhum lançamento informado para importação em lote."})
+
+    try:
+        conta = ContaBancaria.objects.get(id=conta_id, deleted_at__isnull=True)
+    except ContaBancaria.DoesNotExist:
+        raise NotFound("Conta bancária informada não foi encontrada ou está inativa.")
+
+    # Busca categorias válidas em massa
+    cat_ids = {item['categoria_id'] for item in lancamentos_dados}
+    categorias_map = {
+        cat.id: cat for cat in CategoriaFinanceira.objects.filter(id__in=cat_ids, deleted_at__isnull=True)
+    }
+
+    # Meio de pagamento padrão se não fornecido
+    meio_padrao = MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True).first()
+
+    now = timezone.now()
+    user_id = getattr(user, 'id', None)
+
+    total_entradas = Decimal('0.00')
+    total_saidas = Decimal('0.00')
+    lancamentos_criados = []
+
+    with transaction.atomic():
+        for item in lancamentos_dados:
+            cat_id = item['categoria_id']
+            if cat_id not in categorias_map:
+                raise ValidationError({"categoria_id": f"Categoria financeira #{cat_id} não encontrada ou inativa."})
+
+            categoria = categorias_map[cat_id]
+            tipo = item['tipo_lancamento'].upper()
+            valor = Decimal(str(item['valor']))
+            descricao = sanitizar_texto_maiusculo(item['descricao'])
+            dt_pagto = item['data_pagamento']
+
+            if isinstance(dt_pagto, str):
+                try:
+                    dt_pagto = datetime.fromisoformat(dt_pagto.replace('Z', '+00:00'))
+                except ValueError:
+                    dt_pagto = now
+
+            dt_venc = dt_pagto.date() if isinstance(dt_pagto, datetime) else dt_pagto
+
+            # Meio de pagamento
+            meio = meio_padrao
+            if item.get('meio_pagamento_id'):
+                meio = MeioPagamento.objects.filter(id=item['meio_pagamento_id'], deleted_at__isnull=True).first() or meio_padrao
+
+            # Atualiza totalizadores de saldo
+            if tipo == 'ENTRADA':
+                total_entradas += valor
+            else:
+                total_saidas += valor
+
+            # Cria lançamento já liquidado e conciliado
+            lanc = LancamentoFinanceiro.objects.create(
+                conta=conta,
+                categoria=categoria,
+                meio_pagamento=meio,
+                tipo_lancamento=tipo,
+                descricao=descricao,
+                valor=valor,
+                data_vencimento=dt_venc,
+                data_pagamento=dt_pagto,
+                status_pagamento='PAGO',
+                is_conciliado=True,
+                data_conciliacao=now,
+                conciliado_por=user,
+                created_by_id=user_id,
+                updated_by_id=user_id
+            )
+            lancamentos_criados.append(lanc)
+
+        # Impacto consolidado no saldo real da conta
+        delta_saldo = total_entradas - total_saidas
+        novo_saldo = conta.saldo + delta_saldo
+        limite_disponivel = -conta.limite_credito
+
+        if novo_saldo < limite_disponivel:
+            raise ValidationError(
+                f"Saldo insuficiente na conta '{conta.nome}' para processar a importação em lote. "
+                f"Saldo Atual: R$ {conta.saldo}, Saídas: R$ {total_saidas}, Entradas: R$ {total_entradas}, "
+                f"Limite Especial: R$ {conta.limite_credito}."
+            )
+
+        conta.saldo = novo_saldo
+        conta.updated_by_id = user_id
+        conta.save(update_fields=['saldo', 'updated_at', 'updated_by_id'])
+
+    return {
+        'status': 'sucesso',
+        'mensagem': f"{len(lancamentos_criados)} lançamento(s) gerado(s) e conciliado(s) em lote com sucesso!",
+        'total_processados': len(lancamentos_criados),
+        'total_entradas': float(total_entradas),
+        'total_saidas': float(total_saidas),
+        'novo_saldo_conta': float(conta.saldo),
+        'lancamentos_ids': [l.id for l in lancamentos_criados]
+    }
+

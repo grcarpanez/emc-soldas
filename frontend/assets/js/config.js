@@ -104,7 +104,8 @@ const CONFIG = {
       MATCH_SUGESTOES: '/conciliacao/match-sugestoes/',
       CONFIRMAR: '/conciliacao/confirmar/',
       LANCAMENTO_RAPIDO: '/conciliacao/lancamento-rapido/',
-      DIVERGENCIAS: '/conciliacao/divergencias/'
+      DIVERGENCIAS: '/conciliacao/divergencias/',
+      IMPORTACAO_LOTE: '/conciliacao/importacao-lote/'
     },
     ADMINISTRACAO: {
       CONFIGURACOES_GLOBAIS: '/configuracoes-globais/',

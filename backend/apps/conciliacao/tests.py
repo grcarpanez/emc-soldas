@@ -389,3 +389,57 @@ VERSION:102
 
         response = self.client.post('/api/conciliacao/confirmar/', {'lancamento_ids': [1], 'conta_id': 1})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_importacao_lote_com_sucesso(self):
+        """Testa a geração em lote de lançamentos a partir do extrato com conciliação automática."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+        saldo_inicial = self.conta.saldo
+
+        payload = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'fitid': 'LOTE_TEST_001',
+                    'data_pagamento': '2026-08-20T12:00:00Z',
+                    'descricao': 'TARIFA BANCARIA LOTE',
+                    'valor': '45.00',
+                    'tipo_lancamento': 'SAIDA',
+                    'categoria_id': self.categoria_insumos.id,
+                    'documento': 'DOCLOTE1'
+                },
+                {
+                    'fitid': 'LOTE_TEST_002',
+                    'data_pagamento': '2026-08-21T14:30:00Z',
+                    'descricao': 'DEPOSITO CLIENTE LOTE',
+                    'valor': '2500.00',
+                    'tipo_lancamento': 'ENTRADA',
+                    'categoria_id': self.categoria_receita.id,
+                    'documento': 'DOCLOTE2'
+                }
+            ]
+        }
+
+        response = self.client.post('/api/conciliacao/importacao-lote/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        dados = response.json()
+        self.assertEqual(dados['status'], 'sucesso')
+        self.assertEqual(dados['total_processados'], 2)
+
+        self.conta.refresh_from_db()
+        # Saldo inicial + (-45.00) + (+2500.00) = Saldo inicial + 2455.00
+        self.assertEqual(self.conta.saldo, saldo_inicial + Decimal('2455.00'))
+
+        # Verifica se os lançamentos foram criados como PAGO e is_conciliado=True
+        l1 = LancamentoFinanceiro.objects.get(descricao='TARIFA BANCARIA LOTE')
+        self.assertEqual(l1.status_pagamento, 'PAGO')
+        self.assertTrue(l1.is_conciliado)
+        self.assertEqual(l1.valor, Decimal('45.00'))
+        self.assertEqual(l1.tipo_lancamento, 'SAIDA')
+
+        l2 = LancamentoFinanceiro.objects.get(descricao='DEPOSITO CLIENTE LOTE')
+        self.assertEqual(l2.status_pagamento, 'PAGO')
+        self.assertTrue(l2.is_conciliado)
+        self.assertEqual(l2.valor, Decimal('2500.00'))
+        self.assertEqual(l2.tipo_lancamento, 'ENTRADA')
+

@@ -14,7 +14,8 @@ from apps.conciliacao.serializers import (
     DesconciliarSerializer,
     LancamentoRapidoSerializer,
     TrocarContaSerializer,
-    DivergenciasQuerySerializer
+    DivergenciasQuerySerializer,
+    ImportacaoLoteSerializer
 )
 from apps.conciliacao.services import (
     processar_extrato_split_screen,
@@ -22,7 +23,8 @@ from apps.conciliacao.services import (
     desconciliar_lancamento,
     realizar_lancamento_rapido,
     trocar_conta_lancamento,
-    obter_relatorio_divergencias
+    obter_relatorio_divergencias,
+    executar_importacao_lote
 )
 from apps.conciliacao.parsers import ExtratoParserException
 
@@ -201,3 +203,28 @@ class DivergenciasView(views.APIView):
             data_fim=data_fim
         )
         return Response(resultado, status=status.HTTP_200_OK)
+
+
+class ImportacaoLoteView(views.APIView):
+    """
+    POST /api/conciliacao/importacao-lote/
+    Efetiva a importação em lote a partir do extrato bancário, criando e conciliando
+    todos os lançamentos financeiros no ERP de forma atômica e atualizando o saldo bancário.
+    """
+    permission_classes = [permissions.IsAuthenticated, HasTesourariaAccess]
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        serializer = ImportacaoLoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        conta_id = serializer.validated_data['conta_id']
+        lancamentos_dados = serializer.validated_data['lancamentos']
+
+        resultado = executar_importacao_lote(
+            conta_id=conta_id,
+            lancamentos_dados=lancamentos_dados,
+            user=request.user
+        )
+        return Response(resultado, status=status.HTTP_201_CREATED)
+

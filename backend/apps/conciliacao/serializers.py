@@ -93,3 +93,26 @@ class DivergenciasQuerySerializer(serializers.Serializer):
     conta_id = serializers.IntegerField(required=False, allow_null=True)
     data_inicio = serializers.DateField(required=False, allow_null=True)
     data_fim = serializers.DateField(required=False, allow_null=True)
+
+
+class ItemImportacaoLoteSerializer(serializers.Serializer):
+    """Valida um item individual da importação em lote a partir do extrato."""
+    descricao = serializers.CharField(max_length=255, required=True)
+    valor = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'), required=True)
+    tipo_lancamento = serializers.ChoiceField(choices=['ENTRADA', 'SAIDA'], required=True)
+    categoria_id = serializers.IntegerField(min_value=1, required=True)
+    data_pagamento = serializers.DateTimeField(required=True)
+    documento = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
+    fitid = serializers.CharField(max_length=150, required=False, allow_blank=True, allow_null=True)
+    meio_pagamento_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class ImportacaoLoteSerializer(serializers.Serializer):
+    """Valida o payload mestre de importação de lançamentos em lote a partir do extrato."""
+    conta_id = serializers.IntegerField(min_value=1, required=True)
+    lancamentos = serializers.ListField(
+        child=ItemImportacaoLoteSerializer(),
+        allow_empty=False,
+        help_text="Lista de propostas de lançamentos financeiros a gerar e conciliar no ato."
+    )
+
