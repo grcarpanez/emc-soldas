@@ -237,8 +237,6 @@ window.ConciliacaoView = {
     // Para cada transação do extrato que ainda não é conciliada, cria um pré-lançamento
     this.preLancamentosImportacao = this.transacoesExtrato.map((t, idx) => {
       const isEntrada = t.tipo === 'ENTRADA' || (parseFloat(t.valor) || 0) > 0;
-      const catsFiltradas = this.categoriasFinanceiras.filter(c => c.tipo === (isEntrada ? 'RECEITA' : 'DESPESA'));
-      const catPadrao = catsFiltradas.length > 0 ? catsFiltradas[0].id : (this.categoriasFinanceiras[0]?.id || 1);
 
       return {
         id_temp: idx,
@@ -248,7 +246,7 @@ window.ConciliacaoView = {
         tipo_lancamento: isEntrada ? 'ENTRADA' : 'SAIDA',
         descricao: t.descricao || t.memo || 'MOVIMENTAÇÃO BANCÁRIA',
         documento: t.documento || '',
-        categoria_id: catPadrao,
+        categoria_id: null,
         descartado: false
       };
     });
@@ -456,10 +454,12 @@ window.ConciliacaoView = {
     this.preLancamentosImportacao.forEach((p, idx) => {
       const isEntrada = p.tipo_lancamento === 'ENTRADA';
       const isDescartado = p.descartado;
+      const temCategoria = !!p.categoria_id;
 
-      // Monta opções de categorias
-      let optionsCat = '';
-      this.categoriasFinanceiras.forEach(cat => {
+      // Monta opções de categorias com opção em branco no topo
+      let optionsCat = '<option value="">-- SELECIONE A CATEGORIA DRE * --</option>';
+      const catsFiltradas = this.categoriasFinanceiras.filter(c => c.tipo === (isEntrada ? 'RECEITA' : 'DESPESA') || c.tipo === 'AMBOS');
+      catsFiltradas.forEach(cat => {
         optionsCat += `<option value="${cat.id}" ${cat.id === p.categoria_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(cat.nome)}</option>`;
       });
 
@@ -467,35 +467,39 @@ window.ConciliacaoView = {
         <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
-            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">
+          <!-- Linha 1 (Cabeçalho): Identificador/Data na esquerda e Valor com Botão ✕ Alinhado na direita -->
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;">
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
               PRÉ-LANÇAMENTO #${idx + 1} • ${window.EMCUtils.formatarDataPtBr(p.data)}
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               <span class="mono-text font-bold" style="color: ${isEntrada ? 'var(--color-success)' : 'var(--color-error)'}; font-size: 13px;">
                 ${isEntrada ? '+' : '-'} ${window.EMCUtils.formatarMoeda(p.valor)}
               </span>
               ${!isDescartado ? `
-                <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 11px;" title="Descartar este lançamento" onclick="window.ConciliacaoView.descartarPreLancamento(${idx})">
+                <button type="button" class="btn-descarte-pre-lancamento" title="Descartar este lançamento da importação" onclick="window.ConciliacaoView.descartarPreLancamento(${idx})">
                   ✕
                 </button>
               ` : `
-                <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 11px;" title="Restaurar este lançamento" onclick="window.ConciliacaoView.restaurarPreLancamento(${idx})">
+                <button type="button" class="btn-restaurar-pre-lancamento" title="Restaurar este lançamento para a importação" onclick="window.ConciliacaoView.restaurarPreLancamento(${idx})">
                   ↩
                 </button>
               `}
             </div>
           </div>
 
-          <!-- Campos inline de Edição do Pré-Lançamento -->
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+          <!-- Linha 2 (Inputs): Grid com Descrição e Select de Categoria DRE -->
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; width: 100%;">
             <div>
-              <input type="text" class="form-control" style="font-size: 12px; padding: 4px 8px;" 
+              <input type="text" class="form-control" style="font-size: 12px; padding: 5px 8px; width: 100%;" 
                      value="${window.EMCUtils.escapeHtml(p.descricao)}" 
+                     placeholder="DESCRIÇÃO DO LANÇAMENTO..."
                      onchange="window.ConciliacaoView.atualizarDescricaoPreLancamento(${idx}, this.value)">
             </div>
             <div>
-              <select class="form-control" style="font-size: 12px; padding: 4px 8px;"
+              <select id="select-cat-${idx}" 
+                      class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
+                      style="font-size: 12px; padding: 5px 8px; width: 100%;"
                       onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
                 ${optionsCat}
               </select>
@@ -543,7 +547,16 @@ window.ConciliacaoView = {
 
   atualizarCategoriaPreLancamento(idx, catId) {
     if (this.preLancamentosImportacao[idx]) {
-      this.preLancamentosImportacao[idx].categoria_id = parseInt(catId, 10);
+      this.preLancamentosImportacao[idx].categoria_id = catId ? parseInt(catId, 10) : null;
+      const select = document.getElementById(`select-cat-${idx}`);
+      if (select) {
+        if (this.preLancamentosImportacao[idx].categoria_id) {
+          select.classList.remove('select-categoria-pendente');
+        } else {
+          select.classList.add('select-categoria-pendente');
+        }
+      }
+      this.atualizarBotaoGerarLote();
     }
   },
 
@@ -552,13 +565,32 @@ window.ConciliacaoView = {
     if (!btn) return;
 
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
-    btn.disabled = ativos.length === 0 || !this.contaSelecionadaId;
-    btn.textContent = `⚡ GERAR E CONCILIAR EM LOTE (${ativos.length})`;
+    const pendentes = ativos.filter(p => !p.categoria_id);
+
+    if (ativos.length === 0 || !this.contaSelecionadaId) {
+      btn.disabled = true;
+      btn.textContent = '⚡ GERAR E CONCILIAR EM LOTE (0)';
+      return;
+    }
+
+    if (pendentes.length > 0) {
+      btn.disabled = true;
+      btn.textContent = `⚡ SELECIONE AS CATEGORIAS (${pendentes.length} PENDENTE${pendentes.length > 1 ? 'S' : ''})`;
+    } else {
+      btn.disabled = false;
+      btn.textContent = `⚡ GERAR E CONCILIAR EM LOTE (${ativos.length})`;
+    }
   },
 
   async executarImportacaoLote() {
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
     if (!ativos.length || !this.contaSelecionadaId) return;
+
+    const pendentes = ativos.filter(p => !p.categoria_id);
+    if (pendentes.length > 0) {
+      window.EMCUtils.showToast(`Selecione a categoria contábil (DRE) de todos os ${pendentes.length} lançamento(s) pendente(s) antes de gerar o lote.`, 'warning');
+      return;
+    }
 
     window.EMCUtils.openModal({
       title: 'CONFIRMAÇÃO DE IMPORTAÇÃO EM LOTE',

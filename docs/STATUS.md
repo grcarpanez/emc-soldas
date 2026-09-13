@@ -402,6 +402,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Coerência Visual Ponto a Ponto (Nó a Nó):** Universalização do seletor `.anchor-node` no CSS e adição da classe `.split-item` ao container `.pre-lancamento-card`, posicionando o boton verde perfeitamente na borda esquerda (`left: -5px; top: 50%; transform: translateY(-50%)`) com sombra circular idêntica ao boton de saída da borda direita.
   - **Luz Neon Acelerada por GPU nas Linhas Vetoriais:** Aplicação de `filter: drop-shadow(...)` de camada dupla em `.svg-path-match` e `.svg-path-suggestion`, produzindo uma iluminação neon nítida que acompanha perfeitamente o traçado curvilíneo sem borrões no DOM ou perda de performance.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.20` em `frontend/sw.js` e sufixos de cache-busting `?v=4.20` em `frontend/index.html`.
+- [x] **Alinhamento do Botão de Descarte e Categoria DRE Obrigatória em Branco (PWA v4.21):**
+  - **Reestruturação Vertical do Pré-Lançamento:** Eliminação do esmagamento horizontal com `display: flex !important; flex-direction: column !important; gap: 8px !important;` no `.pre-lancamento-card`, organizando o card em cabeçalho superior (título na esquerda, valor e botão `✕` de 26x24px alinhados no centro à direita) e grid de edição inferior (descrição e select).
+  - **Categoria DRE Inicial em Branco:** Inicialização de `categoria_id: null` com a opção `-- SELECIONE A CATEGORIA DRE * --` no topo do select e destaque de aviso sutil (`.select-categoria-pendente`).
+  - **Validação Proativa no Botão de Lote:** Bloqueio automático do botão `⚡ GERAR E CONCILIAR EM LOTE` enquanto houver itens ativos sem classificação contábil (`⚡ SELECIONE AS CATEGORIAS (N PENDENTES)`), prevenindo emissão de lançamentos sem destino no DRE.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.21` em `frontend/sw.js` e sufixos de cache-busting `?v=4.21` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
