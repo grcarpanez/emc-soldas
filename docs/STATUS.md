@@ -428,6 +428,7 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.24` em `frontend/sw.js` e sufixos de cache-busting `?v=4.24` em `frontend/index.html`.
 - [x] **Expurgo Operacional e Limpeza do Banco de Dados para Início de Carga Real (Produção):**
   - **Limpeza Segura de Dados Transacionais e Cadastrais de Teste:** Execução atômica via comando de management `reset_banco_para_producao --confirmar` com exclusão em ordem referencial de FKs (`LancamentoFinanceiro`, `Fatura`, `Orcamento`, `DocumentoFiscalCompra`, `Produto`, `Item`, `Equipamento`, `ClienteFornecedor` e contas bancárias extras).
+  - **Reset de Contadores AUTO_INCREMENT para 1:** Instrução nativa `ALTER TABLE ... AUTO_INCREMENT = 1` aplicada a todas as 16 tabelas operacionais esvaziadas, garantindo que o primeiro cliente, orçamento, fatura e documento comecem estritamente no ID #1.
   - **Preservação Rígida de Tabelas Mestras e Domínio:** Dicionários Centrais (`UOM` e `Atributos`), Categorias Contábeis DRE (13 categorias), Meios e Regras Comerciais de Pagamento, Configurações Globais e usuário Administrador Master (`admin@emcsoldas.com.br`) com seus 10 toggles dinâmicos.
   - **Contas Bancárias Zeradas:** As contas padrão estruturais (`CAIXA FISICO DA OFICINA` e `CONTA BANCARIA PRINCIPAL`) foram preservadas e inicializadas com saldo exato de `R$ 0,00`, prontas para receber os extratos bancários de 02/2025.
 

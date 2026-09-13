@@ -1,7 +1,6 @@
-"""Comando para limpar dados operacionais e de teste mantendo sementes e estruturas de domënio."""
 from django.core.management.base import BaseCommand
 from django.core.management import call_command
-from django.db import transaction
+from django.db import transaction, connection
 
 from apps.financeiro.models import LancamentoFinanceiro, ContaBancaria
 from apps.faturamento.models import Fatura, FaturaPropostaPagamento
@@ -81,6 +80,33 @@ class Command(BaseCommand):
                 conta.deleted_at = None
                 conta.save(update_fields=['saldo', 'deleted_at'])
             self.stdout.write("- Contas bancarias padrao preservadas e saldo zerado para R$ 0,00.")
+
+            # 9. Reset dos contadores de ID (AUTO_INCREMENT = 1) nas tabelas operacionais esvaziadas
+            tabelas_reset_id = [
+                'clientes_fornecedores',
+                'clientes_contatos',
+                'equipamentos',
+                'cliente_equipamento',
+                'itens',
+                'item_atributos_valores',
+                'produtos',
+                'ficha_tecnica',
+                'orcamentos',
+                'orcamento_itens',
+                'orcamento_propostas_pagamento',
+                'faturas',
+                'fatura_propostas_pagamento',
+                'lancamentos_financeiros',
+                'documentos_fiscais_compra',
+                'nota_compra_itens',
+            ]
+            with connection.cursor() as cursor:
+                for tabela in tabelas_reset_id:
+                    try:
+                        cursor.execute(f"ALTER TABLE `{tabela}` AUTO_INCREMENT = 1;")
+                    except Exception as e:
+                        self.stdout.write(self.style.WARNING(f"Aviso ao resetar AUTO_INCREMENT de {tabela}: {e}"))
+            self.stdout.write(self.style.SUCCESS("- Contadores AUTO_INCREMENT das tabelas operacionais reiniciados em 1."))
 
         self.stdout.write(self.style.SUCCESS("Dados transacionais expurgados com sucesso!"))
         self.stdout.write("Garantindo integridade dos dados mestres com seed_initial_data...")
