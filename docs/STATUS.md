@@ -398,6 +398,10 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - *Modo 2 (Importação Total & Lote):* Espelhamento automático de todas as linhas do extrato como pré-lançamentos do ERP com linhas conectivas, permitindo ajuste inline da descrição e Categoria DRE, descarte individual com botão `✕` (e restauração `↩`), e geração em lote com 1 clique.
   - **Endpoint e Atomicidade no Backend:** Criação da rota `POST /api/conciliacao/importacao-lote/` com `ImportacaoLoteSerializer`, validação contra o limite de cheque especial da conta bancária, execução atômica via `transaction.atomic()`, quitação imediata (`status_pagamento='PAGO'`), marcação `is_conciliado=True` e auditoria perpétua.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.19` em `frontend/sw.js` e sufixos de cache-busting `?v=4.19` em `frontend/index.html`.
+- [x] **Alinhamento dos Nós Âncora e Luz Neon nas Linhas Bézier da Conciliação (PWA v4.20):**
+  - **Coerência Visual Ponto a Ponto (Nó a Nó):** Universalização do seletor `.anchor-node` no CSS e adição da classe `.split-item` ao container `.pre-lancamento-card`, posicionando o boton verde perfeitamente na borda esquerda (`left: -5px; top: 50%; transform: translateY(-50%)`) com sombra circular idêntica ao boton de saída da borda direita.
+  - **Luz Neon Acelerada por GPU nas Linhas Vetoriais:** Aplicação de `filter: drop-shadow(...)` de camada dupla em `.svg-path-match` e `.svg-path-suggestion`, produzindo uma iluminação neon nítida que acompanha perfeitamente o traçado curvilíneo sem borrões no DOM ou perda de performance.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.20` em `frontend/sw.js` e sufixos de cache-busting `?v=4.20` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

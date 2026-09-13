@@ -464,7 +464,7 @@ window.ConciliacaoView = {
       });
 
       html += `
-        <div class="pre-lancamento-card ${isDescartado ? 'discarded' : ''}" data-pre-index="${idx}">
+        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">

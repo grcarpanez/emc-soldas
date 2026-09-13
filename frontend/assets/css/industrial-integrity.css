@@ -809,13 +809,15 @@ input[type="file"].form-control::file-selector-button:hover {
   height: 100%;
   pointer-events: none;
   z-index: 5;
+  overflow: visible;
 }
 
-.split-item {
+.split-item,
+.pre-lancamento-card {
   position: relative;
 }
 
-.split-item .anchor-node {
+.anchor-node {
   position: absolute;
   width: 10px;
   height: 10px;
@@ -828,36 +830,45 @@ input[type="file"].form-control::file-selector-button:hover {
   transition: all 0.2s ease;
 }
 
-.split-item .anchor-node.right {
+.anchor-node.right {
   right: -5px;
 }
 
-.split-item .anchor-node.left {
+.anchor-node.left {
   left: -5px;
 }
 
-.split-item .anchor-node.matched {
+.anchor-node.matched {
   background-color: var(--color-success);
-  box-shadow: 0 0 6px rgba(46, 125, 50, 0.8);
+  box-shadow: 0 0 8px rgba(46, 125, 50, 0.9), 0 0 2px #4CAF50;
 }
 
-.split-item .anchor-node.suggested {
+.anchor-node.suggested {
   background-color: var(--color-warning);
-  box-shadow: 0 0 6px rgba(245, 127, 23, 0.8);
+  box-shadow: 0 0 8px rgba(245, 127, 23, 0.9), 0 0 2px #FF9800;
 }
 
-.split-item.highlight-match {
+.split-item.highlight-match,
+.pre-lancamento-card.highlight-match {
   border-color: var(--color-rust-orange) !important;
   background-color: rgba(183, 65, 14, 0.12) !important;
   box-shadow: 0 0 8px rgba(183, 65, 14, 0.4);
 }
 
 .svg-path-match {
-  stroke: var(--color-success);
+  stroke: #4CAF50;
   stroke-width: 2.5;
   fill: none;
-  opacity: 0.85;
-  transition: stroke-width 0.2s, opacity 0.2s;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 3px rgba(76, 175, 80, 0.85)) drop-shadow(0 0 6px rgba(46, 125, 50, 0.45));
+  transition: stroke-width 0.2s, opacity 0.2s, filter 0.2s;
+}
+
+.svg-path-match.highlight {
+  stroke: #66BB6A;
+  stroke-width: 3.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(102, 187, 106, 0.95)) drop-shadow(0 0 10px rgba(76, 175, 80, 0.65));
 }
 
 .svg-path-suggestion {
@@ -865,14 +876,16 @@ input[type="file"].form-control::file-selector-button:hover {
   stroke-width: 2;
   stroke-dasharray: 6, 4;
   fill: none;
-  opacity: 0.85;
-  transition: stroke-width 0.2s, opacity 0.2s;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 3px rgba(245, 127, 23, 0.85)) drop-shadow(0 0 6px rgba(230, 81, 0, 0.45));
+  transition: stroke-width 0.2s, opacity 0.2s, filter 0.2s;
 }
 
-.svg-path-match.highlight,
 .svg-path-suggestion.highlight {
-  stroke-width: 4;
+  stroke: #FFA726;
+  stroke-width: 3;
   opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 167, 38, 0.95)) drop-shadow(0 0 8px rgba(245, 127, 23, 0.65));
 }
 
 .pre-lancamento-card {
