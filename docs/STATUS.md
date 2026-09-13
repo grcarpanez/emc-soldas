@@ -417,6 +417,10 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Classificação Heurística de Categorias DRE:** Sugestão automática de categorias contábeis para Tarifas Bancárias (`TAR`, `IOF`, `DOC/TED`, etc.), Tributos/Guias (`DAS`, `GPS`, `FGTS`, `DARF`, etc.) e Receitas Operacionais para clientes identificados.
   - **Testes Automatizados:** Suíte de conciliação enriquecida (`test_reconhecimento_parceiro_fatura_iss_retido_e_duplicidade`) com 100% de aprovação (72 testes automatizados acumulados em conciliação, cadastros, administração e financeiro).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.22` em `frontend/sw.js` e sufixos de cache-busting `?v=4.22` em `frontend/index.html`.
+- [x] **Padronização e Contraste Industrial Escuro nas Comboboxes de Categoria DRE (PWA v4.23):**
+  - **Eliminação do Fundo Branco:** Refatoração de `.select-categoria-pendente` e `select.form-control option` para assegurar fundo escuro industrial (`var(--color-surface-container-low)` / `#1b1c1c`) e tipografia clara com legibilidade nítida em qualquer estado (selecionado ou pendente).
+  - **Sinalização Sutil de Pendência:** A pendência de seleção de categoria agora é indicada exclusivamente pela borda âmbar (`border-color: var(--color-warning)`), sem alterar a tonalidade de fundo nem comprometer o contraste no desktop ou mobile.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.23` em `frontend/sw.js` e sufixos de cache-busting `?v=4.23` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

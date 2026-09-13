@@ -229,10 +229,17 @@ p, span, label, input, textarea, select {
 
 select.form-control {
   appearance: none;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23A5A9B4' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   padding-right: 32px;
+}
+
+select.form-control option {
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
 }
 
 .form-control:focus {
@@ -964,7 +971,13 @@ input[type="file"].form-control::file-selector-button:hover {
 
 .select-categoria-pendente {
   border-color: var(--color-warning) !important;
-  background-color: rgba(245, 127, 23, 0.05) !important;
+  background-color: var(--color-surface-container-low) !important;
+  color: var(--color-on-surface) !important;
+}
+
+.select-categoria-pendente option {
+  background-color: var(--color-surface-container-low) !important;
+  color: var(--color-on-surface) !important;
 }
 
 /* ==========================================================================
