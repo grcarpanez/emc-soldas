@@ -200,3 +200,43 @@ Todos os controles interativos de nível padrão possuem altura externa total es
   ```
 - **Campos elásticos:** O campo principal de pesquisa textual deve receber `flex: 1; min-width: 200px;` para preencher organicamente o espaço central livre.
 - **Wrappers e Comboboxes:** Devem ter largura fixa ou controlada (ex: `width: 220px; min-width: 180px; flex-shrink: 0;`), garantindo que o texto nunca empurre ou quebre o alinhamento da linha em resoluções desktop normais.
+
+---
+
+## 5. Engenharia e Cálculo de Espaços para Modais e Formulários (Modal Spatial Budget)
+
+Para eliminar transbordos, cortes de botões e deformações em janelas modais, todo modal construído no sistema obedece rigorosamente às seguintes diretrizes matemáticas e de engenharia de layout:
+
+### 5.1 Regra do Teto Vertical (Vertical Budget Rule)
+Todo modal opera com uma restrição máxima de **`max-height: 88vh`** (e `max-height: 94vh` em resoluções móveis/tablets), segregado em três camadas verticais invioláveis:
+1. **Cabeçalho Fixo (`.modal-header`):**
+   - Altura máxima: **52px** (`padding: 12px 20px;`).
+   - Alinhamento vertical centralizado.
+   - Botão de fechar (`.modal-close-btn`): **32px × 32px**, retangular rígido (`0px border-radius`), `display: inline-flex; align-items: center; justify-content: center;`, sem quebra de margem.
+2. **Rodapé Fixo de Ações (`.modal-footer`):**
+   - Altura máxima: **60px** (`padding: 12px 20px; gap: 10px;`).
+   - `flex-shrink: 0;`: os botões de ação ("CANCELAR" e "CONFIRMAR/SALVAR") **jamais** podem ser empurrados para fora da viewport visível.
+3. **Corpo com Rolagem Suave Autocontida (`.modal-body`):**
+   - `flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;`
+   - O scrollbar só se manifesta se o conteúdo ultrapassar a área útil interna, preservando o cabeçalho e os botões de rodapé sempre visíveis e operacionais.
+   - Padding interno: **16px 20px**.
+
+### 5.2 Densidade e Compactação de Formulários em Modais
+- Em modais, o `.form-group` adota espaçamento compacto:
+  - `margin-bottom: 10px;` (em vez dos 16px das telas abertas).
+  - `gap: 4px;` entre o `.form-label` e o `.form-control`.
+- **Proibição de Margens Redundantes:** É terminantemente proibido adicionar `margin-top` inline em wrappers de linha ou formulários dentro de modais. O distanciamento é governado exclusivamente pelas classes estruturais de grid (`.form-grid-2`, `.form-grid-3`, `.form-grid-compact`) com `gap: 10px; margin-bottom: 10px;`.
+- **Banners Explicativos e Avisos:** Devem ter padding compacto (`padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; line-height: 1.4;`).
+
+### 5.3 Proporções Funcionais de Grids em Modais
+- Campos com dados curtos (Data, Hora, CEP, UF, Número de endereço, Valor) **nunca** devem receber partição `1fr` simétrica com campos de texto extenso (Categoria, Cliente, Descrição, Conta Bancária).
+- Exemplos de proporções mandatórias:
+  - `Categoria DRE` + `Data`: `grid-template-columns: 1fr 150px;`
+  - `Conta Bancária` + `Meio de Pagamento`: `grid-template-columns: 1.2fr 1fr;`
+  - `Documento/Tipo` + `Email`: `grid-template-columns: 1fr 2fr;`
+  - `CEP` + `Logradouro` + `Número`: `grid-template-columns: 140px 1fr 100px;`
+
+### 5.4 Obrigatoriedade de Responsividade Universal
+- **Mandato Inegociável:** Todo componente, tela, tabela e modal construído no sistema **deve ser 100% responsivo**.
+- **Colapso Automático de Grids:** Em larguras de tela de **768px ou menores**, todos os formulários e grids (`.form-grid-2`, `.form-grid-3`, `div[style*="grid-template-columns"]`) colapsam compulsoriamente para coluna única (`grid-template-columns: 1fr !important; gap: 10px !important;`).
+- **Dimensões Fluidas de Modais:** Em dispositivos móveis e tablets (`<= 768px`), o `.modal-card` assume `width: 96vw; max-width: 96vw; max-height: 94vh; margin: auto;` com `overflow-x: hidden;`, garantindo que nenhum elemento transborde lateralmente.

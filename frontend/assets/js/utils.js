@@ -492,7 +492,7 @@ function openModal(options = {}) {
     <div class="modal-card modal-size-${size}">
       <div class="modal-header">
         <h3 class="modal-title">${escapeHtml(title)}</h3>
-        <button class="btn btn-ghost btn-sm modal-close-btn" title="Fechar">X</button>
+        <button class="modal-close-btn" title="Fechar (ESC)">✕</button>
       </div>
       <div class="modal-body">
         ${content}

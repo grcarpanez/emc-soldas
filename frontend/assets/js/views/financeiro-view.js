@@ -712,17 +712,17 @@ window.FinanceiroView = {
 
     const modalId = window.EMCUtils.openModal({
       title: modalTitle,
-      size: 'md',
+      size: 'lg',
       confirmText: 'SALVAR LANÇAMENTO',
       content: `
         ${isExtrato ? `
-          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; line-height: 1.4; color: var(--color-on-surface-variant);">
             ⚡ <strong>Regime de Caixa:</strong> Este lançamento registrará uma movimentação já <strong>LIQUIDADA (PAGA)</strong> no Extrato Real, creditando ou debitando o saldo da conta selecionada instantaneamente.
           </div>
         ` : ''}
 
         <form id="form-novo-lanc">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-grid-2">
             <div class="form-group">
               <label class="form-label" for="nl-tipo">Tipo de Movimentação *</label>
               <select id="nl-tipo" class="form-control">
@@ -736,30 +736,30 @@ window.FinanceiroView = {
             </div>
           </div>
 
-          <div class="form-group" style="margin-top: 10px;">
+          <div class="form-group">
             <label class="form-label" for="nl-desc">Descrição / Histórico *</label>
             <input type="text" id="nl-desc" class="form-control" placeholder="EX: PAGAMENTO ENERGIA ELETRICA OFICINA" required>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
-            <div class="form-group">
+          <div style="display: grid; grid-template-columns: 1fr 160px; gap: 10px; margin-bottom: 10px;">
+            <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="nl-cat">Categoria Financeira (DRE) *</label>
               <select id="nl-cat" class="form-control" required>
                 <option value="">SELECIONE A CATEGORIA...</option>
               </select>
             </div>
-            <div class="form-group">
-              <label class="form-label" for="nl-venc">${isExtrato ? 'Data do Pagamento / Movimentação *' : 'Data de Vencimento *'}</label>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="nl-venc">${isExtrato ? 'Data Movimentação *' : 'Data Vencimento *'}</label>
               <input type="date" id="nl-venc" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
-            <div class="form-group">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 4px;">
+            <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
               <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
             </div>
-            <div class="form-group">
+            <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="nl-meio">Meio de Pagamento</label>
               <select id="nl-meio" class="form-control">${optionsMeios}</select>
             </div>
@@ -890,11 +890,11 @@ window.FinanceiroView = {
         size: 'md',
         confirmText: 'SALVAR ALTERAÇÕES',
         content: `
-          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; line-height: 1.4; color: var(--color-on-surface-variant);">
             💡 <strong>Reclassificação Contábil:</strong> Altere a categoria deste lançamento para organizar seu fluxo de caixa ou para viabilizar a exclusão de uma categoria que será descontinuada.
           </div>
 
-          <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
             <span class="status-chip ${tipoLanc === 'ENTRADA' ? 'success' : 'danger'}">${tipoLanc}</span>
             <span class="status-chip secondary mono-text">VALOR: ${window.EMCUtils.formatarMoeda(lancamento.valor)}</span>
             <span class="status-chip info mono-text">CONTA: ${window.EMCUtils.escapeHtml(lancamento.conta_nome || 'NÃO INFORMADA')}</span>
@@ -906,7 +906,7 @@ window.FinanceiroView = {
             <input type="text" id="edit-lanc-desc" class="form-control" value="${window.EMCUtils.escapeHtml(lancamento.descricao || '')}" required>
           </div>
 
-          <div class="form-group" style="margin-top: 12px;">
+          <div class="form-group">
             <label class="form-label" for="edit-lanc-cat">Categoria Financeira (DRE) *</label>
             <select id="edit-lanc-cat" class="form-control" required>
               ${optionsCat}

@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-13 (CRUD de Categorias Financeiras DRE na Administração com Governança, Filtro Dinâmico e Correção do Extrato Real, PWA v4.16)  
+**Última Atualização:** 2026-09-13 (Normatização de Espaços e Responsividade Mandatória de Modais no Design System, Reestruturação do Modal de Lançamento no Extrato Real, PWA v4.17)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -374,6 +374,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Máscara Especializada da Chave NFS-e (50 dígitos):** A função `formatarChaveAcessoNfe` em `utils.js` agora aplica a máscara canônica da NFS-e Nacional (`9999999 9 99999999999999 99999 999999999999999 9999999 9`) quando o documento possui 50 dígitos, e preserva o padrão de 11 grupos de 4 dígitos para as chaves com 44 dígitos (NF-e, NFCom).
   - **Homologação da Bateria de Testes:** Suíte completa com 168 testes automatizados do Django executados com 100% de aprovação (OK em 67.6s).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.14` em `frontend/sw.js` e sufixos de cache-busting `?v=4.14` em `frontend/index.html`.
+- [x] **Normatização de Espaços, Cálculo de Altura e Responsividade Mandatória de Modais (PWA v4.17):**
+  - **Engenharia de Layout e Teto Vertical Mandatório em `docs/DESIGN.md`:** Instituição da Seção 5 ("Engenharia e Cálculo de Espaços para Modais e Formulários - Modal Spatial Budget") e regra de responsividade universal mandatória em 100% dos componentes e modais do sistema.
+  - **Regra do Teto Vertical (88vh / 94vh):** `.modal-card` com `max-height: 88vh; min-height: 0; overflow: hidden;`, cabeçalho fixo (52px), rodapé de ações fixo (60px, `flex-shrink: 0`) e corpo do modal com rolagem suave autocontida (`flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;`).
+  - **Densidade e Compactação de Formulários em Modais:** Em `.modal-body`, o `.form-group` adota `margin-bottom: 10px; gap: 4px;` e eliminação de `margin-top` redundantes inline.
+  - **Botão de Fechar Usinado (`.modal-close-btn`):** Dimensões compactas (32x32px, 0px border-radius), perfeitamente centralizado com ícone `✕` sem colidir nas bordas da moldura do cabeçalho.
+  - **Reestruturação Funcional do Modal de Lançamento no Extrato (`financeiro-view.js`):** Modal reconfigurado para `size: 'lg'`, banner de aviso compacto, grid `1fr 160px` para Categoria + Data de Pagamento (garantindo espaço amplo para nomes longos) e `1.2fr 1fr` para Conta Bancária + Meio de Pagamento, mantendo 100% dos botões visíveis sem transbordo.
+  - **Correção Responsiva na Media Query 768px:** Substituição de classe legada por `.modal-card` com `width: 96vw; max-width: 96vw; max-height: 92vh; margin: auto;` e colapso automático de todos os grids para coluna única (`1fr !important; gap: 10px !important;`).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.17` em `frontend/sw.js` e sufixos de cache-busting `?v=4.17` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

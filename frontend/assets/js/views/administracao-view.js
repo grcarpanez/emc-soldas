@@ -936,7 +936,7 @@ window.AdministracaoView = {
       confirmText: isEdit ? 'ATUALIZAR' : 'CADASTRAR',
       content: `
         ${isEdit ? `
-          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 10px; margin-bottom: 14px; font-size: 11.5px; line-height: 1.5; color: var(--color-on-surface-variant);">
+          <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-primary); padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; line-height: 1.4; color: var(--color-on-surface-variant);">
             ⚠️ <strong>Aviso de Auditoria:</strong> Alterar o nome da categoria atualizará a visualização em relatórios e lançamentos passados. Inversões de natureza (Receita ⇄ Despesa) em categorias com histórico de movimentações são estritamente bloqueadas para proteger o DRE.
           </div>
         ` : ''}
@@ -946,7 +946,7 @@ window.AdministracaoView = {
           <input type="text" id="cat-nome" class="form-control" value="${isEdit ? window.EMCUtils.escapeHtml(cat.nome) : ''}" placeholder="EX: COMBUSTIVEL, ENERGIA ELETRICA, SERVICOS PRESTADOS" required autofocus>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+        <div class="form-grid-2">
           <div class="form-group">
             <label class="form-label" for="cat-tipo">Aplicação Permitida (Natureza) *</label>
             <select id="cat-tipo" class="form-control" required>
@@ -965,7 +965,7 @@ window.AdministracaoView = {
           </div>
         </div>
 
-        <div style="margin-top: 16px; background-color: var(--color-surface-container); padding: 12px; border: 1px solid var(--color-steel-gray);">
+        <div style="margin-top: 10px; background-color: var(--color-surface-container); padding: 10px 12px; border: 1px solid var(--color-steel-gray);">
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
             <input type="checkbox" id="cat-ativo" ${!isEdit || cat.ativo ? 'checked' : ''}>
             <span style="font-size: 13px; font-weight: 600;">Categoria Ativa no Sistema</span>
