@@ -421,6 +421,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Eliminação do Fundo Branco:** Refatoração de `.select-categoria-pendente` e `select.form-control option` para assegurar fundo escuro industrial (`var(--color-surface-container-low)` / `#1b1c1c`) e tipografia clara com legibilidade nítida em qualquer estado (selecionado ou pendente).
   - **Sinalização Sutil de Pendência:** A pendência de seleção de categoria agora é indicada exclusivamente pela borda âmbar (`border-color: var(--color-warning)`), sem alterar a tonalidade de fundo nem comprometer o contraste no desktop ou mobile.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.23` em `frontend/sw.js` e sufixos de cache-busting `?v=4.23` em `frontend/index.html`.
+- [x] **Rolagem Simultânea e Sincronizada das Colunas na Conciliação Bancária (PWA v4.24):**
+  - **Controle Visual na Barra de Ferramentas:** Adição do toggle/checkbox `[x] ROLAGEM SIMULTÂNEA` na barra de controle da tela de conciliação com persistência em tempo real.
+  - **Mecanismo de Scroll Proporcional Bidirecional:** Sincronização inteligente baseada no ratio de deslocamento (`scrollTop / (scrollHeight - clientHeight)`) entre o Extrato Bancário e a Mesa de Triagem/ERP, mantendo os cards equivalentes sempre alinhados lado a lado.
+  - **Prevenção de Loop de Eventos:** Bloqueio através de flag de concorrência (`isSyncingScroll`) e renderização em `requestAnimationFrame`, mantendo o redesenho dinâmico das linhas Bézier cúbicas sem travamento de tela.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.24` em `frontend/sw.js` e sufixos de cache-busting `?v=4.24` em `frontend/index.html`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

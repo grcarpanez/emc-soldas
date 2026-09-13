@@ -18,6 +18,8 @@ window.ConciliacaoView = {
   selectedErpIds: [],
   metaExtrato: null,
   resizeObserver: null,
+  scrollSincronizado: true, // Rolagem simultânea ativada por padrão
+  isSyncingScroll: false,
 
   async render(container) {
     container.innerHTML = `
@@ -52,6 +54,14 @@ window.ConciliacaoView = {
             <button class="btn btn-sm ${this.modoAtual === 'importacao' ? 'btn-primary' : 'btn-secondary'}" id="btn-modo-importacao" style="border: none;">
               MODO 2: IMPORTAÇÃO EM LOTE
             </button>
+          </div>
+
+          <!-- Controle de Rolagem Simultânea das Caixas (Split-Screen Sync) -->
+          <div style="display: flex; align-items: center; gap: 8px; background: var(--color-surface); padding: 4px 10px; border: 1px solid var(--color-steel-gray);">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 0; font-size: 11px; font-weight: 600; font-family: var(--font-mono); color: var(--color-on-surface);">
+              <input type="checkbox" id="check-sync-scroll" ${this.scrollSincronizado ? 'checked' : ''} style="accent-color: var(--color-rust-orange); width: 15px; height: 15px;">
+              <span>ROLAGEM SIMULTÂNEA</span>
+            </label>
           </div>
 
           <!-- Ações Contextuais do Modo Atual -->
@@ -128,6 +138,13 @@ window.ConciliacaoView = {
     document.getElementById('btn-modo-importacao')?.addEventListener('click', () => {
       this.modoAtual = 'importacao';
       this.render(document.getElementById('app-root'));
+    });
+
+    document.getElementById('check-sync-scroll')?.addEventListener('change', (e) => {
+      this.scrollSincronizado = !!e.target.checked;
+      if (this.scrollSincronizado) {
+        this.sincronizarScrollDeOrigem('extrato');
+      }
     });
   },
 
@@ -720,8 +737,72 @@ window.ConciliacaoView = {
     const bodyExtrato = document.getElementById('coluna-extrato-body');
     const bodyErp = document.getElementById('coluna-erp-body');
 
-    bodyExtrato?.addEventListener('scroll', () => this.desenharLinhasConexao());
-    bodyErp?.addEventListener('scroll', () => this.desenharLinhasConexao());
+    bodyExtrato?.addEventListener('scroll', () => {
+      if (this.scrollSincronizado && !this.isSyncingScroll && bodyErp) {
+        this.isSyncingScroll = true;
+        const maxScrollExtrato = bodyExtrato.scrollHeight - bodyExtrato.clientHeight;
+        const maxScrollErp = bodyErp.scrollHeight - bodyErp.clientHeight;
+        if (maxScrollExtrato > 0 && maxScrollErp > 0) {
+          const ratio = bodyExtrato.scrollTop / maxScrollExtrato;
+          bodyErp.scrollTop = ratio * maxScrollErp;
+        } else {
+          bodyErp.scrollTop = bodyExtrato.scrollTop;
+        }
+        requestAnimationFrame(() => {
+          this.isSyncingScroll = false;
+        });
+      }
+      this.desenharLinhasConexao();
+    });
+
+    bodyErp?.addEventListener('scroll', () => {
+      if (this.scrollSincronizado && !this.isSyncingScroll && bodyExtrato) {
+        this.isSyncingScroll = true;
+        const maxScrollExtrato = bodyExtrato.scrollHeight - bodyExtrato.clientHeight;
+        const maxScrollErp = bodyErp.scrollHeight - bodyErp.clientHeight;
+        if (maxScrollExtrato > 0 && maxScrollErp > 0) {
+          const ratio = bodyErp.scrollTop / maxScrollErp;
+          bodyExtrato.scrollTop = ratio * maxScrollExtrato;
+        } else {
+          bodyExtrato.scrollTop = bodyErp.scrollTop;
+        }
+        requestAnimationFrame(() => {
+          this.isSyncingScroll = false;
+        });
+      }
+      this.desenharLinhasConexao();
+    });
+  },
+
+  sincronizarScrollDeOrigem(origem = 'extrato') {
+    const bodyExtrato = document.getElementById('coluna-extrato-body');
+    const bodyErp = document.getElementById('coluna-erp-body');
+    if (!bodyExtrato || !bodyErp) return;
+
+    this.isSyncingScroll = true;
+    if (origem === 'extrato') {
+      const maxScrollExtrato = bodyExtrato.scrollHeight - bodyExtrato.clientHeight;
+      const maxScrollErp = bodyErp.scrollHeight - bodyErp.clientHeight;
+      if (maxScrollExtrato > 0 && maxScrollErp > 0) {
+        const ratio = bodyExtrato.scrollTop / maxScrollExtrato;
+        bodyErp.scrollTop = ratio * maxScrollErp;
+      } else {
+        bodyErp.scrollTop = bodyExtrato.scrollTop;
+      }
+    } else {
+      const maxScrollExtrato = bodyExtrato.scrollHeight - bodyExtrato.clientHeight;
+      const maxScrollErp = bodyErp.scrollHeight - bodyErp.clientHeight;
+      if (maxScrollExtrato > 0 && maxScrollErp > 0) {
+        const ratio = bodyErp.scrollTop / maxScrollErp;
+        bodyExtrato.scrollTop = ratio * maxScrollExtrato;
+      } else {
+        bodyExtrato.scrollTop = bodyErp.scrollTop;
+      }
+    }
+    this.desenharLinhasConexao();
+    setTimeout(() => {
+      this.isSyncingScroll = false;
+    }, 50);
   },
 
   desenharLinhasConexao() {
