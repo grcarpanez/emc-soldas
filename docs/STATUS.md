@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-13 (Unificação de Ações de Lançamento e Expansão das Comboboxes de Filtro no Extrato Real, PWA v4.18)  
+**Última Atualização:** 2026-09-13 (Limpeza Operacional do Banco de Dados para Carga Real do Zero, PWA v4.24)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -426,6 +426,10 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Mecanismo de Scroll Proporcional Bidirecional:** Sincronização inteligente baseada no ratio de deslocamento (`scrollTop / (scrollHeight - clientHeight)`) entre o Extrato Bancário e a Mesa de Triagem/ERP, mantendo os cards equivalentes sempre alinhados lado a lado.
   - **Prevenção de Loop de Eventos:** Bloqueio através de flag de concorrência (`isSyncingScroll`) e renderização em `requestAnimationFrame`, mantendo o redesenho dinâmico das linhas Bézier cúbicas sem travamento de tela.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.24` em `frontend/sw.js` e sufixos de cache-busting `?v=4.24` em `frontend/index.html`.
+- [x] **Expurgo Operacional e Limpeza do Banco de Dados para Início de Carga Real (Produção):**
+  - **Limpeza Segura de Dados Transacionais e Cadastrais de Teste:** Execução atômica via comando de management `reset_banco_para_producao --confirmar` com exclusão em ordem referencial de FKs (`LancamentoFinanceiro`, `Fatura`, `Orcamento`, `DocumentoFiscalCompra`, `Produto`, `Item`, `Equipamento`, `ClienteFornecedor` e contas bancárias extras).
+  - **Preservação Rígida de Tabelas Mestras e Domínio:** Dicionários Centrais (`UOM` e `Atributos`), Categorias Contábeis DRE (13 categorias), Meios e Regras Comerciais de Pagamento, Configurações Globais e usuário Administrador Master (`admin@emcsoldas.com.br`) com seus 10 toggles dinâmicos.
+  - **Contas Bancárias Zeradas:** As contas padrão estruturais (`CAIXA FISICO DA OFICINA` e `CONTA BANCARIA PRINCIPAL`) foram preservadas e inicializadas com saldo exato de `R$ 0,00`, prontas para receber os extratos bancários de 02/2025.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
