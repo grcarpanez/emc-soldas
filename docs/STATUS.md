@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-14 (Restauração e Suporte a Múltiplos Telefones na Máscara Dinâmica de Contatos, PWA v4.28)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis e Governança)  
+**Última Atualização:** 2026-09-14 (Responsividade Mobile da Barra de Ferramentas de Conciliação Bancária, PWA v4.30)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -454,6 +454,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Botão 'RECALCULAR' no Frontend:** Ação direta na tabela de Contas Bancárias (`financeiro-view.js`) permitindo ao operador auditar e re-sincronizar o saldo da conta a qualquer momento em 1 clique com feedback visual.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.29` em `frontend/sw.js` e sufixos de cache-busting `?v=4.29` em `frontend/index.html`.
   - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 71.5s).
+- [x] **Responsividade Mobile da Barra de Ferramentas de Conciliação Bancária (PWA v4.30):**
+  - **Eliminação do Transbordamento Horizontal:** Substituição de estilos rígidos inline por classes semânticas (`.conciliacao-toolbar-content`, `.conciliacao-conta-group`, `.conciliacao-modos-group`, `.conciliacao-sync-group`, `.conciliacao-acoes-group`) em `industrial-integrity.css` e `conciliacao-view.js`.
+  - **Layout Fluido em Duas Linhas no Mobile (`<= 768px`):**
+    - Seletor de conta e botões de alternância de modo passam a ocupar 100% da largura em blocos ergonômicos para toque.
+    - Os botões secundários contextuais (`⚡ AUTO-MATCH` e `+ LANÇAMENTO RÁPIDO`) dividem a primeira linha com largura igual (`calc(50% - 4px)`).
+    - O botão primário de ação (`CONFIRMAR CONCILIAÇÃO` no Modo 1 ou `⚡ GERAR E CONCILIAR EM LOTE` no Modo 2) ocupa a segunda linha isolada com largura total de 100% (`flex: 1 1 100%`), eliminando o truncamento de texto (`CONFIRMA...`) e impedindo estouro de tela.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.30` em `frontend/sw.js` e sufixos de cache-busting `?v=4.30` em `frontend/index.html`.
+  - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 76.1s).
 
 
 

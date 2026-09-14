@@ -38,17 +38,17 @@ window.ConciliacaoView = {
 
       <!-- Barra de Controle: Seletor de Conta e Chave de Modos -->
       <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="conciliacao-toolbar-content">
           <!-- Seletor de Conta Bancária -->
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="conciliacao-conta-group">
             <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); font-weight: 600;">CONTA:</span>
-            <select id="select-conciliacao-conta" class="form-control" style="min-width: 200px; max-width: 280px;">
+            <select id="select-conciliacao-conta" class="form-control">
               <option value="">CARREGANDO CONTAS...</option>
             </select>
           </div>
 
           <!-- Alternador de Modos -->
-          <div style="display: flex; border: 1px solid var(--color-steel-gray); background-color: var(--color-surface);">
+          <div class="conciliacao-modos-group">
             <button class="btn btn-sm ${this.modoAtual === 'conferencia' ? 'btn-primary' : 'btn-secondary'}" id="btn-modo-conferencia" style="border: none;">
               MODO 1: CONFERÊNCIA & MATCH
             </button>
@@ -58,7 +58,7 @@ window.ConciliacaoView = {
           </div>
 
           <!-- Controle de Rolagem Simultânea das Caixas (Split-Screen Sync) -->
-          <div style="display: flex; align-items: center; gap: 8px; background: var(--color-surface); padding: 4px 10px; border: 1px solid var(--color-steel-gray);">
+          <div class="conciliacao-sync-group">
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 0; font-size: 11px; font-weight: 600; font-family: var(--font-mono); color: var(--color-on-surface);">
               <input type="checkbox" id="check-sync-scroll" ${this.scrollSincronizado ? 'checked' : ''} style="accent-color: var(--color-rust-orange); width: 15px; height: 15px;">
               <span>ROLAGEM SIMULTÂNEA</span>
@@ -66,7 +66,7 @@ window.ConciliacaoView = {
           </div>
 
           <!-- Ações Contextuais do Modo Atual -->
-          <div id="barra-acoes-contextuais" style="display: flex; gap: 8px; align-items: center;">
+          <div id="barra-acoes-contextuais" class="conciliacao-acoes-group">
             <!-- Preenchido dinamicamente -->
           </div>
         </div>
