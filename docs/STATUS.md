@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-14 (Responsividade Mobile da Barra de Ferramentas de Conciliação Bancária, PWA v4.30)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile e Governança)  
+**Última Atualização:** 2026-09-14 (Blindagem do Service Worker para Uploads e Operações de Mutação no Celular, PWA v4.31)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -462,6 +462,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - O botão primário de ação (`CONFIRMAR CONCILIAÇÃO` no Modo 1 ou `⚡ GERAR E CONCILIAR EM LOTE` no Modo 2) ocupa a segunda linha isolada com largura total de 100% (`flex: 1 1 100%`), eliminando o truncamento de texto (`CONFIRMA...`) e impedindo estouro de tela.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.30` em `frontend/sw.js` e sufixos de cache-busting `?v=4.30` em `frontend/index.html`.
   - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 76.1s).
+- [x] **Blindagem do Service Worker para Uploads e Operações de Mutação no Celular (PWA v4.31):**
+  - **Bypass de Métodos de Mutação no Service Worker:** Implementação de cláusula de escape imediato `if (event.request.method !== 'GET') return;` no listener de `fetch` em `frontend/sw.js`.
+  - **Eliminação de Falsos Positivos de Desconexão Offline:** Uploads multipart de extratos bancários (OFX/CSV), documentos de compras e anexos passam a trafegar diretamente pela pilha de rede nativa do navegador móvel (Android/iOS), contornando limitações de streaming do worker thread em redes 4G/5G remotas.
+  - **Preservação Integral de Segurança e Cache:** Cookies HttpOnly, cabeçalhos CSRF e tokens continuam sendo transmitidos diretamente pelo navegador, mantendo o cache e a inicialização instantânea para páginas e assets estáticos.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.31` em `frontend/sw.js` e sufixos de cache-busting `?v=4.31` em `frontend/index.html`.
+  - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 80.1s).
 
 
 

@@ -3,7 +3,7 @@
  * Sistema EMC Soldas - Industrial Integrity PWA
  */
 
-const CACHE_NAME = 'emc-soldas-v4.30';
+const CACHE_NAME = 'emc-soldas-v4.31';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -61,6 +61,12 @@ self.addEventListener('activate', (event) => {
 
 // Interceptação de requisições: Network-First com fallback para Cache
 self.addEventListener('fetch', (event) => {
+  // Ignora requisições que não sejam GET (POST, PUT, PATCH, DELETE, uploads de arquivos)
+  // Métodos de mutação devem trafegar diretamente pela conexão nativa do navegador
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Requisições para a API REST (/api/) são sempre Network-First (sem cache estático bruto)
