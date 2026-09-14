@@ -64,11 +64,11 @@ class ClienteFornecedor(BaseModel):
         default=False,
         verbose_name="Isento de Inscrição Estadual"
     )
-    email = models.EmailField(
+    email = models.CharField(
         max_length=255,
         null=True,
         blank=True,
-        verbose_name="E-mail"
+        verbose_name="E-mail(s) Corporativo / Cobrança"
     )
     telefone = models.CharField(
         max_length=20,
@@ -155,8 +155,16 @@ class ClienteContato(models.Model):
         verbose_name="Nome do Contato / Responsável"
     )
     telefone = models.CharField(
-        max_length=20,
-        verbose_name="Telefone de Contato"
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Telefone(s) de Contato"
+    )
+    email = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="E-mail(s) do Contato"
     )
     is_whatsapp = models.BooleanField(
         default=False,
@@ -175,7 +183,9 @@ class ClienteContato(models.Model):
 
     def __str__(self):
         whats = " [WhatsApp]" if self.is_whatsapp else ""
-        return f"{self.nome_contato} - {self.telefone}{whats}"
+        tel = f" - {self.telefone}" if self.telefone else ""
+        mail = f" <{self.email}>" if self.email else ""
+        return f"{self.nome_contato}{tel}{mail}{whats}"
 
 
 class Equipamento(BaseModel):

@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-13 (Correção de Largura e Transbordamento do Campo de CEP no Modal de Cadastros, PWA v4.26)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Fix .form-control e Governança)  
+**Última Atualização:** 2026-09-13 (Contatos Corporativos Flexíveis e Suporte a Múltiplos E-mails por Ponto e Vírgula, PWA v4.27)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Contatos/E-mails Flexíveis e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -103,7 +103,8 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Implementar CRUD de `Equipamento` com suporte a placas antigas/Mercosul, identificação técnica e soft delete.
 - [x] Implementar CRUD de `ClienteEquipamento` com transferência segura (desativação do vínculo anterior e ativação do novo) preservando o histórico para não quebrar orçamentos passados.
 - [x] Implementar gestão e download seguro de anexos de clientes (`AnexoGeralCliente`) com validação de extensões permitidas e cabeçalhos forçados.
-- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (23 testes dedicados em cadastros, 181 testes no acumulado do sistema).
+- [x] Implementar gestão de contatos flexíveis (estilo agenda de smartphone) com suporte a múltiplos telefones e e-mails separados por ponto-e-vírgula (;) e validação individual RFC.
+- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (26 testes dedicados em cadastros, 184 testes no acumulado do sistema).
 
 ### Fase 6 - Catálogo Base, Materiais, Insumos e Produtos (Motor BOM)
 - [x] Implementar cadastro de Itens com atributos técnicos dinâmicos (`ItemAtributoValor`), fator de conversão de unidades e cálculo de custo fracionado de consumo (`/api/itens/`).

@@ -933,3 +933,92 @@ class UtilitariosConsultaAPITestCase(CadastrosBaseTestCase):
         res_novo = self.client.post('/api/orcamentos/', novo_payload, format='json')
         self.assertEqual(res_novo.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_cadastro_cliente_multiplos_emails_e_contatos_flexiveis(self):
+        """Valida suporte a múltiplos e-mails no cliente e contatos com preenchimento flexível (estilo agenda)."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        payload = {
+            "nome_razao": "EMPRESA MULTI EMAIL LTDA",
+            "cnpj_cpf": "11222333000181",
+            "tipo": "Cliente",
+            "tipo_pessoa": "PJ",
+            "email": "financeiro@teste.com.br; compras@teste.com.br",
+            "contatos": [
+                {
+                    "nome_contato": "JOAO RESPONSAVEL",
+                    "telefone": None,
+                    "email": None,
+                    "is_whatsapp": False
+                },
+                {
+                    "nome_contato": "MARIA COMPRAS",
+                    "telefone": "27999991111",
+                    "email": "maria@teste.com.br; cotacoes@teste.com.br",
+                    "is_whatsapp": True
+                },
+                {
+                    "nome_contato": "CARLOS MANUTENCAO",
+                    "telefone": "2733332222; 27988887777",
+                    "email": None,
+                    "is_whatsapp": False
+                }
+            ]
+        }
+
+        response = self.client.post('/api/clientes-fornecedores/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['email'], "financeiro@teste.com.br; compras@teste.com.br")
+        self.assertEqual(len(response.data['contatos']), 3)
+
+        # Valida contato apenas com nome
+        c1 = response.data['contatos'][0]
+        self.assertEqual(c1['nome_contato'], "JOAO RESPONSAVEL")
+        self.assertIsNone(c1['telefone'])
+        self.assertIsNone(c1['email'])
+
+        # Valida contato com telefone e múltiplos e-mails
+        c2 = response.data['contatos'][1]
+        self.assertEqual(c2['nome_contato'], "MARIA COMPRAS")
+        self.assertEqual(c2['telefone'], "27999991111")
+        self.assertEqual(c2['email'], "maria@teste.com.br; cotacoes@teste.com.br")
+        self.assertTrue(c2['is_whatsapp'])
+
+        # Valida contato com múltiplos telefones
+        c3 = response.data['contatos'][2]
+        self.assertEqual(c3['nome_contato'], "CARLOS MANUTENCAO")
+        self.assertEqual(c3['telefone'], "2733332222; 27988887777")
+
+    def test_cadastro_cliente_email_invalido_rejeitado(self):
+        """Valida que uma lista contendo ao menos um e-mail malformado é rejeitada com 400 Bad Request."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        payload = {
+            "nome_razao": "EMPRESA EMAIL INVALIDO",
+            "cnpj_cpf": "99888777000100",
+            "tipo": "Cliente",
+            "tipo_pessoa": "PJ",
+            "email": "valido@teste.com.br; email_sem_arroba_ponto"
+        }
+
+        response = self.client.post('/api/clientes-fornecedores/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        details = response.data.get('details', response.data)
+        self.assertIn("email", details)
+
+    def test_cadastro_cliente_sem_contatos(self):
+        """Valida que o cliente pode ser cadastrado livremente mesmo sem informar nenhum contato."""
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        payload = {
+            "nome_razao": "CLIENTE SEM CONTATOS",
+            "tipo": "Cliente",
+            "tipo_pessoa": "PF",
+            "cnpj_cpf": "01234567890",
+            "contatos": []
+        }
+
+        response = self.client.post('/api/clientes-fornecedores/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data['contatos']), 0)
+
+

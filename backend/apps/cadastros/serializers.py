@@ -2,6 +2,8 @@
 Serializers para o módulo de Cadastros Básicos: Clientes, Fornecedores, Equipamentos, Vínculos e Anexos.
 Em conformidade com docs/FSD.md, docs/PLANO.md e regras de segurança.
 """
+from django.core.validators import validate_email as django_validate_email
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from core.utils import (
     sanitizar_texto_maiusculo,
@@ -19,9 +21,40 @@ from apps.cadastros.models import (
 )
 
 
+def validar_multiplos_emails(value):
+    """
+    Valida e normaliza múltiplos e-mails separados por ';' ou ','.
+    Valida individualmente cada endereço via validador RFC do Django.
+    Retorna os e-mails em caixa baixa separados por '; '.
+    """
+    if not value or not str(value).strip():
+        return None
+
+    partes = str(value).replace(',', ';').split(';')
+    emails_limpos = []
+
+    for parte in partes:
+        email_cand = parte.strip().lower()
+        if not email_cand:
+            continue
+        try:
+            django_validate_email(email_cand)
+            emails_limpos.append(email_cand)
+        except DjangoValidationError:
+            raise serializers.ValidationError(
+                f"O e-mail '{parte.strip()}' possui formato inválido."
+            )
+
+    if not emails_limpos:
+        return None
+
+    return '; '.join(emails_limpos)
+
+
 class ClienteContatoSerializer(serializers.ModelSerializer):
     """
-    Serializer para contatos e telefones vinculados ao Cliente/Fornecedor.
+    Serializer para contatos e telefones/e-mails vinculados ao Cliente/Fornecedor.
+    Representa a pessoa/setor responsável (estilo agenda).
     """
     class Meta:
         model = ClienteContato
@@ -29,6 +62,7 @@ class ClienteContatoSerializer(serializers.ModelSerializer):
             'id',
             'nome_contato',
             'telefone',
+            'email',
             'is_whatsapp',
             'created_at',
         ]
@@ -40,12 +74,24 @@ class ClienteContatoSerializer(serializers.ModelSerializer):
         return sanitizar_texto_maiusculo(value)
 
     def validate_telefone(self, value):
-        if not value:
-            raise serializers.ValidationError("O Telefone é obrigatório.")
-        tel_limpo = limpar_apenas_digitos(value)
-        if len(tel_limpo) < 8 or len(tel_limpo) > 12:
-            raise serializers.ValidationError("Telefone inválido. Informe o DDD e os dígitos (10 ou 11 dígitos).")
-        return tel_limpo
+        if not value or not str(value).strip():
+            return None
+        partes = str(value).replace(',', ';').replace('/', ';').split(';')
+        tels_processados = []
+        for parte in partes:
+            digitos = limpar_apenas_digitos(parte)
+            if digitos:
+                if len(digitos) < 8 or len(digitos) > 12:
+                    raise serializers.ValidationError(
+                        f"Telefone '{parte.strip()}' inválido. Informe o DDD e o número (10 ou 11 dígitos)."
+                    )
+                tels_processados.append(digitos)
+        if not tels_processados:
+            return None
+        return '; '.join(tels_processados)
+
+    def validate_email(self, value):
+        return validar_multiplos_emails(value)
 
 
 class ClienteFornecedorSerializer(serializers.ModelSerializer):
@@ -160,9 +206,7 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        if value:
-            return str(value).lower().strip()
-        return value
+        return validar_multiplos_emails(value)
 
     def validate_telefone(self, value):
         if value:
@@ -217,14 +261,18 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         contatos_data = validated_data.pop('contatos', [])
         
-        # Se telefone principal não informado mas houver contatos, usa o 1º telefone
+        # Se telefone principal não informado mas houver contatos com telefone, usa o 1º telefone
         if not validated_data.get('telefone') and contatos_data:
-            validated_data['telefone'] = contatos_data[0].get('telefone')
+            for c in contatos_data:
+                if c.get('telefone'):
+                    validated_data['telefone'] = c['telefone'].split(';')[0].strip()
+                    break
             
         cliente = ClienteFornecedor.objects.create(**validated_data)
         
         for c_data in contatos_data:
-            ClienteContato.objects.create(cliente=cliente, **c_data)
+            if c_data.get('nome_contato'):
+                ClienteContato.objects.create(cliente=cliente, **c_data)
             
         return cliente
 
@@ -237,10 +285,14 @@ class ClienteFornecedorSerializer(serializers.ModelSerializer):
         if contatos_data is not None:
             instance.contatos.all().delete()
             for c_data in contatos_data:
-                ClienteContato.objects.create(cliente=instance, **c_data)
+                if c_data.get('nome_contato'):
+                    ClienteContato.objects.create(cliente=instance, **c_data)
                 
             if not instance.telefone and contatos_data:
-                instance.telefone = contatos_data[0].get('telefone')
+                for c in contatos_data:
+                    if c.get('telefone'):
+                        instance.telefone = c['telefone'].split(';')[0].strip()
+                        break
                 
         instance.save()
         return instance
