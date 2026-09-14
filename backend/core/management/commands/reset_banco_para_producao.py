@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.core.management import call_command
 from django.db import transaction, connection
 
-from apps.financeiro.models import LancamentoFinanceiro, ContaBancaria
+from apps.financeiro.models import LancamentoFinanceiro, ContaBancaria, CartaoCredito, FaturaCartao
 from apps.faturamento.models import Fatura, FaturaPropostaPagamento
 from apps.orcamentos.models import Orcamento, OrcamentoItem, OrcamentoPropostaPagamento
 from apps.compras.models import DocumentoFiscalCompra, NotaCompraItem
@@ -70,7 +70,12 @@ class Command(BaseCommand):
             total_cli_forn = ClienteFornecedor.all_objects.all().delete()[0]
             self.stdout.write(f"- Clientes e Fornecedores removidos: {total_cli_forn}")
 
-            # 8. Contas Bancarias (manter apenas as estruturais com saldo 0)
+            # 8. Contas Bancarias e Cartões
+            res_fat = FaturaCartao.objects.all().delete()
+            total_fat_cartao = res_fat if isinstance(res_fat, int) else res_fat[0]
+            total_cartoes = CartaoCredito.all_objects.all().delete()[0]
+            self.stdout.write(f"- Cartões corporativos removidos: {total_cartoes}, Faturas de cartão: {total_fat_cartao}")
+
             contas_padrao = ['CAIXA FISICO DA OFICINA', 'CONTA BANCARIA PRINCIPAL']
             total_contas_extras = ContaBancaria.all_objects.exclude(nome__in=contas_padrao).delete()[0]
             self.stdout.write(f"- Contas bancarias extras removidas: {total_contas_extras}")
@@ -81,7 +86,7 @@ class Command(BaseCommand):
                 conta.save(update_fields=['saldo', 'deleted_at'])
             self.stdout.write("- Contas bancarias padrao preservadas e saldo zerado para R$ 0,00.")
 
-            # 9. Reset dos contadores de ID (AUTO_INCREMENT = 1) nas tabelas operacionais esvaziadas
+            # 9. Reset dos contadores de ID (AUTO_INCREMENT = 1) nas tabelas operacionais e contas
             tabelas_reset_id = [
                 'clientes_fornecedores',
                 'clientes_contatos',
@@ -99,6 +104,9 @@ class Command(BaseCommand):
                 'lancamentos_financeiros',
                 'documentos_fiscais_compra',
                 'nota_compra_itens',
+                'cartoes_credito',
+                'faturas_cartao',
+                'contas_bancarias',
             ]
             with connection.cursor() as cursor:
                 for tabela in tabelas_reset_id:
@@ -106,7 +114,7 @@ class Command(BaseCommand):
                         cursor.execute(f"ALTER TABLE `{tabela}` AUTO_INCREMENT = 1;")
                     except Exception as e:
                         self.stdout.write(self.style.WARNING(f"Aviso ao resetar AUTO_INCREMENT de {tabela}: {e}"))
-            self.stdout.write(self.style.SUCCESS("- Contadores AUTO_INCREMENT das tabelas operacionais reiniciados em 1."))
+            self.stdout.write(self.style.SUCCESS("- Contadores AUTO_INCREMENT das tabelas operacionais e contas ajustados."))
 
         self.stdout.write(self.style.SUCCESS("Dados transacionais expurgados com sucesso!"))
         self.stdout.write("Garantindo integridade dos dados mestres com seed_initial_data...")
