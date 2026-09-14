@@ -333,3 +333,16 @@ Utilize o padrão abaixo para cada novo erro registrado:
   3. Compatibilização de chaves no backend e no frontend (`res.extrato || res.transacoes`), adição de seletor de conta bancária na conciliação e inclusão de categoria contábil no modal de lançamento rápido.
   4. Incremento de versão do Service Worker PWA para `v4.15` e cache-busting no `index.html`.
 - **Como evitar no futuro:** Sempre normalizar e sanitizar termos de arquivos de terceiros (como bancos) e manter contratos de API documentados e sincronizados com os handlers de frontend.
+
+---
+
+## 2026-09-14 - Falha de Upload de Extratos no Celular via Provedor de Nuvem (OneDrive) e Interceptação no Service Worker (Failed to fetch)
+
+- **Sintoma:** Ao tentar importar um extrato bancário pelo smartphone (via 4G/5G através do túnel Cloudflare), o PWA disparava inicialmente `[ERRO] Sem conexão com o servidor da oficina. Operação offline.` e, após ajuste no Service Worker, `[ERRO] Failed to fetch`.
+- **Causa:**
+  1. **Arquivo Remoto no Android (OneDrive):** O usuário estava selecionando o arquivo diretamente da pasta virtual do OneDrive no seletor de arquivos do Android. O sistema operacional entrega um ponteiro virtual (`content://`) sem os bytes físicos em cache local. Quando o navegador Chrome tenta ler os bytes para montar o payload multipart/form-data do `fetch()`, a leitura do stream é abortada pelo sistema operacional móvel, gerando imediatamente a exceção `TypeError: Failed to fetch` antes mesmo de transmitir os pacotes para a rede.
+  2. **Interceptação no Service Worker:** Originalmente, o `sw.js` interceptava requisições `POST` de upload e mascarava o erro do navegador gerando um HTTP 503 com aviso de *"Sem conexão com o servidor da oficina"*.
+- **Solução aplicada:**
+  1. **Bypass de Mutação no Service Worker:** Adição da cláusula `if (event.request.method !== 'GET') return;` no listener de `fetch` em `frontend/sw.js` (PWA v4.31), garantindo que uploads trafeguem diretamente pela pilha de rede nativa do navegador com buffers e retransmissões do SO.
+  2. **Download Local do Arquivo:** O usuário baixou o arquivo do OneDrive para o armazenamento físico local do smartphone (pasta `Downloads`), permitindo que o Chrome lesse os bytes instantaneamente e transmitisse o arquivo com 100% de sucesso (resposta HTTP 200 OK com 32.737 bytes de transações processadas).
+- **Como evitar no futuro:** Ao realizar uploads em navegadores móveis (Android/iOS), garantir que os arquivos estejam salvos no armazenamento local do aparelho (e não como referências remotas em nuvens como OneDrive/Google Drive). Manter o Service Worker configurado para nunca interceptar métodos de mutação (`POST`/`PUT`/`DELETE`).
