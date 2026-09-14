@@ -26,20 +26,82 @@ from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
 logger = logging.getLogger(__name__)
 
 
+def detectar_meio_pagamento_transacao(
+    descricao: str,
+    tipo: str,
+    tipo_original_ofx: str = '',
+    meios_cache: Optional[Dict[str, MeioPagamento]] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Classifica heuristicamente o Meio de Pagamento (PIX, Cartões, TED, Boleto, Dinheiro)
+    a partir da descrição (<MEMO>), canal e tipo original do extrato.
+    """
+    if not meios_cache:
+        meios_cache = {m.nome.upper(): m for m in MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True)}
+
+    desc_upper = (descricao or '').upper()
+    trntype_upper = (tipo_original_ofx or '').upper()
+
+    nome_meio_alvo = None
+
+    # 1. PIX
+    if any(k in desc_upper for k in ['PIX', 'TRANSF PIX', 'PAGTO PIX', 'LIQ PIX', 'QR CODE', 'CHAVE PIX', 'PIX RECEBIDO', 'PIX ENVIADO']):
+        nome_meio_alvo = 'PIX'
+
+    # 2. Cartão de Débito / Crédito
+    elif any(k in desc_upper for k in ['CARTAO', 'MAQ', 'POS ', 'CIELO', 'REDE', 'GETNET', 'STONE', 'PAGSEGURO', 'VISA', 'MASTER', 'ELO ']) or trntype_upper == 'POS':
+        if any(k in desc_upper for k in ['DEB', 'DEBITO']) or (trntype_upper == 'POS' and tipo == 'SAIDA'):
+            nome_meio_alvo = 'CARTAO DE DEBITO'
+        else:
+            nome_meio_alvo = 'CARTAO DE CREDITO'
+
+    # 3. Transferência Bancária (TED / DOC / TEF / Inter-contas)
+    elif any(k in desc_upper for k in ['TED ', 'DOC ', 'TEF ', 'TRANSF ', 'TRANSFERENCIA', 'TRANSF ENTRE CONTAS', 'TRANSF C/C', 'DOC/TED']):
+        nome_meio_alvo = 'TRANSFERENCIA TED/DOC'
+
+    # 4. Boleto Bancário / Título / Convênio
+    elif any(k in desc_upper for k in ['BOLETO', 'TITULO', 'PAGTO TITULO', 'COBRANCA', 'LIQ TITULO', 'LIQ COBRANCA', 'CONVENIO', 'BLOQUETO']):
+        nome_meio_alvo = 'BOLETO BANCARIO'
+
+    # 5. Dinheiro / Depósito / Saque
+    elif any(k in desc_upper for k in ['DEPOSITO', 'DEP DINHEIRO', 'SAQUE', 'ESPECIE']):
+        nome_meio_alvo = 'DEPOSITO BANCARIO' if tipo == 'ENTRADA' else 'DINHEIRO'
+
+    # 6. Fallback Heurístico Baseado no Fluxo
+    if not nome_meio_alvo:
+        if tipo == 'ENTRADA':
+            # Recebimento sem menção específica costuma ser PIX ou TED
+            nome_meio_alvo = 'PIX' if 'PIX' in meios_cache else 'TRANSFERENCIA TED/DOC'
+        else:
+            # Pagamento avulso genérico costuma ser PIX ou Boleto
+            nome_meio_alvo = 'PIX' if 'PIX' in meios_cache else 'BOLETO BANCARIO'
+
+    # Localiza objeto no cache
+    meio_obj = meios_cache.get(nome_meio_alvo)
+    if not meio_obj and meios_cache:
+        meio_obj = list(meios_cache.values())[0]
+
+    if meio_obj:
+        return {'id': meio_obj.id, 'nome': meio_obj.nome}
+    return None
+
+
 def enriquecer_transacao_inteligencia(
     trn: Dict[str, Any],
     conta_id: Optional[int],
     config_global: Optional[ConfiguracaoGlobal],
     parceiros_map: Dict[str, ClienteFornecedor],
     categorias_despesa: List[CategoriaFinanceira],
-    categorias_receita: List[CategoriaFinanceira]
+    categorias_receita: List[CategoriaFinanceira],
+    meios_cache: Optional[Dict[str, MeioPagamento]] = None
 ) -> Dict[str, Any]:
     """
     Enriquece uma transação de extrato com inteligência heurística:
     1. Prevenção de duplicidade por FITID ou combinação defensiva;
     2. Identificação de Cliente/Fornecedor por CNPJ/CPF no histórico;
     3. Cruzamento com Faturas em Aberto (com cálculo de ISS Retido e tolerância de 5 centavos);
-    4. Sugestão automática de Categorias DRE (Tarifas, Tributos, Receitas).
+    4. Sugestão automática de Categorias DRE (Tarifas, Tributos, Receitas);
+    5. Detecção automática de Meio de Pagamento (PIX, Cartões, TED, Boleto).
     """
     fitid = trn.get('fitid') or ''
     tipo = trn.get('tipo', 'ENTRADA')
@@ -166,13 +228,22 @@ def enriquecer_transacao_inteligencia(
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
 
+    # 5. Detecção Heurística do Meio de Pagamento
+    meio_pagamento_sugerido = detectar_meio_pagamento_transacao(
+        descricao=descricao,
+        tipo=tipo,
+        tipo_original_ofx=trn.get('tipo_original_ofx', ''),
+        meios_cache=meios_cache
+    )
+
     return {
         'duplicidade': duplicidade,
         'duplicidade_motivo': duplicidade_motivo,
         'lancamento_duplicado_id': lancamento_duplicado_id,
         'parceiro_identificado': parceiro_identificado,
         'fatura_sugerida': fatura_sugerida,
-        'categoria_sugerida': categoria_sugerida
+        'categoria_sugerida': categoria_sugerida,
+        'meio_pagamento_sugerido': meio_pagamento_sugerido
     }
 
 
@@ -267,11 +338,12 @@ def processar_extrato_split_screen(
                 'detalhe': 'NAO LOCALIZADO NO EXTRATO'
             }
 
-    # Cache de categorias, parceiros e configuração global para enriquecimento com inteligência
+    # Cache de categorias, parceiros, meios de pagamento e configuração global para enriquecimento com inteligência
     config_global = ConfiguracaoGlobal.objects.first()
     parceiros_map = {}
     categorias_despesa = list(CategoriaFinanceira.objects.filter(tipo='DESPESA', deleted_at__isnull=True))
     categorias_receita = list(CategoriaFinanceira.objects.filter(tipo='RECEITA', deleted_at__isnull=True))
+    meios_cache = {m.nome.upper(): m for m in MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True)}
 
     # Executa algoritmo de matching para cada transação do extrato
     for trn in transacoes_extrato:
@@ -282,14 +354,15 @@ def processar_extrato_split_screen(
         fitid = trn['fitid']
         descricao = trn.get('descricao', '')
 
-        # Enriquecimento com inteligência avançada (duplicidade, CNPJ/CPF, ISS retido, faturas e categorias)
+        # Enriquecimento com inteligência avançada (duplicidade, CNPJ/CPF, ISS retido, faturas, categorias e meio de pagamento)
         info_inteligencia = enriquecer_transacao_inteligencia(
             trn=trn,
             conta_id=conta_id,
             config_global=config_global,
             parceiros_map=parceiros_map,
             categorias_despesa=categorias_despesa,
-            categorias_receita=categorias_receita
+            categorias_receita=categorias_receita,
+            meios_cache=meios_cache
         )
 
         match_encontrado = False
@@ -318,28 +391,19 @@ def processar_extrato_split_screen(
 
                 # Checa correspondência de tipo e valor exato
                 if lanc.tipo_lancamento == trn_tipo and lanc.valor == trn_valor_abs:
-                    # Proximidade de data (±3 dias)
-                    ref_date = lanc.data_pagamento.date() if lanc.data_pagamento else lanc.data_vencimento
-                    diff_dias = abs((ref_date - trn_data).days)
-                    if diff_dias <= 3:
+                    # Checa proximidade de data (±3 dias de tolerância bancária)
+                    dt_lanc = lanc.data_pagamento.date() if lanc.data_pagamento else lanc.data_vencimento
+                    dias_diferenca = abs((dt_lanc - trn_data).days)
+                    if dias_diferenca <= 3:
                         match_encontrado = True
+                        match_tipo = 'SUGESTAO_1_1'
                         lancamentos_usados_ids.add(lanc.id)
                         lancamentos_sugeridos.append(lanc.id)
-
-                        if lanc.is_conciliado:
-                            match_tipo = 'CONCILIADO'
-                            lancamentos_status_map[lanc.id] = {
-                                'status_conciliacao': 'CONCILIADO',
-                                'sugestao_fitid': fitid,
-                                'detalhe': 'CONCILIADO COM ESTA TRANSACAO'
-                            }
-                        else:
-                            match_tipo = 'SUGESTAO_1_1'
-                            lancamentos_status_map[lanc.id] = {
-                                'status_conciliacao': 'SUGESTAO_MATCH',
-                                'sugestao_fitid': fitid,
-                                'detalhe': f'MATCH 1:1 SUGERIDO (DIFERENCA DE {diff_dias} DIA(S))'
-                            }
+                        lancamentos_status_map[lanc.id] = {
+                            'status_conciliacao': 'SUGESTAO_MATCH',
+                            'sugestao_fitid': fitid,
+                            'detalhe': f'MATCH 1:1 (DIFERENCA DE {dias_diferenca} DIA(S))'
+                        }
                         break
 
         # 2. Match Múltiplo (1:N) se não encontrou 1:1
@@ -387,6 +451,7 @@ def processar_extrato_split_screen(
             'parceiro_identificado': info_inteligencia['parceiro_identificado'],
             'fatura_sugerida': info_inteligencia['fatura_sugerida'],
             'categoria_sugerida': info_inteligencia['categoria_sugerida'],
+            'meio_pagamento_sugerido': info_inteligencia['meio_pagamento_sugerido'],
         })
 
     # Formata lista de lançamentos do ERP
@@ -850,10 +915,16 @@ def executar_importacao_lote(
 
             dt_venc = dt_pagto.date() if isinstance(dt_pagto, datetime) else dt_pagto
 
-            # Meio de pagamento
-            meio = meio_padrao
+            # Meio de pagamento específico do item ou detectado heuristicamente
+            meio = None
             if item.get('meio_pagamento_id'):
-                meio = MeioPagamento.objects.filter(id=item['meio_pagamento_id'], deleted_at__isnull=True).first() or meio_padrao
+                meio = MeioPagamento.objects.filter(id=item['meio_pagamento_id'], deleted_at__isnull=True).first()
+            if not meio:
+                meio_detectado = detectar_meio_pagamento_transacao(descricao=descricao, tipo=tipo)
+                if meio_detectado:
+                    meio = MeioPagamento.objects.filter(id=meio_detectado['id'], deleted_at__isnull=True).first()
+            if not meio:
+                meio = meio_padrao
 
             # Atualiza totalizadores de saldo
             if tipo == 'ENTRADA':

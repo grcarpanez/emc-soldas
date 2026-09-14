@@ -13,6 +13,7 @@ window.ConciliacaoView = {
   conexoesMatch: [], // [{ extratoIndex, erpId, preIndex, tipo: 'CONFIRMADO'|'SUGESTAO' }]
   contasBancarias: [],
   categoriasFinanceiras: [],
+  meiosPagamento: [],
   contaSelecionadaId: null,
   selectedExtratoIndex: null,
   selectedErpIds: [],
@@ -109,6 +110,7 @@ window.ConciliacaoView = {
 
     this.bindEventosGerais();
     await this.carregarCategoriasFinanceiras();
+    await this.carregarMeiosPagamento();
     await this.carregarContasBancarias();
     await this.atualizarInterfacePorModo();
     this.iniciarMonitorConexoes();
@@ -157,6 +159,15 @@ window.ConciliacaoView = {
     }
   },
 
+  async carregarMeiosPagamento() {
+    try {
+      const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO);
+      this.meiosPagamento = res.results || res || [];
+    } catch (e) {
+      this.meiosPagamento = [];
+    }
+  },
+
   async carregarContasBancarias() {
     const select = document.getElementById('select-conciliacao-conta');
     if (!select) return;
@@ -171,17 +182,16 @@ window.ConciliacaoView = {
         return;
       }
 
-      let options = '<option value="">SELECIONE A CONTA...</option>';
+      let options = '<option value="">-- SELECIONE A CONTA BANCÁRIA * --</option>';
       this.contasBancarias.forEach(c => {
         options += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
       });
       select.innerHTML = options;
 
-      if (!this.contaSelecionadaId && this.contasBancarias.length > 0) {
-        this.contaSelecionadaId = this.contasBancarias[0].id;
+      if (this.contaSelecionadaId) {
         select.value = String(this.contaSelecionadaId);
-      } else if (this.contaSelecionadaId) {
-        select.value = String(this.contaSelecionadaId);
+      } else {
+        select.value = '';
       }
     } catch (err) {
       select.innerHTML = '<option value="">ERRO AO CARREGAR CONTAS</option>';
@@ -267,6 +277,9 @@ window.ConciliacaoView = {
         descEfetiva = `${descEfetiva} - ${t.parceiro_identificado.nome_razao}`;
       }
 
+      const meioSugeridoId = t.meio_pagamento_sugerido ? t.meio_pagamento_sugerido.id : null;
+      const meioSugeridoNome = t.meio_pagamento_sugerido ? t.meio_pagamento_sugerido.nome : null;
+
       return {
         id_temp: idx,
         fitid: t.fitid || '',
@@ -277,6 +290,8 @@ window.ConciliacaoView = {
         documento: t.documento || '',
         categoria_id: categoriaSugeridaId,
         categoria_sugerida_nome: t.categoria_sugerida ? t.categoria_sugerida.nome : null,
+        meio_pagamento_id: meioSugeridoId,
+        meio_pagamento_nome: meioSugeridoNome,
         cliente_fornecedor_id: parceiroId,
         parceiro_identificado: t.parceiro_identificado,
         fatura_id: faturaId,
@@ -508,12 +523,19 @@ window.ConciliacaoView = {
       const isEntrada = p.tipo_lancamento === 'ENTRADA';
       const isDescartado = p.descartado;
       const temCategoria = !!p.categoria_id;
+      const temMeio = !!p.meio_pagamento_id;
 
       // Monta opções de categorias com opção em branco no topo
       let optionsCat = '<option value="">-- SELECIONE A CATEGORIA DRE * --</option>';
       const catsFiltradas = this.categoriasFinanceiras.filter(c => c.tipo === (isEntrada ? 'RECEITA' : 'DESPESA') || c.tipo === 'AMBOS');
       catsFiltradas.forEach(cat => {
         optionsCat += `<option value="${cat.id}" ${cat.id === p.categoria_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(cat.nome)}</option>`;
+      });
+
+      // Monta opções de meios de pagamento
+      let optionsMeios = '<option value="">-- MEIO DE PAGAMENTO --</option>';
+      this.meiosPagamento.forEach(m => {
+        optionsMeios += `<option value="${m.id}" ${m.id === p.meio_pagamento_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(m.nome)}</option>`;
       });
 
       // Informações contextuais de inteligência
@@ -567,8 +589,8 @@ window.ConciliacaoView = {
           <!-- Linha Contextual de Inteligência Fiscal e Parceiros -->
           ${infoExtraInteligencia}
 
-          <!-- Linha 2 (Inputs): Grid com Descrição e Select de Categoria DRE -->
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px; width: 100%;">
+          <!-- Linha 2 (Inputs): Grid com Descrição, Select de Categoria DRE e Select de Meio de Pagamento -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-bottom: 6px;">
             <div>
               <input type="text" class="form-control" style="font-size: 12px; padding: 5px 8px; width: 100%;" 
                      value="${window.EMCUtils.escapeHtml(p.descricao)}" 
@@ -576,13 +598,22 @@ window.ConciliacaoView = {
                      onchange="window.ConciliacaoView.atualizarDescricaoPreLancamento(${idx}, this.value)">
             </div>
             <div>
-              <select id="select-cat-${idx}" 
-                      class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
-                      style="font-size: 12px; padding: 5px 8px; width: 100%;"
-                      onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
-                ${optionsCat}
+              <select id="select-meio-${idx}" 
+                      class="form-control" 
+                      style="font-size: 12px; padding: 5px 8px; width: 100%; font-family: var(--font-mono);"
+                      onchange="window.ConciliacaoView.atualizarMeioPreLancamento(${idx}, this.value)">
+                ${optionsMeios}
               </select>
             </div>
+          </div>
+
+          <div style="width: 100%;">
+            <select id="select-cat-${idx}" 
+                    class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
+                    style="font-size: 12px; padding: 5px 8px; width: 100%;"
+                    onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
+              ${optionsCat}
+            </select>
           </div>
         </div>
       `;
@@ -621,6 +652,12 @@ window.ConciliacaoView = {
   atualizarDescricaoPreLancamento(idx, valor) {
     if (this.preLancamentosImportacao[idx]) {
       this.preLancamentosImportacao[idx].descricao = valor.trim();
+    }
+  },
+
+  atualizarMeioPreLancamento(idx, meioId) {
+    if (this.preLancamentosImportacao[idx]) {
+      this.preLancamentosImportacao[idx].meio_pagamento_id = meioId ? parseInt(meioId, 10) : null;
     }
   },
 
@@ -693,6 +730,7 @@ window.ConciliacaoView = {
               data_pagamento: p.data,
               documento: p.documento,
               fitid: p.fitid,
+              meio_pagamento_id: p.meio_pagamento_id || null,
               cliente_fornecedor_id: p.cliente_fornecedor_id || null,
               fatura_id: p.fatura_id || null
             }))

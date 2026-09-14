@@ -434,6 +434,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Ajuste de Sequencial de Contas Bancárias (Próximo ID = 3):** Reset de `contas_bancarias` com `AUTO_INCREMENT = 1`, instruindo o MySQL a recalcular `max(id) + 1 = 3`, eliminando saltos nos IDs após expurgo de contas de teste.
   - **Preservação Rígida de Tabelas Mestras e Domínio:** Dicionários Centrais (`UOM` e `Atributos`), Categorias Contábeis DRE (13 categorias), Meios e Regras Comerciais de Pagamento, Configurações Globais e usuário Administrador Master (`admin@emcsoldas.com.br`) com seus 10 toggles dinâmicos.
   - **Contas Bancárias Zeradas:** As contas padrão estruturais (`CAIXA FISICO DA OFICINA` e `CONTA BANCARIA PRINCIPAL`) foram preservadas e inicializadas com saldo exato de `R$ 0,00`, prontas para receber os extratos bancários de 02/2025.
+- [x] **Seleção Obrigatória de Conta Bancária na Conciliação e Detecção Heurística de Meios de Pagamento (PWA v4.28):**
+  - **Seleção Ativa Mandatória de Conta:** A tela de conciliação bancária (`#/conciliacao`) agora inicializa estritamente com `-- SELECIONE A CONTA BANCÁRIA * --` sem pré-selecionar nenhuma conta por padrão. O botão de upload e a análise ficam bloqueados até que o operador selecione conscientemente a conta de destino, eliminando conciliações por engano.
+  - **Classificador Heurístico Inteligente de Meios de Pagamento:** Implementação de motor em `apps/conciliacao/services.py` (`detectar_meio_pagamento_transacao`) com análise de padrões no `<MEMO>`, `<NAME>` e `<TRNTYPE>` do OFX, categorizando com precisão: `PIX` (transferências, chaves, QR codes), `CARTÃO DE DÉBITO`, `CARTÃO DE CRÉDITO`, `TRANSFERÊNCIA (TED/DOC)`, `BOLETO BANCÁRIO` e `DEPÓSITO BANCÁRIO / DINHEIRO`.
+  - **Mesa de Triagem Enriquecida (Modo 2):** Cada card de transação na esteira de importação passa a exibir uma combobox pesquisável de Meio de Pagamento pré-preenchida com a sugestão inteligente, permitindo ao operador alterar manualmente antes de confirmar a importação em lote.
+  - **Persistência Fiel no Backend:** O endpoint de importação em lote (`executar_importacao_lote`) agora lê o `meio_pagamento_id` real enviado em cada transação, eliminando o fallback genérico que gravava tudo como boleto bancário.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.28` em `frontend/sw.js` e sufixos de cache-busting `?v=4.28` em `frontend/index.html`.
+  - **Homologação:** Suíte completa com 184 testes automatizados do Django executados com 100% de aprovação (OK em 74s).
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
