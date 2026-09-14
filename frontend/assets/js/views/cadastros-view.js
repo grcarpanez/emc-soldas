@@ -791,7 +791,7 @@ window.CadastrosView = {
           <input type="text" class="form-control contato-nome" placeholder="Ex: JOAO (COMPRAS)" value="${window.EMCUtils.escapeHtml(nome)}">
         </td>
         <td>
-          <input type="text" class="form-control mono-text contato-telefone" placeholder="(00) 00000-0000" title="Telefone fixo ou celular (pode conter múltiplos separados por ;)" value="${telefone ? window.EMCUtils.escapeHtml(telefone) : ''}">
+          <input type="text" class="form-control mono-text contato-telefone" data-mask="telefone" placeholder="(00) 00000-0000" title="Telefone fixo ou celular (pode conter múltiplos separados por ;)" value="${telefone ? window.EMCUtils.formatarTelefoneDinamico(telefone) : ''}">
         </td>
         <td style="text-align: center; vertical-align: middle;">
           <label style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 100%;">

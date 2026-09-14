@@ -118,9 +118,9 @@ function formatarCpfCnpjDinamico(valor) {
  * @param {string} valor 
  * @returns {string}
  */
-function formatarTelefoneDinamico(valor) {
+function formatarTelefoneIndividual(valor) {
   const digitos = extrairApenasDigitos(valor).slice(0, 11);
-
+  if (!digitos) return '';
   if (digitos.length <= 10) {
     // Fixo: (00) 0000-0000
     return digitos
@@ -132,6 +132,15 @@ function formatarTelefoneDinamico(valor) {
       .replace(/^(\d{2})(\d)/g, '($1) $2')
       .replace(/(\d{5})(\d)/, '$1-$2');
   }
+}
+
+function formatarTelefoneDinamico(valor) {
+  if (!valor) return '';
+  const str = String(valor);
+  if (str.includes(';')) {
+    return str.split(';').map(p => formatarTelefoneIndividual(p)).filter(Boolean).join('; ');
+  }
+  return formatarTelefoneIndividual(str);
 }
 
 /**
