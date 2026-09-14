@@ -210,19 +210,44 @@ def enriquecer_transacao_inteligencia(
     desc_upper = descricao.upper()
 
     if tipo == 'SAIDA':
-        # Tarifas Bancárias
-        if any(w in desc_upper for w in ['TAR ', 'TARIFA', 'MANUT', 'IOF', 'DOC/TED', 'TAXA TRANSF', 'TAXA MAQ', 'CESTA BANC']):
-            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['TARIFA', 'BANCAR', 'DESPESAS FINANCEIRAS'])), None)
+        # 4.1 Tarifas Bancárias e Maquininha
+        if any(w in desc_upper for w in ['TAR ', 'TARIFA', 'MANUT', 'IOF', 'DOC/TED', 'TAXA TRANSF', 'TAXA MAQ', 'CESTA BANC', 'MENSALIDADE CONTA']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['TARIFAS BANCARIAS', 'TAXAS DE CARTAO', 'TARIFA', 'BANCAR'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # Tributos e Encargos
-        elif any(w in desc_upper for w in ['DAS ', 'SIMPLES NACIONAL', 'GPS', 'FGTS', 'DARF', 'TRIBUTO', 'ARRECADACAO', 'RECEITA FEDERAL', 'PREFEITURA', 'INSS', 'IPTU', 'IPVA']):
-            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['TRIBUTO', 'IMPOSTO', 'ENCARGO'])), None)
+        # 4.2 Encargos Trabalhistas (FGTS, INSS folha, GPS)
+        elif any(w in desc_upper for w in ['FGTS', 'GPS ', 'GRF ', 'CONECTIVIDADE SOCIAL']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['ENCARGOS TRABALHISTAS', 'FGTS', 'INSS'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # 4.3 Tributos Fiscais (Simples Nacional, DAS, DARF, IPTU)
+        elif any(w in desc_upper for w in ['DAS ', 'SIMPLES NACIONAL', 'DARF', 'TRIBUTO', 'ARRECADACAO', 'RECEITA FEDERAL', 'PREFEITURA', 'IPTU', 'IPVA', 'TAXA LICENCA']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['IMPOSTOS E TRIBUTOS', 'TRIBUTO', 'IMPOSTO'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # 4.4 Energia Elétrica, Água e Internet
+        elif any(w in desc_upper for w in ['ENEL', 'CPFL', 'ELEKTRO', 'SABESP', 'COPASA', 'SANEPAR', 'CLARO', 'VIVO', 'TIM', 'INTERNET', 'ENERGIA ELETRICA']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['ENERGIA ELETRICA', 'AGUA E INTERNET'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # 4.5 Combustível e Despesas com Veículos
+        elif any(w in desc_upper for w in ['POSTO ', 'AUTO POSTO', 'COMBUSTIVEL', 'SHELL', 'IPIRANGA', 'PETROBRAS', 'GASOLINA', 'DIESEL', 'ETANOL', 'SEM PARAR', 'VELOE']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['COMBUSTIVEL', 'VEICULOS'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # 4.6 Pró-Labore dos Sócios
+        elif any(w in desc_upper for w in ['PRO-LABORE', 'PRO LABORE', 'PROLABORE']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['PRO-LABORE', 'PRO LABORE'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        # 4.7 Folha de Pagamento / Salários
+        elif any(w in desc_upper for w in ['SALARIO', 'ADIANTAMENTO SALARIAL', 'FOLHA PAG', 'VALE TRANSPORTE']):
+            cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['FOLHA DE PAGAMENTO', 'SALARIOS'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
     elif tipo == 'ENTRADA':
         if parceiro_identificado or fatura_sugerida:
-            cat = next((c for c in categorias_receita if any(k in c.nome.upper() for k in ['SERVICO', 'SOLDA', 'REFORMA', 'RECEITA OPERACIONAL'])), None)
+            cat = next((c for c in categorias_receita if any(k in c.nome.upper() for k in ['PRESTACAO DE SERVICOS', 'SERVICO', 'SOLDA', 'REFORMA', 'RECEITA OPERACIONAL'])), None)
             if not cat and categorias_receita:
                 cat = categorias_receita[0]
             if cat:

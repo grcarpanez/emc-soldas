@@ -111,7 +111,7 @@ class FaturamentoAgregadoTestCase(TestCase):
         )
 
         self.cat_receita = CategoriaFinanceira.objects.create(
-            nome="RECEITA DE SERVICOS (MAO DE OBRA)",
+            nome="RECEITA DE PRESTACAO DE SERVICOS",
             tipo="RECEITA"
         )
         self.cat_taxa = CategoriaFinanceira.objects.create(

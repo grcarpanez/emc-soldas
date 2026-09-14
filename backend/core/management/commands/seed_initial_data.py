@@ -3,6 +3,7 @@ Comando de Management do Django para popular e sincronizar a base de dados com s
 Garante 100% de sanitização (Maiúsculas sem Acento - ASCII puro) em registros novos e pré-existentes.
 Executado via: python backend/manage.py seed_initial_data
 """
+import os
 from django.core.management.base import BaseCommand
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
@@ -165,17 +166,47 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"[OK] Regras de Pagamento sincronizadas ({regra_count} novas regras)."))
 
         # 5. Categorias Financeiras (100% Maiúsculas sem Acento e Enum UPPERCASE)
+        # Mapeamento para migrar/renomear categorias legadas sem duplicar IDs
+        renomeacoes = {
+            'RECEITA DE SERVICOS (MAO DE OBRA)': 'RECEITA DE PRESTACAO DE SERVICOS',
+            'OUTRAS RECEITAS OPERACIONAIS': 'OUTRAS RECEITAS OPERACIONAIS E RENDIMENTOS',
+            'INSUMOS PRODUTIVOS E MATERIA-PRIMA': 'INSUMOS E MATERIA-PRIMA',
+            'ENERGIA ELETRICA E AGUA': 'ENERGIA ELETRICA, AGUA E INTERNET',
+            'MANUTENCAO DE MAQUINAS': 'MANUTENCAO DE MAQUINAS E INSTALACOES',
+            'IMPOSTOS E TRIBUTOS': 'IMPOSTOS E TRIBUTOS (SIMPLES NACIONAL / ISS / TAXAS)',
+            'SALARIOS E ENCARGOS': 'FOLHA DE PAGAMENTO (SALARIOS E BENEFICIOS)',
+            'TAXAS DE CARTAO E BANCARIAS': 'TARIFAS BANCARIAS E TAXAS DE CARTAO',
+        }
+        for nome_antigo, nome_novo in renomeacoes.items():
+            cat = CategoriaFinanceira.all_objects.filter(nome=nome_antigo).first()
+            if cat:
+                if not CategoriaFinanceira.all_objects.filter(nome=nome_novo).exists():
+                    cat.nome = nome_novo
+                    cat.save(update_fields=['nome'])
+
+        # Purgar categorias residuais de teste 'C1'
+        CategoriaFinanceira.all_objects.filter(nome='C1').delete()
+
         categorias = [
-            ("RECEITA DE SERVICOS (MAO DE OBRA)", "RECEITA", None),
+            ("RECEITA DE PRESTACAO DE SERVICOS", "RECEITA", None),
             ("RECEITA DE VENDA DE PRODUTOS E MATERIAIS", "RECEITA", None),
-            ("OUTRAS RECEITAS OPERACIONAIS", "RECEITA", None),
-            ("INSUMOS PRODUTIVOS E MATERIA-PRIMA", "DESPESA", None),
-            ("ENERGIA ELETRICA E AGUA", "DESPESA", None),
-            ("MANUTENCAO DE MAQUINAS", "DESPESA", None),
-            ("IMPOSTOS E TRIBUTOS", "DESPESA", None),
-            ("SALARIOS E ENCARGOS", "DESPESA", None),
-            ("TAXAS DE CARTAO E BANCARIAS", "DESPESA", None),
+            ("OUTRAS RECEITAS OPERACIONAIS E RENDIMENTOS", "RECEITA", None),
+            ("INSUMOS E MATERIA-PRIMA", "DESPESA", None),
+            ("SERVICOS DE TERCEIROS NA PRODUCAO", "DESPESA", None),
+            ("FRETES E TRANSPORTES DE PRODUCAO", "DESPESA", None),
+            ("FOLHA DE PAGAMENTO (SALARIOS E BENEFICIOS)", "DESPESA", None),
+            ("ENCARGOS TRABALHISTAS (FGTS E INSS)", "DESPESA", None),
+            ("PRO-LABORE DOS SOCIOS", "DESPESA", None),
+            ("IMPOSTOS E TRIBUTOS (SIMPLES NACIONAL / ISS / TAXAS)", "DESPESA", None),
+            ("TARIFAS BANCARIAS E TAXAS DE CARTAO", "DESPESA", None),
+            ("ALUGUEL, CONDOMINIO E IPTU", "DESPESA", None),
+            ("ENERGIA ELETRICA, AGUA E INTERNET", "DESPESA", None),
+            ("MANUTENCAO DE MAQUINAS E INSTALACOES", "DESPESA", None),
+            ("COMBUSTIVEL E DESPESAS COM VEICULOS", "DESPESA", None),
+            ("SERVICOS PROFISSIONAIS (CONTABILIDADE, SOFTWARES)", "DESPESA", None),
             ("OUTRAS DESPESAS OPERACIONAIS", "DESPESA", None),
+            ("AQUISICAO DE MAQUINAS, EQUIPAMENTOS E FERRAMENTAS", "DESPESA", None),
+            ("RETIRADA DE SOCIOS / DISTRIBUICAO DE LUCRO", "DESPESA", None),
             ("TRANSFERENCIA INTER-CONTAS", "TRANSFERENCIA", None),
         ]
         cat_count = 0
@@ -228,20 +259,23 @@ class Command(BaseCommand):
 
         # 8. Usuário Administrador Inicial e Permissões Plenas
         admin_email = "admin@emcsoldas.com.br"
+        admin_password = os.environ.get('INITIAL_ADMIN_PASSWORD', 'AdminMaster2026!')
+        admin_pin = os.environ.get('INITIAL_ADMIN_PIN', '123456')
+
         admin_user, created_user = Usuario.objects.get_or_create(
             email=admin_email,
             defaults={
                 'nome': 'ADMINISTRADOR GERAL',
                 'role': 'Admin',
-                'password_hash': make_password('AdminMaster2026!'),
-                'pin_hash': make_password('123456'),
+                'password_hash': make_password(admin_password),
+                'pin_hash': make_password(admin_pin),
                 'is_ativo': True,
             }
         )
         if not created_user:
             admin_user.nome = 'ADMINISTRADOR GERAL'
-            admin_user.set_password('AdminMaster2026!')
-            admin_user.set_pin('123456')
+            admin_user.set_password(admin_password)
+            admin_user.set_pin(admin_pin)
             admin_user.resetar_falhas_login()
             admin_user.save()
 

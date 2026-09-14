@@ -441,6 +441,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Persistência Fiel no Backend:** O endpoint de importação em lote (`executar_importacao_lote`) agora lê o `meio_pagamento_id` real enviado em cada transação, eliminando o fallback genérico que gravava tudo como boleto bancário.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.28` em `frontend/sw.js` e sufixos de cache-busting `?v=4.28` em `frontend/index.html`.
   - **Homologação:** Suíte completa com 184 testes automatizados do Django executados com 100% de aprovação (OK em 74s).
+- [x] **Reestruturação das Categorias DRE, Purga de Testes (C1) e Blindagem de Credenciais do Seeder:**
+  - **Reestruturação Oficial das 20 Categorias:** Reformulação do catálogo de categorias contábeis no `seed_initial_data.py` e no banco de dados. Remoção de `(MAO DE OBRA)` de receitas, criação de `AQUISIÇÃO DE MÁQUINAS E EQUIPAMENTOS` (Investimento CAPEX) segregada de `MANUTENÇÃO DE MÁQUINAS E INSTALAÇÕES` (OPEX), e separação clara entre `FOLHA DE PAGAMENTO (SALARIOS E BENEFICIOS)`, `ENCARGOS TRABALHISTAS (FGTS E INSS)`, `PRO-LABORE DOS SOCIOS`, `IMPOSTOS E TRIBUTOS (SIMPLES NACIONAL / ISS / TAXAS)` e `RETIRADA DE SOCIOS / DISTRIBUICAO DE LUCRO`.
+  - **Purga Definitiva de Registros de Teste:** Exclusão automática de categorias residuais de teste (`C1`) e migração atômica sem duplicidade de IDs para categorias pré-existentes.
+  - **Blindagem de Credenciais no Seeder:** Substituição de senhas/PINs hardcoded em `seed_initial_data.py` por leitura dinâmica via variáveis de ambiente (`INITIAL_ADMIN_PASSWORD` e `INITIAL_ADMIN_PIN`) com fallback transparente para o ambiente de desenvolvimento local.
+  - **Enriquecimento do Classificador Heurístico do Extrato:** Atualização do motor de detecção em `apps/conciliacao/services.py` para mapear extratos automaticamente para as novas categorias oficiais (tarifas, tributos, encargos, combustível, energia/água/internet, salários e receitas).
+  - **Homologação:** Suíte completa de 184 testes automatizados do Django executada e aprovada com 100% de sucesso (OK em 79.9s).
+
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

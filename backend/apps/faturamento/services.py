@@ -36,7 +36,7 @@ def obter_categoria_receita_padrao():
 
     if not categoria:
         categoria = CategoriaFinanceira.objects.create(
-            nome='RECEITA DE SERVICOS (MAO DE OBRA)',
+            nome='RECEITA DE PRESTACAO DE SERVICOS',
             tipo='RECEITA'
         )
     return categoria
