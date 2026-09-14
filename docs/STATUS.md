@@ -447,6 +447,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Blindagem de Credenciais no Seeder:** Substituição de senhas/PINs hardcoded em `seed_initial_data.py` por leitura dinâmica via variáveis de ambiente (`INITIAL_ADMIN_PASSWORD` e `INITIAL_ADMIN_PIN`) com fallback transparente para o ambiente de desenvolvimento local.
   - **Enriquecimento do Classificador Heurístico do Extrato:** Atualização do motor de detecção em `apps/conciliacao/services.py` para mapear extratos automaticamente para as novas categorias oficiais (tarifas, tributos, encargos, combustível, energia/água/internet, salários e receitas).
   - **Homologação:** Suíte completa de 184 testes automatizados do Django executada e aprovada com 100% de sucesso (OK em 79.9s).
+- [x] **Blindagem de Saldos de Contas Bancárias no Seeder, Restauração e Ação de Recálculo Automático (PWA v4.29):**
+  - **Blindagem Definitiva do Seeder:** Atualização da Seção 6 em `seed_initial_data.py` com checagem `ContaBancaria.all_objects.exists()`, eliminando o risco de o seeder sobrescrever saldos reais de contas bancárias ativas durante sincronizações de dados mestres.
+  - **Endpoint de Recálculo de Saldo (`POST /api/contas-bancarias/{id}/recalcular-saldo/`):** Implementação de motor de conciliação no `ContaBancariaViewSet` que audita e soma todas as entradas pagas, subtrai saídas pagas e aplica transferências inter-contas ativas, sincronizando o saldo com as movimentações reais.
+  - **Restauração da Conta NUBANK:** Saldo da conta #2 restabelecido com precisão contábil para **R$ 2.100,39** (R$ 10.898,20 de entradas - R$ 8.797,81 de saídas).
+  - **Botão 'RECALCULAR' no Frontend:** Ação direta na tabela de Contas Bancárias (`financeiro-view.js`) permitindo ao operador auditar e re-sincronizar o saldo da conta a qualquer momento em 1 clique com feedback visual.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.29` em `frontend/sw.js` e sufixos de cache-busting `?v=4.29` em `frontend/index.html`.
+  - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 71.5s).
+
 
 
 

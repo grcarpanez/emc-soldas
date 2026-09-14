@@ -220,21 +220,24 @@ class Command(BaseCommand):
                 cat_count += 1
         self.stdout.write(self.style.SUCCESS(f"[OK] Categorias Financeiras sincronizadas ({cat_count} novas categorias)."))
 
-        # 6. Contas Bancárias Iniciais (100% Maiúsculas sem Acento)
-        contas = [
-            ("CAIXA FISICO DA OFICINA", 0.00, 0.00),
-            ("CONTA BANCARIA PRINCIPAL", 0.00, 1000.00),
-        ]
-        conta_count = 0
-        for nome_conta, saldo, limite in contas:
-            nome_san = sanitizar_texto_maiusculo(nome_conta)
-            obj, created = ContaBancaria.objects.update_or_create(
-                nome=nome_san,
-                defaults={'saldo': saldo, 'limite_credito': limite, 'deleted_at': None}
-            )
-            if created:
+        # 6. Contas Bancárias Iniciais (100% Maiúsculas sem Acento - Preservação Estrita de Saldos)
+        if not ContaBancaria.all_objects.exists():
+            contas = [
+                ("CAIXA FISICO DA OFICINA", 0.00, 0.00),
+                ("CONTA BANCARIA PRINCIPAL", 0.00, 1000.00),
+            ]
+            conta_count = 0
+            for nome_conta, saldo, limite in contas:
+                nome_san = sanitizar_texto_maiusculo(nome_conta)
+                ContaBancaria.objects.create(
+                    nome=nome_san,
+                    saldo=saldo,
+                    limite_credito=limite
+                )
                 conta_count += 1
-        self.stdout.write(self.style.SUCCESS(f"[OK] Contas Bancarias sincronizadas ({conta_count} novas contas)."))
+            self.stdout.write(self.style.SUCCESS(f"[OK] Contas Bancárias sincronizadas ({conta_count} novas contas)."))
+        else:
+            self.stdout.write(self.style.SUCCESS("[OK] Contas Bancárias pré-existentes preservadas com saldos intactos."))
 
         # 7. Configuração Global (Singleton id=1 - 100% Maiúsculas sem Acento)
         config, created = ConfiguracaoGlobal.objects.update_or_create(

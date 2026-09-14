@@ -1104,6 +1104,7 @@ window.FinanceiroView = {
           <td class="text-center">
             <div style="display: flex; justify-content: center; gap: 6px;">
               <button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.abrirModalContaBancaria(${c.id})">EDITAR</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.recalcularSaldoConta(${c.id}, '${window.EMCUtils.escapeHtml(c.nome)}')">RECALCULAR</button>
               <button class="btn btn-danger btn-sm" onclick="window.FinanceiroView.excluirContaBancaria(${c.id}, '${window.EMCUtils.escapeHtml(c.nome)}')">EXCLUIR</button>
             </div>
           </td>
@@ -1213,6 +1214,31 @@ window.FinanceiroView = {
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao inativar conta bancária.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async recalcularSaldoConta(contaId, nome) {
+    window.EMCUtils.openModal({
+      title: 'AUDITORIA E RECÁLCULO DE SALDO',
+      size: 'sm',
+      confirmText: 'CONFIRMAR RECÁLCULO',
+      content: `
+        <p>Deseja auditar e recalcular o saldo da conta <strong>${window.EMCUtils.escapeHtml(nome)}</strong> (#${contaId})?</p>
+        <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-top: 8px;">
+          O sistema somará todas as entradas pagas, subtrairá as saídas pagas e aplicará as transferências inter-contas ativas vinculadas a esta conta.
+        </p>
+      `,
+      onConfirm: async () => {
+        try {
+          const res = await window.api.post(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS}${contaId}/recalcular-saldo/`);
+          window.EMCUtils.showToast(`Saldo recalculado: ${window.EMCUtils.formatarMoeda(res.novo_saldo)} (Anterior: ${window.EMCUtils.formatarMoeda(res.saldo_anterior)})`, 'success');
+          await this.carregarListaContasBancarias();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao recalcular saldo.', 'error');
           return false;
         }
       }

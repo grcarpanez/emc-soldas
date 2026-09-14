@@ -3,6 +3,7 @@ Views e ViewSets do Módulo Financeiro e Tesouraria.
 Em conformidade com docs/FSD.md e docs/PLANO.md (Fase 4 e Fase 10).
 """
 from datetime import date
+from decimal import Decimal
 from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
@@ -147,6 +148,60 @@ class ContaBancariaViewSet(viewsets.ModelViewSet):
 
         user_id = self.request.user.id if self.request.user and self.request.user.is_authenticated else None
         instance.delete(user_id=user_id)
+
+    @action(detail=True, methods=['post'], url_path='recalcular-saldo')
+    def recalcular_saldo(self, request, pk=None):
+        """
+        Recalcula e audita o saldo real da conta bancária somando todas as entradas pagas,
+        subtraindo todas as saídas pagas e aplicando transferências inter-contas ativas.
+        """
+        conta = self.get_object()
+        from django.db.models import Sum
+
+        entradas = conta.lancamentos_origem.filter(
+            tipo_lancamento='ENTRADA',
+            status_pagamento='PAGO',
+            deleted_at__isnull=True
+        ).aggregate(s=Sum('valor'))['s'] or Decimal('0.00')
+
+        saidas = conta.lancamentos_origem.filter(
+            tipo_lancamento='SAIDA',
+            status_pagamento='PAGO',
+            deleted_at__isnull=True
+        ).aggregate(s=Sum('valor'))['s'] or Decimal('0.00')
+
+        transf_entradas = conta.lancamentos_destino.filter(
+            tipo_lancamento='TRANSFERENCIA',
+            status_pagamento='PAGO',
+            deleted_at__isnull=True
+        ).aggregate(s=Sum('valor'))['s'] or Decimal('0.00')
+
+        transf_saidas = conta.lancamentos_origem.filter(
+            tipo_lancamento='TRANSFERENCIA',
+            status_pagamento='PAGO',
+            deleted_at__isnull=True
+        ).aggregate(s=Sum('valor'))['s'] or Decimal('0.00')
+
+        saldo_anterior = conta.saldo
+        novo_saldo = entradas - saidas + transf_entradas - transf_saidas
+
+        conta.saldo = novo_saldo
+        if request.user and request.user.is_authenticated:
+            conta.updated_by_id = request.user.id
+        conta.save(update_fields=['saldo', 'updated_at', 'updated_by_id'])
+
+        return Response({
+            'status': 'sucesso',
+            'mensagem': f"Saldo da conta '{conta.nome}' recalculado com sucesso.",
+            'conta_id': conta.id,
+            'nome': conta.nome,
+            'saldo_anterior': float(saldo_anterior),
+            'novo_saldo': float(novo_saldo),
+            'total_entradas': float(entradas),
+            'total_saidas': float(saidas),
+            'total_transf_recebidas': float(transf_entradas),
+            'total_transf_enviadas': float(transf_saidas),
+        })
 
 
 class MeioPagamentoViewSet(viewsets.ModelViewSet):

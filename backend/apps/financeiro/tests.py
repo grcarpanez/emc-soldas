@@ -865,3 +865,40 @@ class CategoriasGovernancaETesourariaTestCase(TestCase):
         self.assertEqual(response_patch.data['categoria'], self.cat_ambos.id)
         self.assertEqual(response_patch.data['descricao'], "GASTO RECLASSIFICADO")
 
+    def test_recalcular_saldo_conta_bancaria(self):
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        # Força saldo zerado manualmente para testar o recálculo
+        self.conta.saldo = Decimal('0.00')
+        self.conta.save(update_fields=['saldo'])
+
+        # Cria 1 entrada e 1 saída pagas
+        LancamentoFinanceiro.objects.create(
+            tipo_lancamento="ENTRADA",
+            descricao="RECEITA TESTE RECALCULO",
+            valor=Decimal("1500.00"),
+            categoria=self.cat_receita,
+            conta=self.conta,
+            data_vencimento=timezone.localdate(),
+            data_pagamento=timezone.now(),
+            status_pagamento="PAGO"
+        )
+        LancamentoFinanceiro.objects.create(
+            tipo_lancamento="SAIDA",
+            descricao="DESPESA TESTE RECALCULO",
+            valor=Decimal("400.00"),
+            categoria=self.cat_despesa,
+            conta=self.conta,
+            data_vencimento=timezone.localdate(),
+            data_pagamento=timezone.now(),
+            status_pagamento="PAGO"
+        )
+
+        response = self.client.post(f'/api/contas-bancarias/{self.conta.id}/recalcular-saldo/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'sucesso')
+        self.assertEqual(Decimal(str(response.data['novo_saldo'])), Decimal('1100.00'))
+
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, Decimal('1100.00'))
+
