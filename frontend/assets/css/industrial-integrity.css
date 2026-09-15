@@ -962,12 +962,58 @@ input[type="file"].form-control::file-selector-button:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   background-color: var(--color-surface-container-highest);
-  border: 1px solid var(--color-rust-orange);
-  color: var(--color-rust-orange);
+  border: 1px solid var(--color-steel-gray);
+  color: var(--color-on-surface-variant);
   transition: all 0.15s ease;
+}
+
+.btn-anexo-pre-lancamento {
+  padding: 2px 6px;
+  height: 24px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background-color: var(--color-surface-container-highest);
+  border: 1px dashed var(--color-steel-gray);
+  color: var(--color-brushed-metal);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-anexo-pre-lancamento:hover {
+  border-color: var(--color-rust-orange);
+  color: var(--color-rust-orange);
+  background-color: rgba(183, 65, 14, 0.1);
+}
+
+.badge-anexo-anexado {
+  padding: 2px 6px;
+  height: 24px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background-color: rgba(76, 175, 80, 0.15);
+  border: 1px solid var(--color-success);
+  color: #81C784;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.badge-anexo-anexado:hover {
+  background-color: rgba(244, 67, 54, 0.2);
+  border-color: var(--color-error);
+  color: #E57373;
 }
 
 .select-categoria-pendente {

@@ -561,19 +561,32 @@ window.ConciliacaoView = {
         `;
       }
 
+      const badgeAnexoHtml = !isDescartado ? (
+        p.comprovante_path ? `
+          <button type="button" class="badge-anexo-anexado" title="Remover anexo (${window.EMCUtils.escapeHtml(p.nome_arquivo_comprovante || 'Arquivo')})" onclick="window.ConciliacaoView.removerComprovantePreLancamento(${idx})">
+            📎 ${window.EMCUtils.escapeHtml((p.nome_arquivo_comprovante || 'ANEXADO').length > 12 ? (p.nome_arquivo_comprovante || 'ANEXADO').substring(0, 10) + '...' : (p.nome_arquivo_comprovante || 'ANEXADO'))} ✕
+          </button>
+        ` : `
+          <button type="button" class="btn-anexo-pre-lancamento" title="Anexar documento ou comprovante de pagamento" onclick="window.ConciliacaoView.triggerUploadComprovante(${idx})">
+            📎 ${isEntrada ? '+ NF' : '+ RECIBO'}
+          </button>
+        `
+      ) : '';
+
       html += `
         <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
-          <!-- Linha 1 (Cabeçalho): Identificador/Data na esquerda e Valor com Botão ✕ Alinhado na direita -->
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;">
+          <!-- Linha 1 (Cabeçalho Ultra-Denso): Identificador/Data, Valor, Botão/Badge de Anexo e Botão ✕ -->
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; width: 100%;">
             <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
               PRÉ-LANÇAMENTO #${idx + 1} • ${window.EMCUtils.formatarDataPtBr(p.data)}
             </div>
-            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-              <span class="mono-text font-bold" style="color: ${isEntrada ? 'var(--color-success)' : 'var(--color-error)'}; font-size: 13px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <span class="mono-text font-bold" style="color: ${isEntrada ? 'var(--color-success)' : 'var(--color-error)'}; font-size: 12px;">
                 ${isEntrada ? '+' : '-'} ${window.EMCUtils.formatarMoeda(p.valor)}
               </span>
+              ${badgeAnexoHtml}
               ${!isDescartado ? `
                 <button type="button" class="btn-descarte-pre-lancamento" title="Descartar este lançamento da importação" onclick="window.ConciliacaoView.descartarPreLancamento(${idx})">
                   ✕
@@ -589,31 +602,30 @@ window.ConciliacaoView = {
           <!-- Linha Contextual de Inteligência Fiscal e Parceiros -->
           ${infoExtraInteligencia}
 
-          <!-- Linha 2 (Inputs): Grid com Descrição, Select de Categoria DRE e Select de Meio de Pagamento -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-bottom: 6px;">
+          <!-- Linha 2 (Grid Horizontal Único): Descrição (2fr), Meio (1fr), Categoria DRE (2fr) -->
+          <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 6px; width: 100%;">
             <div>
-              <input type="text" class="form-control" style="font-size: 12px; padding: 5px 8px; width: 100%;" 
+              <input type="text" class="form-control" style="font-size: 11px; padding: 4px 6px; width: 100%;" 
                      value="${window.EMCUtils.escapeHtml(p.descricao)}" 
-                     placeholder="DESCRIÇÃO DO LANÇAMENTO..."
+                     placeholder="DESCRIÇÃO..."
                      onchange="window.ConciliacaoView.atualizarDescricaoPreLancamento(${idx}, this.value)">
             </div>
             <div>
               <select id="select-meio-${idx}" 
                       class="form-control" 
-                      style="font-size: 12px; padding: 5px 8px; width: 100%; font-family: var(--font-mono);"
+                      style="font-size: 11px; padding: 4px 6px; width: 100%; font-family: var(--font-mono);"
                       onchange="window.ConciliacaoView.atualizarMeioPreLancamento(${idx}, this.value)">
                 ${optionsMeios}
               </select>
             </div>
-          </div>
-
-          <div style="width: 100%;">
-            <select id="select-cat-${idx}" 
-                    class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
-                    style="font-size: 12px; padding: 5px 8px; width: 100%;"
-                    onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
-              ${optionsCat}
-            </select>
+            <div>
+              <select id="select-cat-${idx}" 
+                      class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
+                      style="font-size: 11px; padding: 4px 6px; width: 100%;"
+                      onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
+                ${optionsCat}
+              </select>
+            </div>
           </div>
         </div>
       `;
@@ -645,6 +657,59 @@ window.ConciliacaoView = {
       this.renderListaExtrato();
       this.renderListaPreLancamentos();
       this.atualizarBotaoGerarLote();
+      this.desenharLinhasConexao();
+    }
+  },
+
+  triggerUploadComprovante(idx) {
+    const item = this.preLancamentosImportacao[idx];
+    if (!item || item.descartado) return;
+
+    let input = document.getElementById('input-upload-comprovante-temp');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'file';
+      input.id = 'input-upload-comprovante-temp';
+      input.accept = '.pdf,.png,.jpg,.jpeg,.xml,.csv,.txt';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+    }
+
+    const newFileInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newFileInput, input);
+
+    newFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('arquivo', file);
+
+      try {
+        window.EMCUtils.showToast('Enviando comprovante...', 'info');
+        const res = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+        
+        if (this.preLancamentosImportacao[idx]) {
+          this.preLancamentosImportacao[idx].comprovante_path = res.comprovante_path;
+          this.preLancamentosImportacao[idx].nome_arquivo_comprovante = res.nome_arquivo_comprovante;
+          window.EMCUtils.showToast(`Comprovante "${res.nome_arquivo_comprovante}" anexado com sucesso!`, 'success');
+          this.renderListaPreLancamentos();
+          this.desenharLinhasConexao();
+        }
+      } catch (err) {
+        window.EMCUtils.showToast(`Erro ao anexar arquivo: ${err.message || 'Falha no envio'}`, 'error');
+      }
+    });
+
+    newFileInput.click();
+  },
+
+  removerComprovantePreLancamento(idx) {
+    if (this.preLancamentosImportacao[idx]) {
+      this.preLancamentosImportacao[idx].comprovante_path = null;
+      this.preLancamentosImportacao[idx].nome_arquivo_comprovante = null;
+      window.EMCUtils.showToast('Anexo removido do lançamento.', 'info');
+      this.renderListaPreLancamentos();
       this.desenharLinhasConexao();
     }
   },
@@ -732,7 +797,9 @@ window.ConciliacaoView = {
               fitid: p.fitid,
               meio_pagamento_id: p.meio_pagamento_id || null,
               cliente_fornecedor_id: p.cliente_fornecedor_id || null,
-              fatura_id: p.fatura_id || null
+              fatura_id: p.fatura_id || null,
+              comprovante_path: p.comprovante_path || null,
+              nome_arquivo_comprovante: p.nome_arquivo_comprovante || null
             }))
           };
 

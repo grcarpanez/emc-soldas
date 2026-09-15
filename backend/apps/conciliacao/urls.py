@@ -9,7 +9,8 @@ from apps.conciliacao.views import (
     LancamentoRapidoView,
     TrocarContaView,
     DivergenciasView,
-    ImportacaoLoteView
+    ImportacaoLoteView,
+    UploadComprovanteConciliacaoView
 )
 
 app_name = 'conciliacao'
@@ -22,4 +23,5 @@ urlpatterns = [
     path('trocar-conta/', TrocarContaView.as_view(), name='trocar-conta'),
     path('divergencias/', DivergenciasView.as_view(), name='divergencias'),
     path('importacao-lote/', ImportacaoLoteView.as_view(), name='importacao-lote'),
+    path('upload-comprovante/', UploadComprovanteConciliacaoView.as_view(), name='upload-comprovante'),
 ]

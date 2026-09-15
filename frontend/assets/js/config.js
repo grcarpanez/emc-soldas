@@ -106,7 +106,8 @@ const CONFIG = {
       CONFIRMAR: '/conciliacao/confirmar/',
       LANCAMENTO_RAPIDO: '/conciliacao/lancamento-rapido/',
       DIVERGENCIAS: '/conciliacao/divergencias/',
-      IMPORTACAO_LOTE: '/conciliacao/importacao-lote/'
+      IMPORTACAO_LOTE: '/conciliacao/importacao-lote/',
+      UPLOAD_COMPROVANTE: '/conciliacao/upload-comprovante/'
     },
     ADMINISTRACAO: {
       CONFIGURACOES_GLOBAIS: '/configuracoes-globais/',

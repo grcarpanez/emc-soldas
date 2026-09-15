@@ -6,6 +6,11 @@ from rest_framework import views, status, permissions
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
+from django.core.files.storage import default_storage
+from django.utils import timezone
+import os
+import uuid
+
 from core.permissions import HasTesourariaAccess
 from apps.financeiro.serializers import LancamentoFinanceiroSerializer
 from apps.conciliacao.serializers import (
@@ -15,7 +20,8 @@ from apps.conciliacao.serializers import (
     LancamentoRapidoSerializer,
     TrocarContaSerializer,
     DivergenciasQuerySerializer,
-    ImportacaoLoteSerializer
+    ImportacaoLoteSerializer,
+    UploadComprovanteConciliacaoSerializer
 )
 from apps.conciliacao.services import (
     processar_extrato_split_screen,
@@ -227,4 +233,34 @@ class ImportacaoLoteView(views.APIView):
             user=request.user
         )
         return Response(resultado, status=status.HTTP_201_CREATED)
+
+
+class UploadComprovanteConciliacaoView(views.APIView):
+    """
+    POST /api/conciliacao/upload-comprovante/
+    Recebe um arquivo individual de comprovante ou nota fiscal enviado na mesa de triagem
+    e salva temporariamente no storage, retornando o caminho salvo para vinculação no lote.
+    """
+    permission_classes = [permissions.IsAuthenticated, HasTesourariaAccess]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        serializer = UploadComprovanteConciliacaoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        arquivo = serializer.validated_data['arquivo']
+        extensao = os.path.splitext(arquivo.name)[1]
+        nome_unico = f"{uuid.uuid4().hex}{extensao}"
+        subpasta = timezone.now().strftime('%Y/%m')
+        caminho_relativo = f"comprovantes/{subpasta}/{nome_unico}"
+
+        caminho_salvo = default_storage.save(caminho_relativo, arquivo)
+
+        return Response({
+            "status": "sucesso",
+            "mensagem": "Comprovante enviado com sucesso.",
+            "comprovante_path": caminho_salvo,
+            "nome_arquivo_comprovante": arquivo.name
+        }, status=status.HTTP_201_CREATED)
+
 

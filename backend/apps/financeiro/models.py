@@ -421,6 +421,18 @@ class LancamentoFinanceiro(BaseModel):
         db_column='cliente_fornecedor_id',
         verbose_name="Cliente ou Fornecedor Vinculado"
     )
+    comprovante = models.FileField(
+        upload_to='comprovantes/%Y/%m/',
+        null=True,
+        blank=True,
+        verbose_name="Comprovante de Pagamento ou Nota Fiscal"
+    )
+    nome_arquivo_comprovante = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Nome do Arquivo do Comprovante"
+    )
 
     class Meta:
         db_table = 'lancamentos_financeiros'

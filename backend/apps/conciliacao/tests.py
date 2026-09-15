@@ -550,3 +550,47 @@ VERSION:102
         self.assertTrue(trn_dup['duplicidade'])
         self.assertIn('PETRA_PIX_01', trn_dup['duplicidade_motivo'])
 
+    def test_upload_comprovante_e_importacao_lote_com_anexo(self):
+        """Testa o endpoint upload-comprovante e a gravação de comprovante no LancamentoFinanceiro."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        dummy_pdf = SimpleUploadedFile("nota_fiscal_servico.pdf", b"%PDF-1.4 Mock PDF content", content_type="application/pdf")
+        response_upload = self.client.post(
+            '/api/conciliacao/upload-comprovante/',
+            {'arquivo': dummy_pdf},
+            format='multipart'
+        )
+
+        self.assertEqual(response_upload.status_code, status.HTTP_201_CREATED)
+        dados_upload = response_upload.json()
+        self.assertEqual(dados_upload['status'], 'sucesso')
+        self.assertIn('comprovantes/', dados_upload['comprovante_path'])
+        self.assertEqual(dados_upload['nome_arquivo_comprovante'], 'nota_fiscal_servico.pdf')
+
+        caminho_salvo = dados_upload['comprovante_path']
+
+        # Efetua importação em lote incluindo o comprovante no payload
+        payload_lote = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'fitid': 'PIX_COM_ANEXO_001',
+                    'data_pagamento': '2026-09-15T10:00:00Z',
+                    'descricao': 'RECEBIMENTO SERVICO SOLDA COM NF',
+                    'valor': '1500.00',
+                    'tipo_lancamento': 'ENTRADA',
+                    'categoria_id': self.categoria_receita.id,
+                    'comprovante_path': caminho_salvo,
+                    'nome_arquivo_comprovante': 'nota_fiscal_servico.pdf'
+                }
+            ]
+        }
+
+        res_lote = self.client.post('/api/conciliacao/importacao-lote/', payload_lote, format='json')
+        self.assertEqual(res_lote.status_code, status.HTTP_201_CREATED)
+
+        lanc = LancamentoFinanceiro.objects.get(fitid='PIX_COM_ANEXO_001')
+        self.assertEqual(lanc.nome_arquivo_comprovante, 'nota_fiscal_servico.pdf')
+        self.assertTrue(lanc.comprovante.name.endswith('.pdf'))
+
+

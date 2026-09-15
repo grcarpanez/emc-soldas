@@ -107,6 +107,24 @@ class ItemImportacaoLoteSerializer(serializers.Serializer):
     meio_pagamento_id = serializers.IntegerField(required=False, allow_null=True)
     cliente_fornecedor_id = serializers.IntegerField(required=False, allow_null=True)
     fatura_id = serializers.IntegerField(required=False, allow_null=True)
+    comprovante_path = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+
+class UploadComprovanteConciliacaoSerializer(serializers.Serializer):
+    """Valida o upload de arquivo de comprovante ou nota fiscal individual para a mesa de triagem."""
+    arquivo = serializers.FileField(required=True)
+
+    def validate_arquivo(self, value):
+        extensao = value.name.lower().split('.')[-1]
+        extensoes_permitidas = ('pdf', 'png', 'jpg', 'jpeg', 'xml', 'csv', 'txt')
+        if extensao not in extensoes_permitidas:
+            raise serializers.ValidationError(f"Formato de arquivo inválido. Formatos permitidos: {', '.join(extensoes_permitidas).upper()}.")
+        
+        # Limite de tamanho de upload (máximo 15MB)
+        if value.size > 15 * 1024 * 1024:
+            raise serializers.ValidationError("O tamanho do arquivo excede o limite máximo permitido de 15MB.")
+        return value
 
 
 class ImportacaoLoteSerializer(serializers.Serializer):

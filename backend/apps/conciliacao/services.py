@@ -994,6 +994,8 @@ def executar_importacao_lote(
             # Cria lançamento já liquidado e conciliado (Receita/Despesa direta, suportando cliente/fornecedor e fitid)
             cli_forn_id = item.get('cliente_fornecedor_id')
             fitid_val = item.get('fitid') or None
+            comprovante_val = item.get('comprovante_path') or None
+            nome_comprovante_val = item.get('nome_arquivo_comprovante') or None
 
             lanc = LancamentoFinanceiro.objects.create(
                 conta=conta,
@@ -1001,6 +1003,8 @@ def executar_importacao_lote(
                 meio_pagamento=meio,
                 cliente_fornecedor_id=cli_forn_id,
                 fitid=fitid_val,
+                comprovante=comprovante_val,
+                nome_arquivo_comprovante=nome_comprovante_val,
                 tipo_lancamento=tipo,
                 descricao=descricao,
                 valor=valor,

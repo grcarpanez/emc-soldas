@@ -341,6 +341,8 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'data_conciliacao',
             'conciliado_por',
             'conciliado_por_nome',
+            'comprovante',
+            'nome_arquivo_comprovante',
             'created_at',
             'updated_at'
         ]

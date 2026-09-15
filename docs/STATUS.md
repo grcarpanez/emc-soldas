@@ -468,6 +468,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Preservação Integral de Segurança e Cache:** Cookies HttpOnly, cabeçalhos CSRF e tokens continuam sendo transmitidos diretamente pelo navegador, mantendo o cache e a inicialização instantânea para páginas e assets estáticos.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.31` em `frontend/sw.js` e sufixos de cache-busting `?v=4.31` em `frontend/index.html`.
   - **Homologação:** Suíte completa com 185 testes automatizados do Django executados com 100% de aprovação (OK em 80.1s).
+- [x] **Anexo de Comprovantes/NFs e Redesign Ultra-Denso da Mesa de Triagem (PWA v4.32):**
+  - **Anexo Inline de Documentos na Conciliação:** Adição de suporte ao upload de Notas Fiscais (em Recebimentos) e Comprovantes de Pagamento (em Saídas) diretamente na Mesa de Triagem (`Modo Importação em Lote`). Botão micro-inline `[📎 + NF]` ou `[📎 + RECIBO]` que se converte dinamicamente em badge verde neon `[📎 NF_123.pdf ✕]`, permitindo vincular arquivos PDF, PNG, JPG ou XML a cada transação pré-lançada.
+  - **Redesign Arquitetural Ultra-Denso (Eliminação do Descompasso de Altura):** Reorganização dos cards da mesa de triagem em **2 linhas horizontais densas (~72px de altura)**:
+    - Linha 1: Título e Data, Valor Formatado (`+ / - R$`), Botão/Badge Inline de Anexo e Botão `✕` de Descarte.
+    - Linha 2: Grid horizontal de 3 colunas (`Descrição`, `Meio de Pagamento`, `Categoria DRE`), eliminando o empilhamento vertical e reduzindo a altura do card em mais de 50%, eliminando a discrepância com a coluna do extrato.
+  - **Backend & Persistência:** Campos `comprovante` (`FileField`) e `nome_arquivo_comprovante` adicionados a `LancamentoFinanceiro` (Migration `financeiro.0005`), com endpoint `POST /api/conciliacao/upload-comprovante/` e integração no serviço `executar_importacao_lote`.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.32` em `frontend/sw.js` e sufixos de cache-busting `?v=4.32` em `frontend/index.html`.
 
 
 
