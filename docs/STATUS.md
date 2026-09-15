@@ -475,6 +475,12 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - Linha 2: Grid horizontal de 3 colunas (`Descrição`, `Meio de Pagamento`, `Categoria DRE`), eliminando o empilhamento vertical e reduzindo a altura do card em mais de 50%, eliminando a discrepância com a coluna do extrato.
   - **Backend & Persistência:** Campos `comprovante` (`FileField`) e `nome_arquivo_comprovante` adicionados a `LancamentoFinanceiro` (Migration `financeiro.0005`), com endpoint `POST /api/conciliacao/upload-comprovante/` e integração no serviço `executar_importacao_lote`.
   - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.32` em `frontend/sw.js` e sufixos de cache-busting `?v=4.32` em `frontend/index.html`.
+- [x] **Anexo Universal de Comprovantes na Tesouraria e Modais (PWA v4.33):**
+  - **Coluna ANEXO na Tabela do Extrato Real:** Adição da coluna `ANEXO` na listagem do Caixa Real (`financeiro-view.js`). Para movimentações com anexo, exibe badge verde `[📎 NomeArquivo]` que abre/baixa o comprovante diretamente em nova aba; para lançamentos sem anexo, exibe o botão `[📎 + ANEXO]` para upload instantâneo diretamente da linha.
+  - **Modais de Lançamento Avulso e Edição:** Campo de seleção de arquivos `<input type="file">` adicionado em `abrirModalNovoLancamento` e `abrirModalEditarLancamento`, efetuando o upload prévio e integrando os caminhos aos payloads de criação (`POST`) e atualização (`PATCH`).
+  - **Modal de Transferência Inter-Contas:** Atualizados `TransferenciaInterContasSerializer`, `transferir_inter_contas` e o modal `abrirModalTransferencia`, registrando o comprovante da operação no lançamento de transferência gerado.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.33` em `frontend/sw.js` e sufixos de cache-busting `?v=4.33` em `frontend/index.html`.
+  - **Homologação:** 38 testes automatizados do Django executados com 100% de sucesso.
 
 
 

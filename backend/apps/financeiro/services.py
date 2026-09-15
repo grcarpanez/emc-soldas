@@ -403,7 +403,7 @@ def estornar_lancamento(lancamento, justificativa, user=None):
 
 
 @transaction.atomic
-def transferir_inter_contas(conta_origem_id, conta_destino_id, valor, descricao=None, data_transferencia=None, user=None):
+def transferir_inter_contas(conta_origem_id, conta_destino_id, valor, descricao=None, data_transferencia=None, comprovante_path=None, nome_arquivo_comprovante=None, user=None):
     """
     Executa uma transferência de fundos entre duas contas bancárias da empresa.
     Operação estritamente atômica e neutra para o DRE.
@@ -458,6 +458,8 @@ def transferir_inter_contas(conta_origem_id, conta_destino_id, valor, descricao=
         tipo_lancamento='TRANSFERENCIA',
         descricao=desc,
         valor=valor,
+        comprovante=comprovante_path or None,
+        nome_arquivo_comprovante=nome_arquivo_comprovante or None,
         data_vencimento=data_transferencia.date() if hasattr(data_transferencia, 'date') else data_transferencia,
         data_pagamento=data_transferencia,
         status_pagamento='PAGO',

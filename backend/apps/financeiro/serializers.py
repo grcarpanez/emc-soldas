@@ -487,6 +487,8 @@ class TransferenciaInterContasSerializer(serializers.Serializer):
     valor = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
     descricao = serializers.CharField(max_length=255, required=False, allow_blank=True)
     data_transferencia = serializers.DateTimeField(required=False, allow_null=True)
+    comprovante_path = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
 
 class RemanejarDespesaCartaoSerializer(serializers.Serializer):

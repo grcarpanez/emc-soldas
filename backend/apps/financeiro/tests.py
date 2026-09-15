@@ -454,12 +454,15 @@ class TesourariaLancamentosTestCase(TestCase):
             "conta_origem_id": self.conta_principal.id,
             "conta_destino_id": self.conta_secundaria.id,
             "valor": "1000.00",
-            "descricao": "SUPRIMENTO DE CAIXA OFICINA"
+            "descricao": "SUPRIMENTO DE CAIXA OFICINA",
+            "comprovante_path": "comprovantes/2026/09/comprovante_transf.pdf",
+            "nome_arquivo_comprovante": "comprovante_transf.pdf"
         }
         response = self.client.post('/api/lancamentos-financeiros/transferir/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['tipo_lancamento'], 'TRANSFERENCIA')
         self.assertEqual(response.data['status_pagamento'], 'PAGO')
+        self.assertEqual(response.data['nome_arquivo_comprovante'], 'comprovante_transf.pdf')
 
         self.conta_principal.refresh_from_db()
         self.conta_secundaria.refresh_from_db()

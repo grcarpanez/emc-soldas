@@ -638,6 +638,8 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             valor=serializer.validated_data['valor'],
             descricao=serializer.validated_data.get('descricao'),
             data_transferencia=serializer.validated_data.get('data_transferencia'),
+            comprovante_path=serializer.validated_data.get('comprovante_path'),
+            nome_arquivo_comprovante=serializer.validated_data.get('nome_arquivo_comprovante'),
             user=request.user
         )
         return Response(LancamentoFinanceiroSerializer(lancamento).data, status=status.HTTP_201_CREATED)

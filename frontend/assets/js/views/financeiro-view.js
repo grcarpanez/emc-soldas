@@ -116,12 +116,13 @@ window.FinanceiroView = {
               <th>CONTA BANCÁRIA</th>
               <th>MEIO</th>
               <th>TIPO</th>
+              <th>ANEXO</th>
               <th>VALOR</th>
               <th style="text-align: right;">AÇÕES</th>
             </tr>
           </thead>
           <tbody id="lista-extrato-tbody">
-            <tr><td colspan="9" class="text-center"><div class="loader-spinner"></div></td></tr>
+            <tr><td colspan="10" class="text-center"><div class="loader-spinner"></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -175,7 +176,7 @@ window.FinanceiroView = {
       }
 
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
         return;
       }
 
@@ -184,6 +185,19 @@ window.FinanceiroView = {
         const isEntrada = l.tipo_lancamento === 'ENTRADA';
         const corValor = isEntrada ? 'var(--color-success)' : 'var(--color-error)';
         const sinal = isEntrada ? '+' : '-';
+        const temComprovante = !!l.comprovante;
+        const nomeAnexo = l.nome_arquivo_comprovante || 'ANEXO';
+        const rotuloAnexo = nomeAnexo.length > 11 ? nomeAnexo.substring(0, 9) + '...' : nomeAnexo;
+
+        const tdAnexo = temComprovante ? `
+          <a href="${l.comprovante}" target="_blank" class="badge-anexo-anexado" style="text-decoration: none;" title="Visualizar / Baixar: ${window.EMCUtils.escapeHtml(nomeAnexo)}">
+            📎 ${window.EMCUtils.escapeHtml(rotuloAnexo)}
+          </a>
+        ` : `
+          <button type="button" class="btn-anexo-pre-lancamento" title="Anexar Nota Fiscal ou Comprovante" onclick="window.FinanceiroView.triggerUploadComprovanteExtrato(${l.id})">
+            📎 + ANEXO
+          </button>
+        `;
 
         html += `
           <tr>
@@ -194,6 +208,7 @@ window.FinanceiroView = {
             <td>${window.EMCUtils.escapeHtml(l.conta_nome || 'Conta')}</td>
             <td><span class="status-chip info">${window.EMCUtils.escapeHtml(l.meio_pagamento_nome || 'PIX/TED')}</span></td>
             <td><span class="status-chip ${isEntrada ? 'success' : 'danger'}">${l.tipo_lancamento}</span></td>
+            <td>${tdAnexo}</td>
             <td class="mono-text" style="font-weight: 700; color: ${corValor}; font-size: 15px;">
               ${sinal} ${window.EMCUtils.formatarMoeda(l.valor)}
             </td>
@@ -206,7 +221,7 @@ window.FinanceiroView = {
       });
       tbody.innerHTML = html;
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
     }
   },
 
@@ -624,6 +639,46 @@ window.FinanceiroView = {
     });
   },
 
+  triggerUploadComprovanteExtrato(lancamentoId) {
+    let input = document.getElementById('input-upload-comprovante-extrato-temp');
+    if (!input) {
+      input = document.createElement('input');
+      input.type = 'file';
+      input.id = 'input-upload-comprovante-extrato-temp';
+      input.accept = '.pdf,.png,.jpg,.jpeg,.xml,.csv,.txt';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+    }
+
+    const newFileInput = input.cloneNode(true);
+    input.parentNode.replaceChild(newFileInput, input);
+
+    newFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('arquivo', file);
+
+      try {
+        window.EMCUtils.showToast('Enviando comprovante...', 'info');
+        const res = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+        
+        await window.api.patch(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}${lancamentoId}/`, {
+          comprovante: res.comprovante_path,
+          nome_arquivo_comprovante: res.nome_arquivo_comprovante
+        });
+
+        window.EMCUtils.showToast(`Comprovante "${res.nome_arquivo_comprovante}" anexado com sucesso!`, 'success');
+        this.carregarListaExtrato();
+      } catch (err) {
+        window.EMCUtils.showToast(`Erro ao anexar comprovante: ${err.message || 'Falha no envio'}`, 'error');
+      }
+    });
+
+    newFileInput.click();
+  },
+
   async abrirModalTransferencia() {
     const contas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS).catch(() => []);
     const listaContas = contas.results || contas || [];
@@ -650,6 +705,10 @@ window.FinanceiroView = {
           <label class="form-label">Valor da Transferência *</label>
           <input type="text" id="transf-valor" class="form-control mono-text" data-mask="moeda-atm" value="R$ 0,00">
         </div>
+        <div class="form-group">
+          <label class="form-label">Comprovante de Transferência (Opcional)</label>
+          <input type="file" id="transf-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
+        </div>
       `,
       onConfirm: async () => {
         const conta_origem_id = document.getElementById('transf-origem').value;
@@ -666,9 +725,27 @@ window.FinanceiroView = {
           return false;
         }
 
+        let comprovante_path = null;
+        let nome_arquivo_comprovante = null;
+
+        const fileInput = document.getElementById('transf-comprovante');
+        if (fileInput?.files?.length > 0) {
+          try {
+            window.EMCUtils.showToast('Enviando comprovante da transferência...', 'info');
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+            comprovante_path = resUp.comprovante_path;
+            nome_arquivo_comprovante = resUp.nome_arquivo_comprovante;
+          } catch (errUp) {
+            window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
+            return false;
+          }
+        }
+
         try {
           await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.TRANSFERIR, {
-            conta_origem_id, conta_destino_id, valor
+            conta_origem_id, conta_destino_id, valor, comprovante_path, nome_arquivo_comprovante
           });
           window.EMCUtils.showToast('Transferência inter-contas realizada com sucesso!', 'success');
           this.carregarListaExtrato();
@@ -752,7 +829,7 @@ window.FinanceiroView = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 4px;">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 10px;">
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
               <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
@@ -761,6 +838,11 @@ window.FinanceiroView = {
               <label class="form-label" for="nl-meio">Meio de Pagamento</label>
               <select id="nl-meio" class="form-control">${optionsMeios}</select>
             </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="nl-comprovante">Anexar Comprovante / Nota Fiscal (Opcional)</label>
+            <input type="file" id="nl-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
           </div>
         </form>
       `,
@@ -799,6 +881,21 @@ window.FinanceiroView = {
         if (isExtrato) {
           payload.status_pagamento = 'PAGO';
           payload.data_pagamento = `${data_vencimento}T12:00:00`;
+        }
+
+        const fileInput = document.getElementById('nl-comprovante');
+        if (fileInput?.files?.length > 0) {
+          try {
+            window.EMCUtils.showToast('Enviando comprovante do lançamento...', 'info');
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+            payload.comprovante = resUp.comprovante_path;
+            payload.nome_arquivo_comprovante = resUp.nome_arquivo_comprovante;
+          } catch (errUp) {
+            window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
+            return false;
+          }
         }
 
         try {
@@ -910,6 +1007,13 @@ window.FinanceiroView = {
               ${optionsCat}
             </select>
           </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-lanc-comprovante">
+              ${lancamento.comprovante ? `Comprovante Atual: <a href="${lancamento.comprovante}" target="_blank" style="color: var(--color-success); font-weight: 600; text-decoration: underline;">📎 ${window.EMCUtils.escapeHtml(lancamento.nome_arquivo_comprovante || 'Ver Arquivo')}</a> (Substituir abaixo)` : 'Anexar Comprovante / Nota Fiscal'}
+            </label>
+            <input type="file" id="edit-lanc-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
+          </div>
         `,
         onConfirm: async () => {
           const descricao = document.getElementById('edit-lanc-desc')?.value.trim();
@@ -920,12 +1024,29 @@ window.FinanceiroView = {
             return false;
           }
 
+          const patchPayload = {
+            descricao,
+            categoria,
+            categoria_id: categoria
+          };
+
+          const fileInput = document.getElementById('edit-lanc-comprovante');
+          if (fileInput?.files?.length > 0) {
+            try {
+              window.EMCUtils.showToast('Enviando comprovante...', 'info');
+              const formData = new FormData();
+              formData.append('arquivo', fileInput.files[0]);
+              const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+              patchPayload.comprovante = resUp.comprovante_path;
+              patchPayload.nome_arquivo_comprovante = resUp.nome_arquivo_comprovante;
+            } catch (errUp) {
+              window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
+              return false;
+            }
+          }
+
           try {
-            await window.api.patch(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}${lancamentoId}/`, {
-              descricao,
-              categoria,
-              categoria_id: categoria
-            });
+            await window.api.patch(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}${lancamentoId}/`, patchPayload);
             window.EMCUtils.showToast('Lançamento atualizado com sucesso!', 'success');
             if (this.currentTab === 'extrato') {
               this.carregarListaExtrato();
