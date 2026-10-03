@@ -346,3 +346,16 @@ Utilize o padrão abaixo para cada novo erro registrado:
   1. **Bypass de Mutação no Service Worker:** Adição da cláusula `if (event.request.method !== 'GET') return;` no listener de `fetch` em `frontend/sw.js` (PWA v4.31), garantindo que uploads trafeguem diretamente pela pilha de rede nativa do navegador com buffers e retransmissões do SO.
   2. **Download Local do Arquivo:** O usuário baixou o arquivo do OneDrive para o armazenamento físico local do smartphone (pasta `Downloads`), permitindo que o Chrome lesse os bytes instantaneamente e transmitisse o arquivo com 100% de sucesso (resposta HTTP 200 OK com 32.737 bytes de transações processadas).
 - **Como evitar no futuro:** Ao realizar uploads em navegadores móveis (Android/iOS), garantir que os arquivos estejam salvos no armazenamento local do aparelho (e não como referências remotas em nuvens como OneDrive/Google Drive). Manter o Service Worker configurado para nunca interceptar métodos de mutação (`POST`/`PUT`/`DELETE`).
+
+---
+
+## 2026-10-03 - Erro de Serialização de Comprovantes em Lançamentos Financeiros (O dado submetido não era um arquivo)
+
+- **Sintoma:** Ao anexar uma Nota Fiscal ou comprovante a um lançamento do Caixa Real na Tesouraria (ou ao criar/editar lançamentos com anexo), o sistema apresentava o toast de erro: `Erro ao anexar comprovante: COMPROVANTE: O dado submetido não era um arquivo. Cheque o tipo de codificação no formulário.`
+- **Causa:** O endpoint `/api/conciliacao/upload-comprovante/` salvava fisicamente o arquivo no disco do servidor e retornava um JSON com o caminho relativo (ex: `comprovantes/2026/10/arquivo.pdf`). Ao chamar `PATCH /api/lancamentos-financeiros/{id}/` com esse caminho em string, o `LancamentoFinanceiroSerializer` gerava um erro de validação do DRF, pois, sendo um `ModelSerializer` de um modelo com `FileField`, ele exigia obrigatoriamente um objeto binário de upload (`UploadedFile`) e rejeitava strings.
+- **Solução aplicada:**
+  1. Criação do campo híbrido customizado `ComprovanteFileOrCharField(serializers.FileField)` em `backend/apps/financeiro/serializers.py`, com suporte a strings (caminhos relativos e URLs), uploads diretos e valores nulos.
+  2. Declaração explícita dos campos `comprovante` e `nome_arquivo_comprovante` no `LancamentoFinanceiroSerializer`.
+  3. Adição de testes unitários automatizados em `backend/apps/financeiro/tests.py` cobrindo PATCH com caminho relativo, desvinculação com `null` e criação via POST.
+- **Como evitar no futuro:** Em modelos do DRF onde o fluxo de upload de arquivos é desacoplado (o upload do arquivo binário ocorre em um endpoint auxiliar e a persistência do vínculo ocorre posteriormente via PATCH/POST em JSON), utilizar serializers fields customizados que aceitem tanto instâncias de arquivo quanto caminhos de arquivos já salvos.
+

@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-09-14 (Blindagem do Service Worker para Uploads e Operações de Mutação no Celular, PWA v4.31)  
+**Última Atualização:** 2026-10-03 (Correção da Serialização de Comprovantes em Lançamentos Financeiros)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -481,6 +481,10 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Modal de Transferência Inter-Contas:** Atualizados `TransferenciaInterContasSerializer`, `transferir_inter_contas` e o modal `abrirModalTransferencia`, registrando o comprovante da operação no lançamento de transferência gerado.
   - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.33` em `frontend/sw.js` e sufixos de cache-busting `?v=4.33` em `frontend/index.html`.
   - **Homologação:** 38 testes automatizados do Django executados com 100% de sucesso.
+- [x] **Correção da Serialização de Comprovantes em Lançamentos Financeiros:**
+  - **Diagnóstico:** O DRF `ModelSerializer` padrão rejeitava strings de caminhos relativos salvas previamente pelo endpoint de upload (`comprovantes/...`) nos métodos `POST` e `PATCH` de `/api/lancamentos-financeiros/`, disparando o erro *"O dado submetido não era um arquivo. Cheque o tipo de codificação no formulário"*.
+  - **Solução Arquitetural:** Implementação do campo híbrido `ComprovanteFileOrCharField(serializers.FileField)` em `backend/apps/financeiro/serializers.py`, aceitando perfeitamente caminhos relativos de arquivos já armazenados no servidor, URLs sanitizadas, arquivos diretos (`UploadedFile`) e valores nulos (desvinculação/remoção de anexo).
+  - **Homologação:** 27 testes automatizados de `apps.financeiro` aprovados (incluindo testes dedicados de PATCH com caminho de anexo, desanexação e criação via POST) e 188 testes de todo o backend aprovados com 100% de sucesso.
 
 
 

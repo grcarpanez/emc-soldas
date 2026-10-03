@@ -479,6 +479,72 @@ class TesourariaLancamentosTestCase(TestCase):
         self.assertIn('contas_a_pagar', response.data)
         self.assertIn('contas_a_receber', response.data)
 
+    def test_anexo_e_remocao_comprovante_via_patch_lancamento(self):
+        """Valida que o endpoint de lançamentos aceita caminho relativo de comprovante no PATCH e permite remoção."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        titulo = LancamentoFinanceiro.objects.create(
+            categoria=self.categoria_receita,
+            tipo_lancamento="ENTRADA",
+            descricao="RECEBIMENTO DE SERVICOS CAVENGE",
+            valor=Decimal("6770.00"),
+            data_vencimento=timezone.localdate(),
+            status_pagamento="PAGO",
+            conta=self.conta_principal
+        )
+
+        # 1. Anexar comprovante passando caminho salvo pelo upload
+        payload_anexo = {
+            "comprovante": "comprovantes/2026/10/nota_fiscal_cavenge.pdf",
+            "nome_arquivo_comprovante": "nota_fiscal_cavenge.pdf"
+        }
+        res_patch = self.client.patch(f'/api/lancamentos-financeiros/{titulo.id}/', payload_anexo, format='json')
+        self.assertEqual(res_patch.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_patch.data['nome_arquivo_comprovante'], 'nota_fiscal_cavenge.pdf')
+        self.assertIn('/media/comprovantes/2026/10/nota_fiscal_cavenge.pdf', res_patch.data['comprovante'])
+
+        titulo.refresh_from_db()
+        self.assertEqual(str(titulo.comprovante), 'comprovantes/2026/10/nota_fiscal_cavenge.pdf')
+        self.assertEqual(titulo.nome_arquivo_comprovante, 'nota_fiscal_cavenge.pdf')
+
+        # 2. Desvincular / remover comprovante passando null
+        payload_remocao = {
+            "comprovante": None,
+            "nome_arquivo_comprovante": None
+        }
+        res_del = self.client.patch(f'/api/lancamentos-financeiros/{titulo.id}/', payload_remocao, format='json')
+        self.assertEqual(res_del.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res_del.data['comprovante'])
+        self.assertIsNone(res_del.data['nome_arquivo_comprovante'])
+
+        titulo.refresh_from_db()
+        self.assertFalse(bool(titulo.comprovante))
+        self.assertIsNone(titulo.nome_arquivo_comprovante)
+
+    def test_criacao_lancamento_com_comprovante(self):
+        """Valida que novo lançamento pode ser criado via POST com comprovante previamente salvo."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+
+        payload = {
+            "categoria": self.categoria_receita.id,
+            "tipo_lancamento": "ENTRADA",
+            "descricao": "NOVO RECEBIMENTO COM NOTA FISCAL",
+            "valor": "2500.00",
+            "data_vencimento": str(timezone.localdate()),
+            "status_pagamento": "PAGO",
+            "conta": self.conta_principal.id,
+            "comprovante": "comprovantes/2026/10/nf_servico_2500.pdf",
+            "nome_arquivo_comprovante": "nf_servico_2500.pdf"
+        }
+        response = self.client.post('/api/lancamentos-financeiros/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['nome_arquivo_comprovante'], 'nf_servico_2500.pdf')
+        self.assertIn('/media/comprovantes/2026/10/nf_servico_2500.pdf', response.data['comprovante'])
+
+        novo_id = response.data['id']
+        lanc = LancamentoFinanceiro.objects.get(id=novo_id)
+        self.assertEqual(str(lanc.comprovante), 'comprovantes/2026/10/nf_servico_2500.pdf')
+
 
 class CartoesCorporativosTestCase(TestCase):
     """Bateria de testes para Cartões de Crédito Corporativos, Faturas e Rollover (Fase 10)."""

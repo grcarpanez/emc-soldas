@@ -296,6 +296,37 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
         return value
 
 
+class ComprovanteFileOrCharField(serializers.FileField):
+    """
+    Campo híbrido para comprovantes e notas fiscais de lançamentos financeiros:
+    - Aceita arquivo direto (UploadedFile / multipart)
+    - Aceita caminho relativo retornado pelo upload (string, ex: 'comprovantes/2026/10/arquivo.pdf')
+    - Limpa automaticamente prefixos como '/media/' ou URLs completas para persistência segura
+    - Aceita None ou string vazia para remoção ou desvinculação do anexo
+    - Na serialização de saída (to_representation), retorna a URL acessível do arquivo
+    """
+    def to_internal_value(self, data):
+        if data is None or data == '':
+            return None
+        if isinstance(data, str):
+            val = data.strip()
+            if not val:
+                return None
+            if '/media/' in val:
+                val = val.split('/media/', 1)[1]
+            return val
+        return super().to_internal_value(data)
+
+    def to_representation(self, value):
+        if not value:
+            return None
+        if isinstance(value, str):
+            if value.startswith('http://') or value.startswith('https://') or value.startswith('/media/'):
+                return value
+            return f"/media/{value}"
+        return super().to_representation(value)
+
+
 class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     """
     Serializer completo para Lançamentos Financeiros (Competência e Caixa Real).
@@ -309,6 +340,8 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     categoria_tipo = serializers.CharField(source='categoria.tipo', read_only=True)
     conciliado_por_nome = serializers.CharField(source='conciliado_por.nome', read_only=True, allow_null=True)
     cliente_fornecedor_nome = serializers.CharField(source='cliente_fornecedor.nome_razao', read_only=True, allow_null=True)
+    comprovante = ComprovanteFileOrCharField(required=False, allow_null=True)
+    nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = LancamentoFinanceiro
