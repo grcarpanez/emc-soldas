@@ -1903,6 +1903,7 @@ input[type="file"].form-control::file-selector-button:hover {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .chart-tooltip-header {
@@ -1912,6 +1913,26 @@ input[type="file"].form-control::file-selector-button:hover {
   padding-bottom: 6px;
   margin-bottom: 8px;
   border-bottom: 1px solid rgba(113, 121, 126, 0.4);
+  gap: 8px;
+}
+
+.chart-tooltip-close {
+  background: transparent;
+  border: none;
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 0px;
+  margin-left: 6px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.chart-tooltip-close:hover {
+  color: var(--color-error);
+  background-color: rgba(183, 65, 14, 0.15);
 }
 
 .chart-tooltip-title {
@@ -1951,6 +1972,23 @@ input[type="file"].form-control::file-selector-button:hover {
   gap: 6px;
   max-height: 190px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-right: 4px;
+}
+
+.chart-tooltip-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chart-tooltip-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chart-tooltip-list::-webkit-scrollbar-thumb {
+  background: var(--color-steel-gray);
+  border-radius: 0px;
 }
 
 .chart-tooltip-item {

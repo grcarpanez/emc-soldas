@@ -385,7 +385,46 @@ window.DashboardView = {
       tooltipEl.className = 'chart-tooltip';
       container.appendChild(tooltipEl);
 
+      let hideTimeout = null;
+
+      const agendarOcultarTooltip = (delay = 250) => {
+        if (hideTimeout) clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(() => {
+          tooltipEl.classList.remove('visible');
+        }, delay);
+      };
+
+      const cancelarOcultarTooltip = () => {
+        if (hideTimeout) {
+          clearTimeout(hideTimeout);
+          hideTimeout = null;
+        }
+      };
+
+      const ocultarTooltipImediato = () => {
+        cancelarOcultarTooltip();
+        tooltipEl.classList.remove('visible');
+      };
+
+      // Manter tooltip aberto quando o mouse entra nele e permitir rolagem interna
+      tooltipEl.addEventListener('mouseenter', () => {
+        cancelarOcultarTooltip();
+      });
+
+      tooltipEl.addEventListener('mouseleave', () => {
+        agendarOcultarTooltip(200);
+      });
+
+      tooltipEl.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+      });
+
+      tooltipEl.addEventListener('touchstart', (ev) => {
+        ev.stopPropagation();
+      }, { passive: true });
+
       const mostrarTooltip = (e, mesData, tipo) => {
+        cancelarOcultarTooltip();
         const isRec = tipo === 'RECEITA';
         const total = isRec ? Number(mesData.receitas || 0) : Number(mesData.despesas || 0);
         const categorias = isRec ? (mesData.receitas_categorias || []) : (mesData.despesas_categorias || []);
@@ -419,14 +458,25 @@ window.DashboardView = {
               <span class="chart-tooltip-badge ${isRec ? 'receita' : 'despesa'}"></span>
               ${sigla}/${anoVisualizado} • ${isRec ? 'RECEITAS' : 'DESPESAS'}
             </span>
-            <span class="chart-tooltip-total" style="color: ${isRec ? 'var(--color-success)' : 'var(--color-error)'};">
-              ${window.EMCUtils.formatarMoeda(total)}
-            </span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="chart-tooltip-total" style="color: ${isRec ? 'var(--color-success)' : 'var(--color-error)'};">
+                ${window.EMCUtils.formatarMoeda(total)}
+              </span>
+              <button type="button" class="chart-tooltip-close" id="btn-chart-tooltip-close" title="Fechar tooltip">✕</button>
+            </div>
           </div>
           <div class="chart-tooltip-list">
             ${categoriasHtml}
           </div>
         `;
+
+        const btnClose = tooltipEl.querySelector('#btn-chart-tooltip-close');
+        if (btnClose) {
+          btnClose.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            ocultarTooltipImediato();
+          });
+        }
 
         tooltipEl.classList.add('visible');
 
@@ -454,27 +504,31 @@ window.DashboardView = {
         tooltipEl.style.top = `${Math.round(top)}px`;
       };
 
-      const ocultarTooltip = () => {
-        tooltipEl.classList.remove('visible');
-      };
-
       container.querySelectorAll('.chart-bar-interactive').forEach((bar) => {
         const idx = parseInt(bar.dataset.mesIdx, 10);
         const tipo = bar.dataset.tipo;
         const mesData = meses[idx];
         if (!mesData) return;
 
-        bar.addEventListener('mouseenter', (e) => mostrarTooltip(e, mesData, tipo));
-        bar.addEventListener('mouseleave', ocultarTooltip);
+        bar.addEventListener('mouseenter', (e) => {
+          cancelarOcultarTooltip();
+          mostrarTooltip(e, mesData, tipo);
+        });
+
+        bar.addEventListener('mouseleave', () => {
+          agendarOcultarTooltip(250);
+        });
+
         bar.addEventListener('click', (e) => {
           e.stopPropagation();
+          cancelarOcultarTooltip();
           mostrarTooltip(e, mesData, tipo);
         });
       });
 
       document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) {
-          ocultarTooltip();
+          ocultarTooltipImediato();
         }
       }, { passive: true });
     } catch (err) {

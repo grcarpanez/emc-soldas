@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Tooltips Informativos nas Barras do Gráfico com Segregação por Categoria - PWA v4.39)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Tooltips no Gráfico com Categorias, Detecção de Meios OFX, Guias Fiscais, Estorno Caixa vs Agenda, Modais Empilhados e Dashboard)  
+**Última Atualização:** 2026-10-03 (Interatividade, Rolagem e Suporte Mobile no Tooltip do Gráfico do Dashboard - PWA v4.40)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Rolagem e Interatividade no Tooltip do Gráfico, Detecção de Meios OFX, Guias Fiscais, Modais Empilhados e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -548,6 +548,19 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.39` em `frontend/sw.js` e sufixos de cache-busting `?v=4.39` em `frontend/index.html`.
   - **Homologação:** 14 testes de `apps.relatorios` e 197 testes globais aprovados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_08_tooltips_grafico_categorias.md`.
+- [x] **Interatividade, Rolagem e Suporte Mobile no Tooltip do Gráfico (PWA v4.40):**
+  - **Acesso ao Ponteiro e Rolagem Interna no CSS (`industrial-integrity.css`):**
+    - Configuração de `pointer-events: auto;` em `.chart-tooltip.visible`, habilitando alcance e foco do cursor do mouse e toques de tela.
+    - Isolamento de cadeia de rolagem na lista interna `.chart-tooltip-list` via `overscroll-behavior: contain;`, aceleração inercial `-webkit-overflow-scrolling: touch;` e captura vertical `touch-action: pan-y;`, impedindo que a rolagem interna movimente a tela principal no celular.
+    - Inclusão do botão de fechamento técnico `.chart-tooltip-close` `[✕]` (0px border-radius, tipografia mono).
+  - **Ponte de Tolerância no Desktop e Touch no Mobile (`dashboard-view.js`):**
+    - Temporizador de saída com tolerância (*hover grace period*) de 250ms no `mouseleave` da barra, permitindo deslocar o mouse suavemente até o tooltip.
+    - Escuta de `mouseenter` e `mouseleave` no próprio `#dashboard-chart-tooltip`, cancelando o timer e mantendo o tooltip fixo enquanto o usuário navega e rola a lista com a rodinha do mouse.
+    - Tratamento de `e.stopPropagation()` no toque do tooltip no mobile, permitindo rolar com o dedo sem disparar o fechamento por clique fora.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.40` em `frontend/sw.js` e sufixos de cache-busting `?v=4.40` em `frontend/index.html`.
+  - **Homologação:** 14 testes de `apps.relatorios` aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_09_fix_tooltip_interatividade_scroll_mobile.md`.
+
 
 
 
