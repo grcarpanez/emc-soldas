@@ -364,6 +364,36 @@
   .flip-card-btn-detail {
     font-size: 10.5px;
   }
+
+  .dashboard-lower-grid {
+    gap: 12px;
+  }
+}
+
+/* Grid Inferior do Dashboard (Gráfico e Feed de Atividades) */
+.dashboard-lower-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+.dashboard-chart-container {
+  min-height: 240px;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  overflow: visible;
+}
+
+@media (max-width: 900px) {
+  .dashboard-lower-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 
 

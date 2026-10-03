@@ -30,20 +30,20 @@ window.DashboardView = {
       </div>
 
       <!-- Seção Inferior: Gráfico Comparativo e Feed de Atividades -->
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;" id="dashboard-lower-grid">
+      <div class="dashboard-lower-grid" id="dashboard-lower-grid">
         <!-- Gráfico / Comparativo Mensal -->
-        <div class="card">
+        <div class="card" style="width: 100%; box-sizing: border-box;">
           <div class="card-header">
             <h3 id="dashboard-chart-title">RECEITAS X DESPESAS</h3>
             <span class="status-chip info">REGIME DE CAIXA</span>
           </div>
-          <div id="dashboard-chart-container" style="min-height: 240px; display: flex; align-items: center; justify-content: center;">
+          <div id="dashboard-chart-container" class="dashboard-chart-container">
             <div class="loader-spinner"></div>
           </div>
         </div>
 
         <!-- Feed de Atividades Recentes -->
-        <div class="card">
+        <div class="card" style="width: 100%; box-sizing: border-box;">
           <div class="card-header">
             <h3>ATIVIDADES RECENTES</h3>
             <span class="status-chip warning">LOG EM TEMPO REAL</span>
@@ -330,7 +330,7 @@ window.DashboardView = {
       }
 
       // Renderiza gráfico de barras em HTML/CSS puro com suporte a tooltips interativos
-      let html = '<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-end; height: 180px; gap: 8px; padding-top: 20px;">';
+      let html = '<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-end; height: 180px; gap: clamp(2px, 0.8vw, 8px); padding-top: 20px; box-sizing: border-box;">';
       
       const maxValor = Math.max(...meses.map(m => Math.max(Number(m.receitas || 0), Number(m.despesas || 0))), 100);
 
@@ -342,35 +342,35 @@ window.DashboardView = {
         const siglaMes = m.mes_sigla || m.mes_nome || m.mes;
 
         html += `
-          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end;">
-            <div style="display: flex; gap: 3px; align-items: flex-end; width: 100%; justify-content: center;">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end;">
+            <div style="display: flex; gap: 2px; align-items: flex-end; width: 100%; justify-content: center;">
               <!-- Barra de Receita -->
               <div class="chart-bar-interactive chart-bar-receita" 
                    data-mes-idx="${idx}" 
                    data-tipo="RECEITA"
-                   style="width: 46%; max-width: 24px; height: ${Math.max(altRec, 4)}px; background-color: var(--color-success);"
+                   style="width: 48%; max-width: 20px; min-width: 4px; height: ${Math.max(altRec, 4)}px; background-color: var(--color-success);"
                    title=""></div>
               <!-- Barra de Despesa -->
               <div class="chart-bar-interactive chart-bar-despesa" 
                    data-mes-idx="${idx}" 
                    data-tipo="DESPESA"
-                   style="width: 46%; max-width: 24px; height: ${Math.max(altDes, 4)}px; background-color: var(--color-error);"
+                   style="width: 48%; max-width: 20px; min-width: 4px; height: ${Math.max(altDes, 4)}px; background-color: var(--color-error);"
                    title=""></div>
             </div>
-            <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">${siglaMes}</span>
+            <span class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant); text-transform: uppercase; white-space: nowrap; overflow: hidden;">${siglaMes}</span>
           </div>
         `;
       });
 
       html += '</div>';
       html += `
-        <div style="display: flex; justify-content: center; gap: 24px; margin-top: 16px; font-size: 12px;">
+        <div style="display: flex; justify-content: center; gap: 16px; margin-top: 14px; font-size: 11.5px; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 6px;">
-            <div style="width: 12px; height: 12px; background-color: var(--color-success);"></div>
+            <div style="width: 12px; height: 12px; background-color: var(--color-success); border-radius: 0px;"></div>
             <span>Receitas Liquidadas</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <div style="width: 12px; height: 12px; background-color: var(--color-error);"></div>
+            <div style="width: 12px; height: 12px; background-color: var(--color-error); border-radius: 0px;"></div>
             <span>Despesas Pagas</span>
           </div>
         </div>
@@ -378,6 +378,9 @@ window.DashboardView = {
 
       container.innerHTML = html;
       container.style.position = 'relative';
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      container.style.width = '100%';
 
       // Tooltip flutuante interativo (0px border-radius Industrial Integrity)
       const tooltipEl = document.createElement('div');

@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Interatividade, Rolagem e Suporte Mobile no Tooltip do Gráfico do Dashboard - PWA v4.40)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Rolagem e Interatividade no Tooltip do Gráfico, Detecção de Meios OFX, Guias Fiscais, Modais Empilhados e Dashboard)  
+**Última Atualização:** 2026-10-03 (Responsividade Mobile do Gráfico e Feed de Atividades do Dashboard - PWA v4.41)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Alinhamento Mobile do Gráfico e Feed, Tooltips com Scroll, Detecção OFX, Guias Fiscais e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -560,6 +560,18 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.40` em `frontend/sw.js` e sufixos de cache-busting `?v=4.40` em `frontend/index.html`.
   - **Homologação:** 14 testes de `apps.relatorios` aprovados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_09_fix_tooltip_interatividade_scroll_mobile.md`.
+- [x] **Responsividade Mobile do Gráfico e Feed de Atividades do Dashboard (PWA v4.41):**
+  - **Grid Inferior com 1 Coluna no Mobile (`layout.css`):**
+    - Criação da classe `.dashboard-lower-grid` que aplica `grid-template-columns: 2fr 1fr; gap: 20px;` no Desktop (>900px) e colapsa para `grid-template-columns: 1fr; gap: 16px;` no Mobile/Tablet (<=900px).
+    - Empilhamento automático: o card do gráfico ocupa 100% da largura (alinhado com os Flip Cards de cima) e o card de "ATIVIDADES RECENTES" aparece logo abaixo dele, ocupando 100% da largura com exato alinhamento à esquerda e à direita.
+  - **Empilhamento Vertical e Fluidez das Barras (`dashboard-view.js`):**
+    - Correção do container `#dashboard-chart-container` para `display: flex; flex-direction: column; width: 100%;`, impedindo que a legenda seja posicionada ao lado das barras.
+    - Centralização da legenda abaixo das barras com `flex-wrap: wrap; gap: 16px; margin-top: 14px;`.
+    - Ajuste de `min-width: 0;` em cada coluna de mês e espaçamento fluido `gap: clamp(2px, 0.8vw, 8px)`, permitindo que as 12 colunas se adaptem sem provocar estouro horizontal em qualquer smartphone.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.41` em `frontend/sw.js` e sufixos de cache-busting `?v=4.41` em `frontend/index.html`.
+  - **Homologação:** 14 testes de `apps.relatorios` aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_10_responsividade_mobile_grafico_feed_dashboard.md`.
+
 
 
 
