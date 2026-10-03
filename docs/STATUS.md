@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Diferenciação no Estorno: Contas a Pagar vs Lançamentos Avulsos com Soft Delete e Saneamento do Lançamento #63 - PWA v4.37)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Estorno Inteligente de Caixa vs Agenda, Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW, Paginação e Dashboard)  
+**Última Atualização:** 2026-10-03 (Detecção Heurística Universal de Meios de Pagamento, Gestão de Guias Fiscais da Receita Federal e Bloqueio Visual de Pendências no Extrato - PWA v4.38)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Detecção Universal de Meios OFX, Guias Fiscais, Bloqueio de Lacunas, Estorno Caixa vs Agenda, Modais Empilhados, Comboboxes Pesquisáveis, Paginação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -520,6 +520,23 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.37` em `sw.js` e `?v=4.37` em `index.html`.
   - **Homologação:** 29 testes de `apps.financeiro` e 184 testes da suíte global executados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_06_diferenciacao_estorno_contas_pagar_vs_avulsos.md`.
+- [x] **Detecção Heurística Universal de Meios de Pagamento, Gestão de Guias da Receita Federal e Bloqueio Visual de Pendências no Extrato (PWA v4.38):**
+  - **Motor Heurístico Universal (`apps.conciliacao.services.detectar_meio_pagamento_transacao`):**
+    - Sanitização ASCII maiúscula sem acentos eliminando falhas por acentuação (`débito` vira `DEBITO`).
+    - Mapeamento universal cobrindo padrões Febraban/OFX de bancos como Nubank (`Compra no débito`), Bradesco (`COMPRA CARTAO DEBITO`, `PAGTO COBRANCA`, `TARIFA REGISTRO COBRANCA`), Itaú (`COMPRA A DEBITO`, `RSHOP`), Banco do Brasil, Santander, Caixa, Inter, C6 e adquirentes POS.
+    - **Fim dos Chutes Cegos:** Remoção do fallback cego que forçava `PIX` ou `meio_padrao`. Caso a transação não seja identificada com convicção absoluta, retorna `None`, atribuindo a decisão consciente ao operador.
+  - **Classificação Contábil DRE e Proteção da Empresa (`enriquecer_transacao_inteligencia`):**
+    - Regex de palavra inteira `\b(DAS|DARF|IPTU|IPVA)\b` impedindo que a razão social `EMC SOLDAS` seja falsamente classificada como tributo fiscal.
+    - Identificação de rendimentos bancários e aplicações (`RENTAB.INVEST FACILCRED*`) classificados como `OUTRAS RECEITAS OPERACIONAIS E RENDIMENTOS`.
+    - **Guias da Receita Federal Sem Chute:** Transações genéricas da Receita Federal via Pix QR Code deixam a Categoria DRE em aberto (`None`) com alerta contextual `alerta_receita_federal = True`, sem chutar entre DAS ou GPS.
+  - **Frontend PWA e Design System *Industrial Integrity* (`conciliacao-view.js` & `industrial-integrity.css`):**
+    - **Cards de Atenção com Destaque Chamativo:** Transações com lacunas pendentes (Categoria ou Meio ausentes) ganham borda de aviso industrial `#f5a623`, fundo sutil e badge no topo: `⚠️ ATENÇÃO: DEFINA O MEIO E/OU CATEGORIA DRE`.
+    - **Aviso Contextual da Receita Federal:** Exibição do badge `"⚠️ GUIA RECEITA FEDERAL"` solicitando a escolha contábil exata pelo usuário.
+    - **Reatividade em Tempo Real:** Conforme o operador seleciona os campos nos cards, o método `atualizarEstadoCard(idx)` reavalia o status e remove a borda de alerta e os badges instantaneamente.
+    - **Bloqueio Duplo de Lacunas:** Bloqueio preventivo no frontend com contador de pendências no botão `btn-gerar-lote` e aviso Toast industrial caso haja campos em branco, além de validação estrita no backend (`ValidationError 400 Bad Request` em `executar_importacao_lote`).
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.38` em `frontend/sw.js` e sufixos de cache-busting `?v=4.38` em `frontend/index.html`.
+  - **Homologação:** 18 testes automatizados de `apps.conciliacao` e 197 testes da suíte global executados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_07_deteccao_heuristica_universal_meios_pagamento_ofx.md`.
 
 
 

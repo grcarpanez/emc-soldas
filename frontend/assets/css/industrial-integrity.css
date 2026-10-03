@@ -1016,15 +1016,53 @@ input[type="file"].form-control::file-selector-button:hover {
   color: #E57373;
 }
 
-.select-categoria-pendente {
-  border-color: var(--color-warning) !important;
+.select-categoria-pendente,
+.select-pendente-alerta {
+  border: 1px solid var(--color-warning) !important;
+  background-color: var(--color-surface-container-low) !important;
+  color: var(--color-on-surface) !important;
+  outline: 1px solid rgba(245, 166, 35, 0.5) !important;
+}
+
+.select-categoria-pendente option,
+.select-pendente-alerta option {
   background-color: var(--color-surface-container-low) !important;
   color: var(--color-on-surface) !important;
 }
 
-.select-categoria-pendente option {
-  background-color: var(--color-surface-container-low) !important;
-  color: var(--color-on-surface) !important;
+.card-pendente-atencao {
+  border: 2px solid var(--color-warning) !important;
+  background: rgba(245, 166, 35, 0.08) !important;
+  box-shadow: 0 0 10px rgba(245, 166, 35, 0.25) !important;
+}
+
+.badge-alerta-pendencia {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffe2a8;
+  background: #b7410e;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  border-left: 3px solid #f5a623;
+  letter-spacing: 0.5px;
+}
+
+.badge-alerta-rf {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffe2a8;
+  background: rgba(59, 40, 6, 0.6);
+  padding: 4px 8px;
+  border-left: 3px solid #f5a623;
+  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ==========================================================================

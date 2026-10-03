@@ -174,6 +174,26 @@ class ConciliacaoAPITestCase(TestCase):
             nome='PIX',
             ativo=True
         )
+        self.meio_debito = MeioPagamento.objects.create(
+            nome='CARTAO DE DEBITO',
+            ativo=True
+        )
+        self.meio_deb_conta = MeioPagamento.objects.create(
+            nome='DEBITO EM CONTA',
+            ativo=True
+        )
+        self.meio_boleto = MeioPagamento.objects.create(
+            nome='BOLETO BANCARIO',
+            ativo=True
+        )
+        self.meio_deposito = MeioPagamento.objects.create(
+            nome='DEPOSITO BANCARIO',
+            ativo=True
+        )
+        self.meio_ted = MeioPagamento.objects.create(
+            nome='TRANSFERENCIA TED/DOC',
+            ativo=True
+        )
 
     def test_upload_extrato_split_screen_match_1_1(self):
         """Testa o processamento Split-Screen com sugestão de Match Automático 1:1."""
@@ -530,6 +550,7 @@ VERSION:102
                     'valor': '9700.03',
                     'tipo_lancamento': 'ENTRADA',
                     'categoria_id': self.categoria_receita.id,
+                    'meio_pagamento_id': self.meio_pix.id,
                     'cliente_fornecedor_id': cliente.id,
                     'fatura_id': fatura.id
                 }
@@ -580,6 +601,7 @@ VERSION:102
                     'valor': '1500.00',
                     'tipo_lancamento': 'ENTRADA',
                     'categoria_id': self.categoria_receita.id,
+                    'meio_pagamento_id': self.meio_pix.id,
                     'comprovante_path': caminho_salvo,
                     'nome_arquivo_comprovante': 'nota_fiscal_servico.pdf'
                 }
@@ -712,6 +734,183 @@ NEWFILEVERSION:102
         # 3. Saldo da conta NÃO foi creditado novamente (não houve duplicidade de saldo)
         self.conta.refresh_from_db()
         self.assertEqual(self.conta.saldo, saldo_inicial)
+
+    def test_deteccao_universal_meios_pagamento_todos_bancos(self):
+        """Valida que a detecção heurística identifica corretamente Débito, Pix, Boleto e Débito em Conta de vários bancos."""
+        from apps.conciliacao.services import detectar_meio_pagamento_transacao
+
+        meio_debito, _ = MeioPagamento.objects.get_or_create(nome='CARTAO DE DEBITO', defaults={'ativo': True})
+        meio_deb_conta, _ = MeioPagamento.objects.get_or_create(nome='DEBITO EM CONTA', defaults={'ativo': True})
+        meio_boleto, _ = MeioPagamento.objects.get_or_create(nome='BOLETO BANCARIO', defaults={'ativo': True})
+        meio_ted, _ = MeioPagamento.objects.get_or_create(nome='TRANSFERENCIA TED/DOC', defaults={'ativo': True})
+
+        # 1. NUBANK
+        deb1 = detectar_meio_pagamento_transacao('Compra no débito - EQUIPAMINAS EQUIPAMENT', 'SAIDA')
+        self.assertIsNotNone(deb1)
+        self.assertEqual(deb1['nome'], 'CARTAO DE DEBITO')
+
+        deb2 = detectar_meio_pagamento_transacao('Compra no débito - POSTO BURNIER', 'SAIDA')
+        self.assertIsNotNone(deb2)
+        self.assertEqual(deb2['nome'], 'CARTAO DE DEBITO')
+
+        pix_nu = detectar_meio_pagamento_transacao('Transferência enviada pelo Pix - R.R. Oxigenio Ltda', 'SAIDA')
+        self.assertIsNotNone(pix_nu)
+        self.assertEqual(pix_nu['nome'], 'PIX')
+
+        tar_nu = detectar_meio_pagamento_transacao('Tarifa - Boleto de cobrança', 'SAIDA')
+        self.assertIsNotNone(tar_nu)
+        self.assertEqual(tar_nu['nome'], 'DEBITO EM CONTA')
+
+        # 2. BRADESCO
+        pix_bra = detectar_meio_pagamento_transacao('PIX ENVIADO DES: ENRICO MACHADO CARPAN 09/02', 'SAIDA')
+        self.assertIsNotNone(pix_bra)
+        self.assertEqual(pix_bra['nome'], 'PIX')
+
+        pix_qr_bra = detectar_meio_pagamento_transacao('PIX QR CODE ESTATICO DES: BATISTA FERRO E ACO L 12/02', 'SAIDA')
+        self.assertIsNotNone(pix_qr_bra)
+        self.assertEqual(pix_qr_bra['nome'], 'PIX')
+
+        tar_bra = detectar_meio_pagamento_transacao('TARIFA REGISTRO COBRANCA QUANDO DO REGISTRO      00000002', 'SAIDA')
+        self.assertIsNotNone(tar_bra)
+        self.assertEqual(tar_bra['nome'], 'DEBITO EM CONTA')
+
+        liq_bra = detectar_meio_pagamento_transacao('LIQUIDACAO DE COBRANCA VALOR DISPONIVEL', 'ENTRADA')
+        self.assertIsNotNone(liq_bra)
+        self.assertEqual(liq_bra['nome'], 'BOLETO BANCARIO')
+
+        # 3. ITAÚ
+        deb_itau1 = detectar_meio_pagamento_transacao('COMPRA A DEBITO - RESTAURANTE CENTRAL', 'SAIDA')
+        self.assertIsNotNone(deb_itau1)
+        self.assertEqual(deb_itau1['nome'], 'CARTAO DE DEBITO')
+
+        deb_itau2 = detectar_meio_pagamento_transacao('RSHOP - AUTO POSTO BANDEIRAS', 'SAIDA')
+        self.assertIsNotNone(deb_itau2)
+        self.assertEqual(deb_itau2['nome'], 'CARTAO DE DEBITO')
+
+        # 4. BANCO DO BRASIL
+        deb_bb1 = detectar_meio_pagamento_transacao('BB COMPRA DEBITO - FARMACIA POPULAR', 'SAIDA')
+        self.assertIsNotNone(deb_bb1)
+        self.assertEqual(deb_bb1['nome'], 'CARTAO DE DEBITO')
+
+        deb_bb2 = detectar_meio_pagamento_transacao('COMPRA COM CARTAO - LOJA DE FERRAGENS', 'SAIDA')
+        self.assertIsNotNone(deb_bb2)
+        self.assertEqual(deb_bb2['nome'], 'CARTAO DE DEBITO')
+
+        # 5. CAIXA & SANTANDER
+        deb_cx = detectar_meio_pagamento_transacao('COMPRA ELO DEBITO - SUPERMERCADO', 'SAIDA')
+        self.assertIsNotNone(deb_cx)
+        self.assertEqual(deb_cx['nome'], 'CARTAO DE DEBITO')
+
+        deb_san = detectar_meio_pagamento_transacao('COMPRA NO DEBITO - PAPELARIA', 'SAIDA')
+        self.assertIsNotNone(deb_san)
+        self.assertEqual(deb_san['nome'], 'CARTAO DE DEBITO')
+
+        # 6. SEM CHUTE CEGO (Transação genérica desconhecida retorna None)
+        sem_padrao = detectar_meio_pagamento_transacao('MOVIMENTACAO DIVERSA 12345', 'SAIDA')
+        self.assertIsNone(sem_padrao)
+
+    def test_inteligencia_receita_federal_e_protecao_soldas(self):
+        """Valida que 'EMC SOLDAS' não é categorizado como imposto DAS e que 'RECEITA FEDERAL' gera alerta de guia sem chute de categoria."""
+        from apps.conciliacao.services import enriquecer_transacao_inteligencia
+
+        cat_impostos = CategoriaFinanceira.objects.create(
+            nome='IMPOSTOS E TRIBUTOS (SIMPLES NACIONAL / ISS / TAXAS)',
+            tipo='DESPESA'
+        )
+        cat_rendimentos = CategoriaFinanceira.objects.create(
+            nome='OUTRAS RECEITAS OPERACIONAIS E RENDIMENTOS',
+            tipo='RECEITA'
+        )
+
+        cats_desp = list(CategoriaFinanceira.objects.filter(tipo__in=['DESPESA', 'AMBOS']))
+        cats_rec = list(CategoriaFinanceira.objects.filter(tipo__in=['RECEITA', 'AMBOS']))
+
+        # 1. Proteção de falso positivo em 'EMC SOLDAS' (não deve casar com DAS)
+        trn_soldas = {
+            'descricao': 'PIX ENVIADO DES: EMC SOLDAS 19/02',
+            'tipo': 'SAIDA',
+            'valor': -750.00,
+            'data': timezone.localdate().isoformat(),
+            'fitid': 'FIT_SOLDAS'
+        }
+        info_soldas = enriquecer_transacao_inteligencia(
+            trn=trn_soldas, conta_id=None, config_global=None,
+            parceiros_map={}, categorias_despesa=cats_desp, categorias_receita=cats_rec
+        )
+        self.assertFalse(info_soldas['alerta_receita_federal'])
+        if info_soldas['categoria_sugerida']:
+            self.assertNotEqual(info_soldas['categoria_sugerida']['id'], cat_impostos.id)
+
+        # 2. Receita Federal genérica: categoria None e alerta_receita_federal = True
+        trn_rf = {
+            'descricao': 'Transferência enviada pelo Pix - RECEITA FEDERAL - 00.394.460/0058-87',
+            'tipo': 'SAIDA',
+            'valor': -342.12,
+            'data': timezone.localdate().isoformat(),
+            'fitid': 'FIT_RF'
+        }
+        info_rf = enriquecer_transacao_inteligencia(
+            trn=trn_rf, conta_id=None, config_global=None,
+            parceiros_map={}, categorias_despesa=cats_desp, categorias_receita=cats_rec
+        )
+        self.assertTrue(info_rf['alerta_receita_federal'])
+        self.assertIsNone(info_rf['categoria_sugerida'])
+
+        # 3. Rendimento automático de aplicação bancária (Bradesco)
+        trn_invest = {
+            'descricao': 'RENTAB.INVEST FACILCRED*',
+            'tipo': 'ENTRADA',
+            'valor': 0.02,
+            'data': timezone.localdate().isoformat(),
+            'fitid': 'FIT_INVEST'
+        }
+        info_invest = enriquecer_transacao_inteligencia(
+            trn=trn_invest, conta_id=None, config_global=None,
+            parceiros_map={}, categorias_despesa=cats_desp, categorias_receita=cats_rec
+        )
+        self.assertIsNotNone(info_invest['categoria_sugerida'])
+        self.assertEqual(info_invest['categoria_sugerida']['id'], cat_rendimentos.id)
+
+    def test_importacao_lote_bloqueia_meio_pagamento_ou_categoria_vazia(self):
+        """Valida que o backend rejeita com erro 400 a criação de novos lançamentos sem categoria ou sem meio de pagamento."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        # Payload com categoria ausente
+        payload_sem_cat = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'descricao': 'COMPRA NO DEBITO - EQUIPAMINAS',
+                    'valor': 474.60,
+                    'tipo_lancamento': 'SAIDA',
+                    'data_pagamento': timezone.now().isoformat(),
+                    'meio_pagamento_id': self.meio_pix.id,
+                    'categoria_id': None
+                }
+            ]
+        }
+        res_cat = self.client.post('/api/conciliacao/importacao-lote/', payload_sem_cat, format='json')
+        self.assertEqual(res_cat.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Payload com meio de pagamento ausente
+        payload_sem_meio = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'descricao': 'COMPRA DESCONHECIDA SEM PADRAO',
+                    'valor': 100.00,
+                    'tipo_lancamento': 'SAIDA',
+                    'data_pagamento': timezone.now().isoformat(),
+                    'meio_pagamento_id': None,
+                    'categoria_id': self.categoria_despesa.id
+                }
+            ]
+        }
+        res_meio = self.client.post('/api/conciliacao/importacao-lote/', payload_sem_meio, format='json')
+        self.assertEqual(res_meio.status_code, status.HTTP_400_BAD_REQUEST)
+        dados_erro = res_meio.json()
+        detalhes = dados_erro.get('details', dados_erro)
+        self.assertIn('meio_pagamento_id', detalhes)
 
 
 

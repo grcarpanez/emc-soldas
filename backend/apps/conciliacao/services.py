@@ -35,52 +35,90 @@ def detectar_meio_pagamento_transacao(
     """
     Classifica heuristicamente o Meio de Pagamento (PIX, Cartões, TED, Boleto, Dinheiro)
     a partir da descrição (<MEMO>), canal e tipo original do extrato.
+    Universal para todos os bancos brasileiros (Febraban / OFX).
+    Retorna None se a transação não puder ser classificada com convicção (sem chutes cegos).
     """
     if not meios_cache:
         meios_cache = {m.nome.upper(): m for m in MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True)}
 
-    desc_upper = (descricao or '').upper()
-    trntype_upper = (tipo_original_ofx or '').upper()
+    # Sanitização ASCII Maiúscula sem acentos para comparações limpas
+    desc_clean = sanitizar_texto_maiusculo(descricao or '')
+    trntype_upper = (tipo_original_ofx or '').upper().strip()
 
     nome_meio_alvo = None
 
-    # 1. PIX
-    if any(k in desc_upper for k in ['PIX', 'TRANSF PIX', 'PAGTO PIX', 'LIQ PIX', 'QR CODE', 'CHAVE PIX', 'PIX RECEBIDO', 'PIX ENVIADO']):
+    # 1. PIX (Prioridade máxima para evitar conflitos com transferências genéricas)
+    if any(k in desc_clean for k in [
+        'PIX', 'TRANSF PIX', 'PAGTO PIX', 'LIQ PIX', 'QR CODE', 'QRCODE',
+        'CHAVE PIX', 'PIX RECEBIDO', 'PIX ENVIADO', 'PIX TRANSF', 'DICT ',
+        'PAGAMENTO PIX', 'RECEBIMENTO PIX', 'INSTANTANEO'
+    ]):
         nome_meio_alvo = 'PIX'
 
-    # 2. Cartão de Débito / Crédito
-    elif any(k in desc_upper for k in ['CARTAO', 'MAQ', 'POS ', 'CIELO', 'REDE', 'GETNET', 'STONE', 'PAGSEGURO', 'VISA', 'MASTER', 'ELO ']) or trntype_upper == 'POS':
-        if any(k in desc_upper for k in ['DEB', 'DEBITO']) or (trntype_upper == 'POS' and tipo == 'SAIDA'):
+    # 2. Cartão de Débito (Universal para todos os bancos brasileiros em conta corrente)
+    elif any(k in desc_clean for k in [
+        'COMPRA NO DEBITO', 'COMPRA A DEBITO', 'COMPRA DEBITO', 'COMPRA DEB',
+        'COMPRA CARTAO DEBITO', 'COMPRA COM CARTAO', 'CARTAO DEBITO', 'CARTAO DEB',
+        'DEBITO CARTAO', 'DEB CARTAO', 'COMPRA NO CARTAO',
+        'RSHOP', 'REDE SHOP', 'MAESTRO', 'VISA ELECTRON', 'ELECTRON',
+        'ELO DEBITO', 'DEBITO ELO', 'DEBITO VISA', 'DEBITO MASTER',
+    ]) or (
+        # Compras em maquininhas / POS ou adquirentes sem menção a crédito
+        (
+            trntype_upper == 'POS' or
+            any(k in desc_clean for k in ['MAQ', 'POS ', 'CIELO', 'REDE', 'GETNET', 'STONE', 'PAGSEGURO', 'SUMUP', 'PAG*', 'MERC PAGO', 'BIN '])
+        ) and tipo == 'SAIDA' and not any(k in desc_clean for k in ['CREDITO', 'CRED', 'PARC '])
+    ):
+        # Proteção contra falsos positivos de débitos automáticos em conta
+        if not any(k in desc_clean for k in ['DEBITO AUTOMATICO', 'DEBITO EM CONTA', 'DEB AUTO', 'DEB CONTA', 'DEBITO AUT']):
             nome_meio_alvo = 'CARTAO DE DEBITO'
-        else:
-            nome_meio_alvo = 'CARTAO DE CREDITO'
 
-    # 3. Transferência Bancária (TED / DOC / TEF / Inter-contas)
-    elif any(k in desc_upper for k in ['TED ', 'DOC ', 'TEF ', 'TRANSF ', 'TRANSFERENCIA', 'TRANSF ENTRE CONTAS', 'TRANSF C/C', 'DOC/TED']):
-        nome_meio_alvo = 'TRANSFERENCIA TED/DOC'
+    # 3. Cartão de Crédito (Ex: compras no crédito ou faturas de cartão)
+    elif any(k in desc_clean for k in [
+        'COMPRA NO CREDITO', 'COMPRA A CREDITO', 'COMPRA CREDITO', 'COMPRA CRED',
+        'CARTAO CREDITO', 'CREDITO CARTAO', 'FATURA CARTAO', 'PAGTO FATURA CARTAO'
+    ]):
+        nome_meio_alvo = 'CARTAO DE CREDITO'
 
-    # 4. Boleto Bancário / Título / Convênio
-    elif any(k in desc_upper for k in ['BOLETO', 'TITULO', 'PAGTO TITULO', 'COBRANCA', 'LIQ TITULO', 'LIQ COBRANCA', 'CONVENIO', 'BLOQUETO']):
+    # 4. Débito em Conta / Tarifas Bancárias
+    elif any(k in desc_clean for k in [
+        'TARIFA', 'TAR ', 'CESTA', 'MANUT CONTA', 'TAXA SERVICO', 'IOF',
+        'DEBITO AUTOMATICO', 'DEB AUTO', 'DEBITO EM CONTA', 'DEB CONTA', 'DEBITO AUT'
+    ]):
+        nome_meio_alvo = 'DEBITO EM CONTA' if 'DEBITO EM CONTA' in meios_cache else 'TRANSFERENCIA TED/DOC'
+
+    # 5. Boleto Bancário / Título / Cobrança
+    elif any(k in desc_clean for k in [
+        'BOLETO', 'TITULO', 'PAGTO TITULO', 'COBRANCA', 'LIQ TITULO', 'LIQ COBRANCA',
+        'LIQUIDACAO DE COBRANCA', 'CONVENIO', 'BLOQUETO', 'PAGTO CONVENIO'
+    ]):
         nome_meio_alvo = 'BOLETO BANCARIO'
 
-    # 5. Dinheiro / Depósito / Saque
-    elif any(k in desc_upper for k in ['DEPOSITO', 'DEP DINHEIRO', 'SAQUE', 'ESPECIE']):
+    # 6. Transferência Bancária (TED / DOC / TEF / Inter-contas)
+    elif any(k in desc_clean for k in [
+        'TED ', 'DOC ', 'TEF ', 'TRANSF ENTRE CONTAS', 'TRANSF C/C', 'DOC/TED',
+        'TRANSFERENCIA', 'TRANSF BANCARIA', 'TRANSF '
+    ]):
+        nome_meio_alvo = 'TRANSFERENCIA TED/DOC'
+
+    # 7. Dinheiro / Depósito / Saque
+    elif any(k in desc_clean for k in ['DEPOSITO', 'DEP DINHEIRO', 'SAQUE', 'ESPECIE']):
         nome_meio_alvo = 'DEPOSITO BANCARIO' if tipo == 'ENTRADA' else 'DINHEIRO'
 
-    # 6. Fallback Heurístico Baseado no Fluxo
+    # 8. Cheque
+    elif any(k in desc_clean for k in ['CHEQUE', 'CHQ ']):
+        nome_meio_alvo = 'CHEQUE'
+
+    # 9. Rendimentos / Aplicações automáticas
+    elif any(k in desc_clean for k in ['RENTAB', 'INVEST', 'RENDIMENTO', 'APLICACAO']):
+        nome_meio_alvo = 'DEPOSITO BANCARIO' if 'DEPOSITO BANCARIO' in meios_cache else 'TRANSFERENCIA TED/DOC'
+
+    # Sem chute cego: se não mapeado com convicção, não força PIX nem BOLETO
     if not nome_meio_alvo:
-        if tipo == 'ENTRADA':
-            # Recebimento sem menção específica costuma ser PIX ou TED
-            nome_meio_alvo = 'PIX' if 'PIX' in meios_cache else 'TRANSFERENCIA TED/DOC'
-        else:
-            # Pagamento avulso genérico costuma ser PIX ou Boleto
-            nome_meio_alvo = 'PIX' if 'PIX' in meios_cache else 'BOLETO BANCARIO'
+        return None
 
     # Localiza objeto no cache
     meio_obj = meios_cache.get(nome_meio_alvo)
-    if not meio_obj and meios_cache:
-        meio_obj = list(meios_cache.values())[0]
-
     if meio_obj:
         return {'id': meio_obj.id, 'nome': meio_obj.nome}
     return None
@@ -240,7 +278,8 @@ def enriquecer_transacao_inteligencia(
 
     # 4. Classificação Heurística de Categorias DRE
     categoria_sugerida = None
-    desc_upper = descricao.upper()
+    alerta_receita_federal = False
+    desc_upper = sanitizar_texto_maiusculo(descricao or '')
 
     if tipo == 'SAIDA':
         # 4.1 Tarifas Bancárias e Maquininha
@@ -249,37 +288,47 @@ def enriquecer_transacao_inteligencia(
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
         # 4.2 Encargos Trabalhistas (FGTS, INSS folha, GPS)
-        elif any(w in desc_upper for w in ['FGTS', 'GPS ', 'GRF ', 'CONECTIVIDADE SOCIAL']):
+        elif any(w in desc_upper for w in ['FGTS', 'GRF ', 'CONECTIVIDADE SOCIAL']) or re.search(r'\b(GPS|INSS)\b', desc_upper):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['ENCARGOS TRABALHISTAS', 'FGTS', 'INSS'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # 4.3 Tributos Fiscais (Simples Nacional, DAS, DARF, IPTU)
-        elif any(w in desc_upper for w in ['DAS ', 'SIMPLES NACIONAL', 'DARF', 'TRIBUTO', 'ARRECADACAO', 'RECEITA FEDERAL', 'PREFEITURA', 'IPTU', 'IPVA', 'TAXA LICENCA']):
+        # 4.3 Tributos Fiscais (Simples Nacional, DAS, DARF, IPTU) - com \bDAS\b para não casar com SOLDAS
+        elif any(w in desc_upper for w in ['SIMPLES NACIONAL', 'TRIBUTO', 'ARRECADACAO', 'PREFEITURA', 'TAXA LICENCA']) or re.search(r'\b(DAS|DARF|IPTU|IPVA)\b', desc_upper):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['IMPOSTOS E TRIBUTOS', 'TRIBUTO', 'IMPOSTO'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # 4.4 Energia Elétrica, Água e Internet
+        # 4.4 Pagamento genérico para RECEITA FEDERAL (sem especificar se é DAS ou GPS)
+        elif 'RECEITA FEDERAL' in desc_upper:
+            # Não define categoria automaticamente para não errar entre DAS e GPS. Emite alerta contextual.
+            alerta_receita_federal = True
+            categoria_sugerida = None
+        # 4.5 Energia Elétrica, Água e Internet
         elif any(w in desc_upper for w in ['ENEL', 'CPFL', 'ELEKTRO', 'SABESP', 'COPASA', 'SANEPAR', 'CLARO', 'VIVO', 'TIM', 'INTERNET', 'ENERGIA ELETRICA']):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['ENERGIA ELETRICA', 'AGUA E INTERNET'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # 4.5 Combustível e Despesas com Veículos
+        # 4.6 Combustível e Despesas com Veículos
         elif any(w in desc_upper for w in ['POSTO ', 'AUTO POSTO', 'COMBUSTIVEL', 'SHELL', 'IPIRANGA', 'PETROBRAS', 'GASOLINA', 'DIESEL', 'ETANOL', 'SEM PARAR', 'VELOE']):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['COMBUSTIVEL', 'VEICULOS'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # 4.6 Pró-Labore dos Sócios
+        # 4.7 Pró-Labore dos Sócios
         elif any(w in desc_upper for w in ['PRO-LABORE', 'PRO LABORE', 'PROLABORE']):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['PRO-LABORE', 'PRO LABORE'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
-        # 4.7 Folha de Pagamento / Salários
+        # 4.8 Folha de Pagamento / Salários
         elif any(w in desc_upper for w in ['SALARIO', 'ADIANTAMENTO SALARIAL', 'FOLHA PAG', 'VALE TRANSPORTE']):
             cat = next((c for c in categorias_despesa if any(k in c.nome.upper() for k in ['FOLHA DE PAGAMENTO', 'SALARIOS'])), None)
             if cat:
                 categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
     elif tipo == 'ENTRADA':
-        if parceiro_identificado or fatura_sugerida:
+        # 4.9 Rendimentos e Aplicações Financeiras
+        if any(w in desc_upper for w in ['RENTAB', 'RENDIMENTO', 'INVEST', 'APLICACAO', 'REMUNERACAO CONTA']):
+            cat = next((c for c in categorias_receita if any(k in c.nome.upper() for k in ['RENDIMENTO', 'OUTRAS RECEITAS'])), None)
+            if cat:
+                categoria_sugerida = {'id': cat.id, 'nome': cat.nome}
+        elif parceiro_identificado or fatura_sugerida:
             cat = next((c for c in categorias_receita if any(k in c.nome.upper() for k in ['PRESTACAO DE SERVICOS', 'SERVICO', 'SOLDA', 'REFORMA', 'RECEITA OPERACIONAL'])), None)
             if not cat and categorias_receita:
                 cat = categorias_receita[0]
@@ -302,7 +351,8 @@ def enriquecer_transacao_inteligencia(
         'parceiro_identificado': parceiro_identificado,
         'fatura_sugerida': fatura_sugerida,
         'categoria_sugerida': categoria_sugerida,
-        'meio_pagamento_sugerido': meio_pagamento_sugerido
+        'meio_pagamento_sugerido': meio_pagamento_sugerido,
+        'alerta_receita_federal': alerta_receita_federal
     }
 
 
@@ -524,6 +574,7 @@ def processar_extrato_split_screen(
             'fatura_sugerida': info_inteligencia['fatura_sugerida'],
             'categoria_sugerida': info_inteligencia['categoria_sugerida'],
             'meio_pagamento_sugerido': info_inteligencia['meio_pagamento_sugerido'],
+            'alerta_receita_federal': info_inteligencia.get('alerta_receita_federal', False),
         })
 
     # Formata lista de lançamentos do ERP
@@ -997,12 +1048,12 @@ def executar_importacao_lote(
             meio = None
             if item.get('meio_pagamento_id'):
                 meio = MeioPagamento.objects.filter(id=item['meio_pagamento_id'], deleted_at__isnull=True).first()
-            if not meio:
+            if not meio and not item.get('lancamento_existente_id'):
                 meio_detectado = detectar_meio_pagamento_transacao(descricao=descricao, tipo=tipo)
                 if meio_detectado:
                     meio = MeioPagamento.objects.filter(id=meio_detectado['id'], deleted_at__isnull=True).first()
-            if not meio:
-                meio = meio_padrao
+            if not meio and not item.get('lancamento_existente_id'):
+                raise ValidationError({"meio_pagamento_id": f"O Meio de Pagamento é obrigatório para o lançamento '{descricao}'."})
 
             # Atualiza totalizadores de saldo
             if tipo == 'ENTRADA':

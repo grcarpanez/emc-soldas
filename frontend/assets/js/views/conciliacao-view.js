@@ -310,6 +310,7 @@ window.ConciliacaoView = {
         categoria_sugerida_nome: t.categoria_sugerida ? t.categoria_sugerida.nome : (temCorrespondente ? t.lancamento_correspondente.categoria_nome : null),
         meio_pagamento_id: meioSugeridoId,
         meio_pagamento_nome: meioSugeridoNome,
+        alerta_receita_federal: !!t.alerta_receita_federal,
         cliente_fornecedor_id: parceiroId,
         parceiro_identificado: t.parceiro_identificado,
         fatura_id: faturaId,
@@ -554,8 +555,10 @@ window.ConciliacaoView = {
     this.preLancamentosImportacao.forEach((p, idx) => {
       const isEntrada = p.tipo_lancamento === 'ENTRADA';
       const isDescartado = p.descartado;
+      const isCardVincular = p.lancamento_correspondente && p.acao_duplicidade === 'VINCULAR';
       const temCategoria = !!p.categoria_id;
       const temMeio = !!p.meio_pagamento_id;
+      const isPendente = !isDescartado && !isCardVincular && (!temCategoria || !temMeio);
 
       // Monta opções de categorias com opção em branco no topo
       let optionsCat = '<option value="">-- SELECIONE A CATEGORIA DRE * --</option>';
@@ -564,11 +567,26 @@ window.ConciliacaoView = {
         optionsCat += `<option value="${cat.id}" ${cat.id === p.categoria_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(cat.nome)}</option>`;
       });
 
-      // Monta opções de meios de pagamento
-      let optionsMeios = '<option value="">-- MEIO DE PAGAMENTO --</option>';
+      // Monta opções de meios de pagamento com opção em branco no topo
+      let optionsMeios = '<option value="">-- MEIO DE PAGAMENTO * --</option>';
       this.meiosPagamento.forEach(m => {
         optionsMeios += `<option value="${m.id}" ${m.id === p.meio_pagamento_id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(m.nome)}</option>`;
       });
+
+      // Badge chamativo de atenção para pendências
+      let badgePendenciaHtml = '';
+      if (isPendente) {
+        const msg = (!temMeio && !temCategoria)
+          ? '⚠️ ATENÇÃO: DEFINA O MEIO E A CATEGORIA DRE *'
+          : (!temMeio ? '⚠️ ATENÇÃO: DEFINA O MEIO DE PAGAMENTO *' : '⚠️ ATENÇÃO: DEFINA A CATEGORIA DRE *');
+        badgePendenciaHtml = `<div class="badge-alerta-pendencia">${msg}</div>`;
+      }
+
+      // Badge contextual para guias da Receita Federal
+      let badgeRfHtml = '';
+      if (p.alerta_receita_federal) {
+        badgeRfHtml = `<div class="badge-alerta-rf"><span>⚠️ GUIA RECEITA FEDERAL</span></div>`;
+      }
 
       // Informações contextuais de inteligência
       let infoExtraInteligencia = '';
@@ -626,11 +644,10 @@ window.ConciliacaoView = {
         `
       ) : '';
 
-      const isCardVincular = p.lancamento_correspondente && p.acao_duplicidade === 'VINCULAR';
       const borderDestaque = isCardVincular ? 'border-left: 3px solid #69f0ae;' : (p.lancamento_correspondente ? 'border-left: 3px solid #f5a623;' : '');
 
       html += `
-        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''} ${p.lancamento_correspondente ? 'correspondente-erp' : ''}" style="${borderDestaque}" data-pre-index="${idx}">
+        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''} ${p.lancamento_correspondente ? 'correspondente-erp' : ''} ${isPendente ? 'card-pendente-atencao' : ''}" style="${borderDestaque}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
           <!-- Linha 1 (Cabeçalho Ultra-Denso): Identificador/Data, Valor, Botão/Badge de Anexo e Botão ✕ -->
@@ -655,8 +672,12 @@ window.ConciliacaoView = {
             </div>
           </div>
 
-          <!-- Linha Contextual de Inteligência Fiscal e Parceiros -->
-          ${infoExtraInteligencia}
+          <!-- Linha Contextual de Inteligência Fiscal e Alertas -->
+          <div class="container-avisos-inteligencia">
+            ${badgePendenciaHtml}
+            ${badgeRfHtml}
+            ${infoExtraInteligencia}
+          </div>
 
           <!-- Linha 2 (Grid Horizontal Único): Descrição (2fr), Meio (1fr), Categoria DRE (2fr) -->
           <div style="display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 6px; width: 100%;">
@@ -668,7 +689,7 @@ window.ConciliacaoView = {
             </div>
             <div>
               <select id="select-meio-${idx}" 
-                      class="form-control" 
+                      class="form-control ${!temMeio && !isDescartado && !isCardVincular ? 'select-pendente-alerta' : ''}" 
                       style="font-size: 11px; padding: 4px 6px; width: 100%; font-family: var(--font-mono);"
                       onchange="window.ConciliacaoView.atualizarMeioPreLancamento(${idx}, this.value)">
                 ${optionsMeios}
@@ -676,7 +697,7 @@ window.ConciliacaoView = {
             </div>
             <div>
               <select id="select-cat-${idx}" 
-                      class="form-control ${!temCategoria && !isDescartado && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR') ? 'select-categoria-pendente' : ''}" 
+                      class="form-control ${!temCategoria && !isDescartado && !isCardVincular ? 'select-pendente-alerta select-categoria-pendente' : ''}" 
                       style="font-size: 11px; padding: 4px 6px; width: 100%;"
                       onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
                 ${optionsCat}
@@ -779,22 +800,77 @@ window.ConciliacaoView = {
   atualizarMeioPreLancamento(idx, meioId) {
     if (this.preLancamentosImportacao[idx]) {
       this.preLancamentosImportacao[idx].meio_pagamento_id = meioId ? parseInt(meioId, 10) : null;
+      this.atualizarEstadoCard(idx);
     }
   },
 
   atualizarCategoriaPreLancamento(idx, catId) {
     if (this.preLancamentosImportacao[idx]) {
       this.preLancamentosImportacao[idx].categoria_id = catId ? parseInt(catId, 10) : null;
-      const select = document.getElementById(`select-cat-${idx}`);
-      if (select) {
-        if (this.preLancamentosImportacao[idx].categoria_id) {
-          select.classList.remove('select-categoria-pendente');
+      this.atualizarEstadoCard(idx);
+    }
+  },
+
+  atualizarEstadoCard(idx) {
+    const p = this.preLancamentosImportacao[idx];
+    if (!p) return;
+
+    const card = document.querySelector(`.pre-lancamento-card[data-pre-index="${idx}"]`);
+    const selectCat = document.getElementById(`select-cat-${idx}`);
+    const selectMeio = document.getElementById(`select-meio-${idx}`);
+    const isCardVincular = p.lancamento_correspondente && p.acao_duplicidade === 'VINCULAR';
+    const isDescartado = p.descartado;
+
+    const temCat = !!p.categoria_id;
+    const temMeio = !!p.meio_pagamento_id;
+    const isPendente = !isDescartado && !isCardVincular && (!temCat || !temMeio);
+
+    if (selectCat) {
+      if (!temCat && !isDescartado && !isCardVincular) {
+        selectCat.classList.add('select-pendente-alerta', 'select-categoria-pendente');
+      } else {
+        selectCat.classList.remove('select-pendente-alerta', 'select-categoria-pendente');
+      }
+    }
+
+    if (selectMeio) {
+      if (!temMeio && !isDescartado && !isCardVincular) {
+        selectMeio.classList.add('select-pendente-alerta');
+      } else {
+        selectMeio.classList.remove('select-pendente-alerta');
+      }
+    }
+
+    if (card) {
+      let badgePendencia = card.querySelector('.badge-alerta-pendencia');
+      if (isPendente) {
+        card.classList.add('card-pendente-atencao');
+        const msg = (!temMeio && !temCat)
+          ? '⚠️ ATENÇÃO: DEFINA O MEIO E A CATEGORIA DRE *'
+          : (!temMeio ? '⚠️ ATENÇÃO: DEFINA O MEIO DE PAGAMENTO *' : '⚠️ ATENÇÃO: DEFINA A CATEGORIA DRE *');
+
+        if (badgePendencia) {
+          badgePendencia.textContent = msg;
         } else {
-          select.classList.add('select-categoria-pendente');
+          const div = document.createElement('div');
+          div.className = 'badge-alerta-pendencia';
+          div.textContent = msg;
+          const containerAvisos = card.querySelector('.container-avisos-inteligencia');
+          if (containerAvisos) {
+            containerAvisos.prepend(div);
+          } else {
+            card.insertBefore(div, card.children[1] || null);
+          }
+        }
+      } else {
+        card.classList.remove('card-pendente-atencao');
+        if (badgePendencia) {
+          badgePendencia.remove();
         }
       }
-      this.atualizarBotaoGerarLote();
     }
+
+    this.atualizarBotaoGerarLote();
   },
 
   atualizarBotaoGerarLote() {
@@ -802,7 +878,9 @@ window.ConciliacaoView = {
     if (!btn) return;
 
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
-    const pendentes = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
+    const pendentesCat = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
+    const pendentesMeio = ativos.filter(p => !p.meio_pagamento_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
+    const totalPendentes = new Set([...pendentesCat, ...pendentesMeio]).size;
 
     if (ativos.length === 0 || !this.contaSelecionadaId) {
       btn.disabled = true;
@@ -810,9 +888,9 @@ window.ConciliacaoView = {
       return;
     }
 
-    if (pendentes.length > 0) {
+    if (totalPendentes > 0) {
       btn.disabled = true;
-      btn.textContent = `⚡ SELECIONE AS CATEGORIAS (${pendentes.length} PENDENTE${pendentes.length > 1 ? 'S' : ''})`;
+      btn.textContent = `⚡ PENDÊNCIAS A PREENCHER (${totalPendentes})`;
     } else {
       btn.disabled = false;
       const vinculados = ativos.filter(p => p.acao_duplicidade === 'VINCULAR' && p.lancamento_existente_id).length;
@@ -985,9 +1063,12 @@ window.ConciliacaoView = {
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
     if (!ativos.length || !this.contaSelecionadaId) return;
 
-    const pendentes = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
-    if (pendentes.length > 0) {
-      window.EMCUtils.showToast(`Selecione a categoria contábil (DRE) de todos os ${pendentes.length} lançamento(s) pendente(s) antes de gerar o lote.`, 'warning');
+    const pendentesCat = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
+    const pendentesMeio = ativos.filter(p => !p.meio_pagamento_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
+    const totalPendentes = new Set([...pendentesCat, ...pendentesMeio]).size;
+
+    if (totalPendentes > 0) {
+      window.EMCUtils.showToast(`Atenção: Existem pendências de preenchimento (${pendentesCat.length} sem Categoria DRE e ${pendentesMeio.length} sem Meio de Pagamento). Complete as lacunas em destaque antes de gerar o lote.`, 'warning');
       return;
     }
 
