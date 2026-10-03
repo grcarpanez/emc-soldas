@@ -112,8 +112,9 @@ def enriquecer_transacao_inteligencia(
     duplicidade = False
     duplicidade_motivo = ''
     lancamento_duplicado_id = None
+    lancamento_correspondente = None
 
-    # 1. Checagem de Duplicidade
+    # 1. Checagem de Duplicidade por FITID
     if fitid:
         lanc_existente = LancamentoFinanceiro.objects.filter(
             fitid=fitid,
@@ -124,13 +125,14 @@ def enriquecer_transacao_inteligencia(
             duplicidade_motivo = f"Transação com FITID '{fitid}' já registrada no ERP (Lançamento #{lanc_existente.id})"
             lancamento_duplicado_id = lanc_existente.id
 
+    # 2. Checagem defensiva de Lançamento Já Conciliado por valor e data próxima (±3 dias)
     if not duplicidade and conta_id:
-        # Checagem defensiva por valor idêntico e data próxima (±2 dias) já conciliado
         lanc_conciliado = LancamentoFinanceiro.objects.filter(
             conta_id=conta_id,
             tipo_lancamento=tipo,
-            valor=valor_abs,
-            data_pagamento__date__range=[data_obj - timedelta(days=2), data_obj + timedelta(days=2)],
+            valor__gte=valor_abs - Decimal('0.05'),
+            valor__lte=valor_abs + Decimal('0.05'),
+            data_pagamento__date__range=[data_obj - timedelta(days=3), data_obj + timedelta(days=3)],
             is_conciliado=True,
             deleted_at__isnull=True
         ).first()
@@ -138,6 +140,37 @@ def enriquecer_transacao_inteligencia(
             duplicidade = True
             duplicidade_motivo = f"Lançamento idêntico já conciliado nesta conta (Lançamento #{lanc_conciliado.id})"
             lancamento_duplicado_id = lanc_conciliado.id
+
+    # 3. Checagem de Lançamento Manual / Pendente no ERP (is_conciliado=False)
+    if not duplicidade and conta_id:
+        cand = LancamentoFinanceiro.objects.filter(
+            Q(conta_id=conta_id) | Q(conta__isnull=True),
+            tipo_lancamento=tipo,
+            valor__gte=valor_abs - Decimal('0.05'),
+            valor__lte=valor_abs + Decimal('0.05'),
+            is_conciliado=False,
+            deleted_at__isnull=True
+        ).exclude(
+            status_pagamento='CANCELADO'
+        ).filter(
+            Q(data_pagamento__date__range=[data_obj - timedelta(days=3), data_obj + timedelta(days=3)]) |
+            Q(data_vencimento__range=[data_obj - timedelta(days=3), data_obj + timedelta(days=3)])
+        ).select_related('categoria', 'conta').first()
+
+        if cand:
+            dt_cand = cand.data_pagamento.date() if cand.data_pagamento else cand.data_vencimento
+            dias_dif = abs((dt_cand - data_obj).days)
+            lancamento_correspondente = {
+                'id': cand.id,
+                'descricao': cand.descricao,
+                'valor': float(cand.valor),
+                'data': str(dt_cand),
+                'status_pagamento': cand.status_pagamento,
+                'categoria_id': cand.categoria_id,
+                'categoria_nome': cand.categoria.nome if cand.categoria else None,
+                'conta_nome': cand.conta.nome if cand.conta else None,
+                'dias_diferenca': dias_dif
+            }
 
     # 2. Reconhecimento de Parceiro por CNPJ/CPF na descrição
     parceiro_identificado = None
@@ -265,6 +298,7 @@ def enriquecer_transacao_inteligencia(
         'duplicidade': duplicidade,
         'duplicidade_motivo': duplicidade_motivo,
         'lancamento_duplicado_id': lancamento_duplicado_id,
+        'lancamento_correspondente': lancamento_correspondente,
         'parceiro_identificado': parceiro_identificado,
         'fatura_sugerida': fatura_sugerida,
         'categoria_sugerida': categoria_sugerida,
@@ -414,8 +448,8 @@ def processar_extrato_split_screen(
                 if lanc.id in lancamentos_usados_ids:
                     continue
 
-                # Checa correspondência de tipo e valor exato
-                if lanc.tipo_lancamento == trn_tipo and lanc.valor == trn_valor_abs:
+                # Checa correspondência de tipo e valor (tolerância de até R$ 0,05)
+                if lanc.tipo_lancamento == trn_tipo and abs(lanc.valor - trn_valor_abs) <= Decimal('0.05'):
                     # Checa proximidade de data (±3 dias de tolerância bancária)
                     dt_lanc = lanc.data_pagamento.date() if lanc.data_pagamento else lanc.data_vencimento
                     dias_diferenca = abs((dt_lanc - trn_data).days)
@@ -429,6 +463,18 @@ def processar_extrato_split_screen(
                             'sugestao_fitid': fitid,
                             'detalhe': f'MATCH 1:1 (DIFERENCA DE {dias_diferenca} DIA(S))'
                         }
+                        if not info_inteligencia.get('lancamento_correspondente'):
+                            info_inteligencia['lancamento_correspondente'] = {
+                                'id': lanc.id,
+                                'descricao': lanc.descricao,
+                                'valor': float(lanc.valor),
+                                'data': str(dt_lanc),
+                                'status_pagamento': lanc.status_pagamento,
+                                'categoria_id': lanc.categoria_id,
+                                'categoria_nome': lanc.categoria.nome if lanc.categoria else None,
+                                'conta_nome': lanc.conta.nome if lanc.conta else None,
+                                'dias_diferenca': dias_diferenca
+                            }
                         break
 
         # 2. Match Múltiplo (1:N) se não encontrou 1:1
@@ -473,6 +519,7 @@ def processar_extrato_split_screen(
             'lancamentos_sugeridos_ids': lancamentos_sugeridos,
             'duplicidade': info_inteligencia['duplicidade'],
             'duplicidade_motivo': info_inteligencia['duplicidade_motivo'],
+            'lancamento_correspondente': info_inteligencia.get('lancamento_correspondente'),
             'parceiro_identificado': info_inteligencia['parceiro_identificado'],
             'fatura_sugerida': info_inteligencia['fatura_sugerida'],
             'categoria_sugerida': info_inteligencia['categoria_sugerida'],
@@ -514,6 +561,8 @@ def processar_extrato_split_screen(
     total_sugestoes = sum(1 for t in transacoes_processadas if t['status_match'].startswith('SUGESTAO'))
     total_sobras_extrato = sum(1 for t in transacoes_processadas if t['status_match'] == 'NAO_CONCILIADO')
     total_sobras_erp = sum(1 for e in erp_processados if e['status_conciliacao'] == 'SOBRA_ERP')
+
+    meta['total_correspondencias_pendentes'] = sum(1 for t in transacoes_processadas if t.get('lancamento_correspondente'))
 
     return {
         'formato': dados_extrato.get('formato', 'OFX'),
@@ -904,8 +953,8 @@ def executar_importacao_lote(
     except ContaBancaria.DoesNotExist:
         raise NotFound("Conta bancária informada não foi encontrada ou está inativa.")
 
-    # Busca categorias válidas em massa
-    cat_ids = {item['categoria_id'] for item in lancamentos_dados}
+    # Busca categorias válidas em massa (apenas dos itens que forneceram categoria_id)
+    cat_ids = {item['categoria_id'] for item in lancamentos_dados if item.get('categoria_id')}
     categorias_map = {
         cat.id: cat for cat in CategoriaFinanceira.objects.filter(id__in=cat_ids, deleted_at__isnull=True)
     }
@@ -922,11 +971,14 @@ def executar_importacao_lote(
 
     with transaction.atomic():
         for item in lancamentos_dados:
-            cat_id = item['categoria_id']
-            if cat_id not in categorias_map:
-                raise ValidationError({"categoria_id": f"Categoria financeira #{cat_id} não encontrada ou inativa."})
-
-            categoria = categorias_map[cat_id]
+            cat_id = item.get('categoria_id')
+            categoria = None
+            if cat_id:
+                if cat_id not in categorias_map:
+                    raise ValidationError({"categoria_id": f"Categoria financeira #{cat_id} não encontrada ou inativa."})
+                categoria = categorias_map[cat_id]
+            elif not item.get('fatura_id') and not item.get('lancamento_existente_id'):
+                raise ValidationError({"categoria_id": "Categoria financeira é obrigatória para novos lançamentos."})
             tipo = item['tipo_lancamento'].upper()
             valor = Decimal(str(item['valor']))
             descricao = sanitizar_texto_maiusculo(item['descricao'])
@@ -991,11 +1043,56 @@ def executar_importacao_lote(
                 except Fatura.DoesNotExist:
                     pass
 
-            # Cria lançamento já liquidado e conciliado (Receita/Despesa direta, suportando cliente/fornecedor e fitid)
-            cli_forn_id = item.get('cliente_fornecedor_id')
             fitid_val = item.get('fitid') or None
             comprovante_val = item.get('comprovante_path') or None
             nome_comprovante_val = item.get('nome_arquivo_comprovante') or None
+
+            # Se for vinculação com Lançamento Financeiro já existente no ERP
+            lancamento_existente_id = item.get('lancamento_existente_id')
+            if lancamento_existente_id:
+                try:
+                    lanc_existente = LancamentoFinanceiro.objects.get(
+                        id=lancamento_existente_id,
+                        deleted_at__isnull=True
+                    )
+                    # Verifica se o lançamento existente já estava PAGO e na mesma conta
+                    ja_impactou_saldo = (
+                        lanc_existente.status_pagamento == 'PAGO' and 
+                        lanc_existente.conta_id == conta.id
+                    )
+
+                    lanc_existente.is_conciliado = True
+                    lanc_existente.data_conciliacao = now
+                    lanc_existente.conciliado_por = user
+                    if fitid_val:
+                        lanc_existente.fitid = fitid_val
+                    if comprovante_val and not lanc_existente.comprovante:
+                        lanc_existente.comprovante = comprovante_val
+                        lanc_existente.nome_arquivo_comprovante = nome_comprovante_val
+
+                    # Se estava A_VENCER, liquida para PAGO na conta informada
+                    if lanc_existente.status_pagamento != 'PAGO':
+                        lanc_existente.status_pagamento = 'PAGO'
+                        lanc_existente.data_pagamento = dt_pagto
+                        lanc_existente.conta = conta
+
+                    lanc_existente.updated_by_id = user_id
+                    lanc_existente.save()
+                    lancamentos_criados.append(lanc_existente)
+
+                    # Se já havia impactado o saldo da conta quando foi lançado manualmente,
+                    # ajusta o totalizador para não creditar/debitar duas vezes!
+                    if ja_impactou_saldo:
+                        if tipo == 'ENTRADA':
+                            total_entradas -= valor
+                        else:
+                            total_saidas -= valor
+                    continue
+                except LancamentoFinanceiro.DoesNotExist:
+                    pass
+
+            # Cria lançamento já liquidado e conciliado (Receita/Despesa direta, suportando cliente/fornecedor e fitid)
+            cli_forn_id = item.get('cliente_fornecedor_id')
 
             lanc = LancamentoFinanceiro.objects.create(
                 conta=conta,

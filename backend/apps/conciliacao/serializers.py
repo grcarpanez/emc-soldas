@@ -100,7 +100,8 @@ class ItemImportacaoLoteSerializer(serializers.Serializer):
     descricao = serializers.CharField(max_length=255, required=True)
     valor = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'), required=True)
     tipo_lancamento = serializers.ChoiceField(choices=['ENTRADA', 'SAIDA'], required=True)
-    categoria_id = serializers.IntegerField(min_value=1, required=True)
+    categoria_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    lancamento_existente_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     data_pagamento = serializers.DateTimeField(required=True)
     documento = serializers.CharField(max_length=100, required=False, allow_blank=True, allow_null=True)
     fitid = serializers.CharField(max_length=150, required=False, allow_blank=True, allow_null=True)
@@ -109,6 +110,11 @@ class ItemImportacaoLoteSerializer(serializers.Serializer):
     fatura_id = serializers.IntegerField(required=False, allow_null=True)
     comprovante_path = serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
     nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs.get('lancamento_existente_id') and not attrs.get('fatura_id') and not attrs.get('categoria_id'):
+            raise serializers.ValidationError({"categoria_id": "A categoria contábil DRE é obrigatória para novos lançamentos."})
+        return attrs
 
 
 class UploadComprovanteConciliacaoSerializer(serializers.Serializer):

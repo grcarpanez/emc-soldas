@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Correção da Serialização de Comprovantes em Lançamentos Financeiros)  
+**Última Atualização:** 2026-10-03 (Detecção de Correspondência e Conferência Anti-Duplicidade na Importação de Extratos - PWA v4.34)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -484,7 +484,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] **Correção da Serialização de Comprovantes em Lançamentos Financeiros:**
   - **Diagnóstico:** O DRF `ModelSerializer` padrão rejeitava strings de caminhos relativos salvas previamente pelo endpoint de upload (`comprovantes/...`) nos métodos `POST` e `PATCH` de `/api/lancamentos-financeiros/`, disparando o erro *"O dado submetido não era um arquivo. Cheque o tipo de codificação no formulário"*.
   - **Solução Arquitetural:** Implementação do campo híbrido `ComprovanteFileOrCharField(serializers.FileField)` em `backend/apps/financeiro/serializers.py`, aceitando perfeitamente caminhos relativos de arquivos já armazenados no servidor, URLs sanitizadas, arquivos diretos (`UploadedFile`) e valores nulos (desvinculação/remoção de anexo).
-  - **Homologação:** 27 testes automatizados de `apps.financeiro` aprovados (incluindo testes dedicados de PATCH com caminho de anexo, desanexação e criação via POST) e 188 testes de todo o backend aprovados com 100% de sucesso.
+- [x] **Detecção de Correspondência e Conferência Anti-Duplicidade na Importação de Extratos Bancários (PWA v4.34):**
+  - **Identificação Automática de Lançamentos Manuais Pré-Existentes:** No backend (`backend/apps/conciliacao/services.py`), o motor de enriquecimento passa a identificar lançamentos manuais pendentes de conciliação (`is_conciliado=False`) que possuam mesma conta bancária, mesma direção (`ENTRADA`/`SAIDA`), valor idêntico ($\pm$ R$ 0,05) e data próxima ($\pm$ 3 dias), ignorando diferenças de texto/descrição entre o extrato bancário e o lançamento manual, anexando o objeto `lancamento_correspondente`.
+  - **Prevenção Atômica de Saldo Duplo (`executar_importacao_lote`):** Ao receber `lancamento_existente_id` com ação `VINCULAR`, o sistema carimba o FITID bancário e concilia o registro existente sem criar um segundo lançamento no MySQL. Caso o lançamento manual já estivesse liquidado como `PAGO` na conta, o backend deduz o valor do recálculo de saldo da importação, impedindo que o saldo seja creditado/debitado duas vezes no Caixa Real.
+  - **Modal Industrial de Conferência Anti-Duplicidade:** Abertura automática ao importar extratos com correspondências (ou via botão `⚠️ CONFERÊNCIA` na barra de ações), exibindo tabela comparativa lado a lado (Extrato vs Lançamento no ERP) com opções de rádio: `[🔘 VINCULAR E CONCILIAR (Recomendado)]`, `[⚪ CRIAR NOVO LANÇAMENTO]` e `[⚪ DESCARTAR DO EXTRATO]`.
+  - **Mesa de Triagem com Ação Contextual:** Cards com correspondência identificada recebem destaque âmbar/verde no padrão *Industrial Integrity*, opções de rádio para alternância ágil de ação e atualização automática do texto do botão `⚡ IMPORTAR EM LOTE (X: Y VINCULADOS)`.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.34` em `frontend/sw.js` e sufixos de cache-busting `?v=4.34` em `frontend/index.html`.
+  - **Homologação:** 15 testes de `apps.conciliacao`, 27 testes de `apps.financeiro` e 100% dos testes globais aprovados com sucesso.
 
 
 

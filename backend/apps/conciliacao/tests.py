@@ -4,7 +4,7 @@ Cobre parsers OFX/CSV, motor de matching 1:1 e 1:N, liquidação com impacto em 
 lançamento rápido no ato, desconciliação, troca de conta, divergências e segurança RBAC.
 """
 from decimal import Decimal
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import io
 
 from django.test import TestCase
@@ -592,5 +592,126 @@ VERSION:102
         lanc = LancamentoFinanceiro.objects.get(fitid='PIX_COM_ANEXO_001')
         self.assertEqual(lanc.nome_arquivo_comprovante, 'nota_fiscal_servico.pdf')
         self.assertTrue(lanc.comprovante.name.endswith('.pdf'))
+
+    def test_deteccao_lancamento_correspondente_manual(self):
+        """Valida que o upload do extrato detecta lançamentos manuais pendentes no ERP por valor e data próxima."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        # Lançamento manual criado pelo operador no Caixa Real
+        lanc_manual = LancamentoFinanceiro.objects.create(
+            conta=self.conta,
+            categoria=self.categoria_receita,
+            tipo_lancamento='ENTRADA',
+            descricao='LANCAMENTO MANUAL OFICINA',
+            valor=Decimal('6770.00'),
+            data_vencimento=date(2025, 6, 2),
+            data_pagamento=timezone.make_aware(datetime(2025, 6, 2, 14, 0, 0)),
+            status_pagamento='PAGO',
+            is_conciliado=False
+        )
+
+        ofx_content = """OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+COMPRESSION:NONE
+OLDFILEVERSION:102
+NEWFILEVERSION:102
+<OFX>
+<BANKMSGSRSV1>
+<STMTTRNRS>
+<STMTRS>
+<CURDEF>BRL
+<BANKACCTFROM>
+<BANKID>001
+<ACCTID>123456
+<ACCTTYPE>CHECKING
+</BANKACCTFROM>
+<BANKTRANLIST>
+<DTSTART>20250601
+<DTEND>20250605
+<STMTTRN>
+<TRNTYPE>CREDIT
+<DTPOSTED>20250602
+<TRNAMT>6770.00
+<FITID>CAVENGE_EXTRATO_001
+<MEMO>PIX RECEBIDO - CAVENGE CONSTRUCOES
+</STMTTRN>
+</BANKTRANLIST>
+</STMTRS>
+</STMTTRNRS>
+</BANKMSGSRSV1>
+</OFX>"""
+        ofx_file = SimpleUploadedFile("extrato_junho.ofx", ofx_content.encode('utf-8'), content_type="application/x-ofx")
+
+        response = self.client.post(
+            f'/api/conciliacao/upload-extrato/?conta_id={self.conta.id}',
+            {'arquivo': ofx_file, 'conta_id': self.conta.id},
+            format='multipart'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        dados = response.json()
+        self.assertIn('transacoes', dados)
+        trn = dados['transacoes'][0]
+
+        # Valida que foi detectada correspondência com o lançamento manual
+        self.assertIsNotNone(trn.get('lancamento_correspondente'))
+        self.assertEqual(trn['lancamento_correspondente']['id'], lanc_manual.id)
+        self.assertEqual(trn['lancamento_correspondente']['valor'], 6770.00)
+
+    def test_importacao_lote_com_vinculacao_evita_duplicidade(self):
+        """Valida que importar em lote vinculando a lançamento existente não duplica o registro nem o saldo."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+
+        saldo_inicial = self.conta.saldo # 10000.00
+
+        # Lançamento manual prévio de R$ 6.770,00 como PAGO no Caixa Real
+        lanc_manual = LancamentoFinanceiro.objects.create(
+            conta=self.conta,
+            categoria=self.categoria_receita,
+            tipo_lancamento='ENTRADA',
+            descricao='REFORMA CAVENGE MANUAL',
+            valor=Decimal('6770.00'),
+            data_vencimento=date(2025, 6, 2),
+            data_pagamento=timezone.make_aware(datetime(2025, 6, 2, 10, 0, 0)),
+            status_pagamento='PAGO',
+            is_conciliado=False
+        )
+
+        total_lancs_antes = LancamentoFinanceiro.objects.count()
+
+        # Envia importação em lote com lancamento_existente_id
+        payload = {
+            'conta_id': self.conta.id,
+            'lancamentos': [
+                {
+                    'fitid': 'FITID_CAVENGE_2025',
+                    'data_pagamento': '2025-06-02T12:00:00Z',
+                    'descricao': 'PIX RECEBIDO - CAVENGE',
+                    'valor': '6770.00',
+                    'tipo_lancamento': 'ENTRADA',
+                    'lancamento_existente_id': lanc_manual.id
+                }
+            ]
+        }
+
+        res = self.client.post('/api/conciliacao/importacao-lote/', payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        # 1. Total de lançamentos no banco NÃO aumentou (zero duplicações)
+        self.assertEqual(LancamentoFinanceiro.objects.count(), total_lancs_antes)
+
+        # 2. Lançamento manual foi atualizado com conciliação e FITID
+        lanc_manual.refresh_from_db()
+        self.assertTrue(lanc_manual.is_conciliado)
+        self.assertEqual(lanc_manual.fitid, 'FITID_CAVENGE_2025')
+        self.assertIsNotNone(lanc_manual.data_conciliacao)
+
+        # 3. Saldo da conta NÃO foi creditado novamente (não houve duplicidade de saldo)
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, saldo_inicial)
+
 
 

@@ -218,15 +218,32 @@ window.ConciliacaoView = {
       await this.carregarLancamentosErp();
     } else {
       if (tituloErp) tituloErp.textContent = 'MESA DE TRIAGEM & PRÉ-LANÇAMENTOS';
+
+      this.prepararPreLancamentosImportacao();
+
+      const correspondentesCount = this.preLancamentosImportacao.filter(p => p.lancamento_correspondente && !p.duplicidade).length;
+      let btnConferenciaHtml = '';
+      if (correspondentesCount > 0) {
+        btnConferenciaHtml = `
+          <button class="btn btn-warning btn-sm" id="btn-abrir-conferencia-duplicidade" style="background-color: #f5a623; color: #131313; font-weight: 700; margin-right: 8px;">
+            ⚠️ CONFERÊNCIA (${correspondentesCount} CORRESPONDÊNCIA${correspondentesCount > 1 ? 'S' : ''})
+          </button>
+        `;
+      }
+
       barraAcoes.innerHTML = `
+        ${btnConferenciaHtml}
         <button class="btn btn-primary btn-sm" id="btn-gerar-lote" disabled>
           ⚡ GERAR E CONCILIAR EM LOTE (0)
         </button>
       `;
 
-      document.getElementById('btn-gerar-lote')?.addEventListener('click', () => this.executarImportacaoLote());
+      document.getElementById('btn-abrir-conferencia-duplicidade')?.addEventListener('click', () => {
+        const itens = this.preLancamentosImportacao.filter(p => p.lancamento_correspondente && !p.duplicidade);
+        this.abrirModalConferenciaCorrespondentes(itens);
+      });
 
-      this.prepararPreLancamentosImportacao();
+      document.getElementById('btn-gerar-lote')?.addEventListener('click', () => this.executarImportacaoLote());
     }
 
     this.renderListaExtrato();
@@ -265,7 +282,8 @@ window.ConciliacaoView = {
     this.preLancamentosImportacao = this.transacoesExtrato.map((t, idx) => {
       const isEntrada = t.tipo === 'ENTRADA' || (parseFloat(t.valor) || 0) > 0;
       const isDuplicado = !!t.duplicidade;
-      const categoriaSugeridaId = t.categoria_sugerida ? t.categoria_sugerida.id : null;
+      const temCorrespondente = !!t.lancamento_correspondente;
+      const categoriaSugeridaId = t.categoria_sugerida ? t.categoria_sugerida.id : (temCorrespondente ? t.lancamento_correspondente.categoria_id : null);
       const parceiroId = t.parceiro_identificado ? t.parceiro_identificado.id : null;
       const faturaId = t.fatura_sugerida ? t.fatura_sugerida.id : null;
 
@@ -289,7 +307,7 @@ window.ConciliacaoView = {
         descricao: descEfetiva,
         documento: t.documento || '',
         categoria_id: categoriaSugeridaId,
-        categoria_sugerida_nome: t.categoria_sugerida ? t.categoria_sugerida.nome : null,
+        categoria_sugerida_nome: t.categoria_sugerida ? t.categoria_sugerida.nome : (temCorrespondente ? t.lancamento_correspondente.categoria_nome : null),
         meio_pagamento_id: meioSugeridoId,
         meio_pagamento_nome: meioSugeridoNome,
         cliente_fornecedor_id: parceiroId,
@@ -298,6 +316,9 @@ window.ConciliacaoView = {
         fatura_sugerida: t.fatura_sugerida,
         duplicidade: isDuplicado,
         duplicidade_motivo: t.duplicidade_motivo,
+        lancamento_correspondente: t.lancamento_correspondente || null,
+        acao_duplicidade: temCorrespondente ? 'VINCULAR' : 'CRIAR',
+        lancamento_existente_id: temCorrespondente ? t.lancamento_correspondente.id : null,
         descartado: isDuplicado // Se já existe no ERP, descarta por padrão para proteger contra duplicidades
       };
     });
@@ -346,6 +367,14 @@ window.ConciliacaoView = {
       await this.atualizarInterfacePorModo();
 
       window.EMCUtils.showToast(`Extrato importado com sucesso! ${this.transacoesExtrato.length} transações prontas.`, 'success');
+
+      // Se estiver no modo importação e existirem correspondências pendentes no ERP, abre o modal de conferência
+      if (this.modoAtual === 'importacao') {
+        const itensComCorrespondente = this.preLancamentosImportacao.filter(p => p.lancamento_correspondente && !p.duplicidade);
+        if (itensComCorrespondente.length > 0) {
+          setTimeout(() => this.abrirModalConferenciaCorrespondentes(itensComCorrespondente), 300);
+        }
+      }
     } catch (err) {
       window.EMCUtils.showToast(err.message || 'Falha ao processar arquivo de extrato.', 'error');
     } finally {
@@ -400,6 +429,9 @@ window.ConciliacaoView = {
       let badgeInteligencia = '';
       if (t.duplicidade) {
         badgeInteligencia = `<span class="status-chip neutral" style="font-size: 9px; padding: 2px 5px; background-color: #2e3035; color: #a5a9b4; border: 1px solid #71797e;">🔒 ${window.EMCUtils.escapeHtml(t.duplicidade_motivo || 'JÁ NO ERP')}</span>`;
+      } else if (t.lancamento_correspondente) {
+        const c = t.lancamento_correspondente;
+        badgeInteligencia = `<span class="status-chip warning" style="font-size: 9px; padding: 2px 5px; background-color: #3b2806; color: #f5a623; border: 1px solid #7a520d;">⚠️ CORRESPONDÊNCIA ERP #${c.id}</span>`;
       } else if (t.fatura_sugerida) {
         const descIss = t.fatura_sugerida.iss_retido_aplicado ? ` (ISS ${t.fatura_sugerida.aliquota_iss}% RETIDO)` : '';
         badgeInteligencia = `<span class="status-chip info" style="font-size: 9px; padding: 2px 5px; background-color: #0d2744; color: #4ba3e3; border: 1px solid #1a5690;">📄 FATURA #${t.fatura_sugerida.numero}${descIss}</span>`;
@@ -546,6 +578,27 @@ window.ConciliacaoView = {
             🔒 <strong>DETECTADA DUPLICIDADE:</strong> ${window.EMCUtils.escapeHtml(p.duplicidade_motivo || 'Lançamento já existente no sistema')}. Descartado por segurança.
           </div>
         `;
+      } else if (p.lancamento_correspondente) {
+        const l = p.lancamento_correspondente;
+        const isVincular = p.acao_duplicidade === 'VINCULAR';
+        infoExtraInteligencia = `
+          <div class="mono-text" style="font-size: 11px; color: #ffe2a8; background: rgba(59, 40, 6, 0.4); padding: 6px 8px; border-left: 3px solid #f5a623; margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
+              <span>⚠️ <strong>CONFERÊNCIA:</strong> Lançamento manual no ERP (#${l.id} - ${window.EMCUtils.formatarMoeda(l.valor)} em ${window.EMCUtils.formatarDataPtBr(l.data_pagamento)})</span>
+              <span class="status-chip ${isVincular ? 'success' : 'warning'}" style="font-size: 9px; padding: 1px 4px;">${isVincular ? 'VINCULAR (RECOMENDADO)' : 'CRIAR NOVO'}</span>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+              <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 0; font-size: 10px; font-weight: 700; color: ${isVincular ? '#69f0ae' : 'var(--color-on-surface)'};">
+                <input type="radio" name="card-acao-${idx}" value="VINCULAR" ${isVincular ? 'checked' : ''} onchange="window.ConciliacaoView.definirAcaoCorrespondente(${idx}, 'VINCULAR')">
+                VINCULAR AO #${l.id} (NÃO DUPLICAR)
+              </label>
+              <label style="display: inline-flex; align-items: center; gap: 4px; cursor: pointer; margin: 0; font-size: 10px; font-weight: 600; color: ${!isVincular && !isDescartado ? '#ffe2a8' : 'var(--color-on-surface)'};">
+                <input type="radio" name="card-acao-${idx}" value="CRIAR" ${!isVincular && !isDescartado ? 'checked' : ''} onchange="window.ConciliacaoView.definirAcaoCorrespondente(${idx}, 'CRIAR')">
+                CRIAR NOVO
+              </label>
+            </div>
+          </div>
+        `;
       } else if (p.fatura_sugerida) {
         const descIss = p.fatura_sugerida.iss_retido_aplicado ? ` (ISS ${p.fatura_sugerida.aliquota_iss}% RETIDO: R$ ${window.EMCUtils.formatarMoeda(p.fatura_sugerida.valor_iss)})` : '';
         infoExtraInteligencia = `
@@ -573,8 +626,11 @@ window.ConciliacaoView = {
         `
       ) : '';
 
+      const isCardVincular = p.lancamento_correspondente && p.acao_duplicidade === 'VINCULAR';
+      const borderDestaque = isCardVincular ? 'border-left: 3px solid #69f0ae;' : (p.lancamento_correspondente ? 'border-left: 3px solid #f5a623;' : '');
+
       html += `
-        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''}" data-pre-index="${idx}">
+        <div class="split-item pre-lancamento-card ${isDescartado ? 'discarded' : ''} ${p.duplicidade ? 'duplicado-erp' : ''} ${p.lancamento_correspondente ? 'correspondente-erp' : ''}" style="${borderDestaque}" data-pre-index="${idx}">
           <div class="anchor-node left ${!isDescartado ? 'matched' : ''}"></div>
 
           <!-- Linha 1 (Cabeçalho Ultra-Denso): Identificador/Data, Valor, Botão/Badge de Anexo e Botão ✕ -->
@@ -620,7 +676,7 @@ window.ConciliacaoView = {
             </div>
             <div>
               <select id="select-cat-${idx}" 
-                      class="form-control ${!temCategoria && !isDescartado ? 'select-categoria-pendente' : ''}" 
+                      class="form-control ${!temCategoria && !isDescartado && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR') ? 'select-categoria-pendente' : ''}" 
                       style="font-size: 11px; padding: 4px 6px; width: 100%;"
                       onchange="window.ConciliacaoView.atualizarCategoriaPreLancamento(${idx}, this.value)">
                 ${optionsCat}
@@ -746,7 +802,7 @@ window.ConciliacaoView = {
     if (!btn) return;
 
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
-    const pendentes = ativos.filter(p => !p.categoria_id);
+    const pendentes = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
 
     if (ativos.length === 0 || !this.contaSelecionadaId) {
       btn.disabled = true;
@@ -759,30 +815,212 @@ window.ConciliacaoView = {
       btn.textContent = `⚡ SELECIONE AS CATEGORIAS (${pendentes.length} PENDENTE${pendentes.length > 1 ? 'S' : ''})`;
     } else {
       btn.disabled = false;
-      btn.textContent = `⚡ GERAR E CONCILIAR EM LOTE (${ativos.length})`;
+      const vinculados = ativos.filter(p => p.acao_duplicidade === 'VINCULAR' && p.lancamento_existente_id).length;
+      if (vinculados > 0) {
+        btn.textContent = `⚡ IMPORTAR EM LOTE (${ativos.length}: ${vinculados} VINCULADO${vinculados > 1 ? 'S' : ''})`;
+      } else {
+        btn.textContent = `⚡ GERAR E CONCILIAR EM LOTE (${ativos.length})`;
+      }
     }
+  },
+
+  definirAcaoCorrespondente(idx, acao) {
+    const p = this.preLancamentosImportacao[idx];
+    if (!p) return;
+
+    if (acao === 'VINCULAR') {
+      p.descartado = false;
+      p.acao_duplicidade = 'VINCULAR';
+      p.lancamento_existente_id = p.lancamento_correspondente ? p.lancamento_correspondente.id : null;
+      if (p.lancamento_correspondente?.categoria_id && !p.categoria_id) {
+        p.categoria_id = p.lancamento_correspondente.categoria_id;
+      }
+    } else if (acao === 'CRIAR') {
+      p.descartado = false;
+      p.acao_duplicidade = 'CRIAR';
+      p.lancamento_existente_id = null;
+    } else if (acao === 'DESCARTAR') {
+      p.descartado = true;
+      p.acao_duplicidade = 'DESCARTAR';
+      p.lancamento_existente_id = null;
+    }
+
+    // Revalida conexões match
+    this.conexoesMatch = this.conexoesMatch.filter(c => c.preIndex !== idx);
+    if (!p.descartado) {
+      this.conexoesMatch.push({
+        extratoIndex: idx,
+        preIndex: idx,
+        tipo: 'CONFIRMADO'
+      });
+    }
+
+    // Sincroniza seletores de rádio na Mesa de Triagem
+    const cardRadioVincular = document.querySelector(`input[name="card-acao-${idx}"][value="VINCULAR"]`);
+    const cardRadioCriar = document.querySelector(`input[name="card-acao-${idx}"][value="CRIAR"]`);
+    if (cardRadioVincular && cardRadioCriar) {
+      cardRadioVincular.checked = p.acao_duplicidade === 'VINCULAR';
+      cardRadioCriar.checked = p.acao_duplicidade === 'CRIAR';
+    }
+
+    this.renderListaExtrato();
+    this.renderListaPreLancamentos();
+    this.atualizarBotaoGerarLote();
+    this.desenharLinhasConexao();
+  },
+
+  abrirModalConferenciaCorrespondentes(itens) {
+    if (!itens || !itens.length) return;
+
+    const linhasHtml = itens.map(p => {
+      const idx = p.id_temp;
+      const l = p.lancamento_correspondente;
+      const isEntrada = p.tipo_lancamento === 'ENTRADA';
+      const isVincular = p.acao_duplicidade === 'VINCULAR';
+      const isCriar = p.acao_duplicidade === 'CRIAR';
+      const isDescartar = p.descartado;
+
+      return `
+        <tr style="border-bottom: 1px solid var(--color-outline-variant);">
+          <!-- Transação no Extrato -->
+          <td style="padding: 10px; vertical-align: top; width: 33%;">
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">
+              ${window.EMCUtils.formatarDataPtBr(p.data)} • <span class="status-chip ${isEntrada ? 'success' : 'danger'}" style="font-size: 9px; padding: 1px 4px;">${isEntrada ? 'CRÉDITO' : 'DÉBITO'}</span>
+            </div>
+            <div style="font-weight: 600; margin: 4px 0; font-size: 12px; color: var(--color-on-surface);">
+              ${window.EMCUtils.escapeHtml(p.descricao)}
+            </div>
+            <div class="mono-text font-bold" style="color: ${isEntrada ? 'var(--color-success)' : 'var(--color-error)'}; font-size: 13px;">
+              ${isEntrada ? '+' : '-'} ${window.EMCUtils.formatarMoeda(p.valor)}
+            </div>
+          </td>
+
+          <!-- Lançamento no ERP -->
+          <td style="padding: 10px; vertical-align: top; background: rgba(255, 255, 255, 0.02); border-left: 1px solid var(--color-outline-variant); border-right: 1px solid var(--color-outline-variant); width: 35%;">
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; justify-content: space-between;">
+              <span>#${l.id} • ${window.EMCUtils.formatarDataPtBr(l.data_pagamento || p.data)}</span>
+              <span class="status-chip ${l.status_pagamento === 'PAGO' ? 'success' : 'warning'}" style="font-size: 9px; padding: 1px 4px;">${l.status_pagamento}</span>
+            </div>
+            <div style="font-weight: 600; margin: 4px 0; font-size: 12px; color: var(--color-on-surface);">
+              ${window.EMCUtils.escapeHtml(l.descricao || 'Lançamento manual')}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="mono-text font-bold" style="font-size: 13px; color: var(--color-on-surface);">
+                ${window.EMCUtils.formatarMoeda(l.valor)}
+              </span>
+              <span class="mono-text" style="font-size: 10px; color: var(--color-on-surface-variant); background: var(--color-surface); padding: 2px 6px; border: 1px solid var(--color-outline-variant);">
+                📁 ${window.EMCUtils.escapeHtml(l.categoria_nome || 'SEM CATEGORIA')}
+              </span>
+            </div>
+            ${l.dias_diferenca !== 0 ? `
+              <div class="mono-text" style="font-size: 10px; color: #ffe2a8; margin-top: 4px;">
+                ⏱ Diferença de data: ${Math.abs(l.dias_diferenca)} dia(s)
+              </div>
+            ` : ''}
+          </td>
+
+          <!-- Ação do Usuário -->
+          <td style="padding: 10px; vertical-align: middle; width: 32%;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; font-size: 11px; font-weight: 700; color: #69f0ae;">
+                <input type="radio" name="modal-acao-${idx}" value="VINCULAR" ${isVincular && !isDescartar ? 'checked' : ''} onchange="window.ConciliacaoView.definirAcaoCorrespondente(${idx}, 'VINCULAR')">
+                <span>🔘 VINCULAR E CONCILIAR (Recomendado)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; font-size: 11px; color: var(--color-on-surface);">
+                <input type="radio" name="modal-acao-${idx}" value="CRIAR" ${isCriar && !isDescartar ? 'checked' : ''} onchange="window.ConciliacaoView.definirAcaoCorrespondente(${idx}, 'CRIAR')">
+                <span>⚪ CRIAR NOVO LANÇAMENTO</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; font-size: 11px; color: var(--color-error);">
+                <input type="radio" name="modal-acao-${idx}" value="DESCARTAR" ${isDescartar ? 'checked' : ''} onchange="window.ConciliacaoView.definirAcaoCorrespondente(${idx}, 'DESCARTAR')">
+                <span>⚪ DESCARTAR DO EXTRATO</span>
+              </label>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    window.EMCUtils.openModal({
+      title: 'CONFERÊNCIA DE LANÇAMENTOS - DETECÇÃO ANTI-DUPLICIDADE',
+      size: 'xl',
+      confirmText: 'APLICAR DECISÕES E CONTINUAR',
+      showCancel: false,
+      content: `
+        <div style="margin-bottom: 12px;">
+          <p style="font-size: 13px; color: var(--color-on-surface); margin-bottom: 6px;">
+            Identificamos <strong>${itens.length} movimentação(ões)</strong> no extrato bancário com valores idênticos e datas compatíveis a lançamentos manuais já existentes no ERP.
+          </p>
+          <div class="mono-text" style="font-size: 11px; color: #ffe2a8; background: rgba(59, 40, 6, 0.4); padding: 8px 12px; border-left: 3px solid #f5a623;">
+            💡 <strong>PROTEÇÃO DE SALDO REAL:</strong> A opção <strong>VINCULAR E CONCILIAR (Recomendado)</strong> aproveita o lançamento manual já existente, carimba o código bancário (FITID) e concilia a movimentação <strong>sem duplicar o saldo nem criar registros repetidos</strong>.
+          </div>
+        </div>
+
+        <div style="max-height: 480px; overflow-y: auto; border: 1px solid var(--color-outline-variant);">
+          <table class="table-industrial" style="width: 100%; font-size: 12px; border-collapse: collapse;">
+            <thead>
+              <tr style="background: var(--color-surface-variant); border-bottom: 1px solid var(--color-outline-variant);">
+                <th style="padding: 8px 10px; text-align: left;">TRANSAÇÃO NO EXTRATO</th>
+                <th style="padding: 8px 10px; text-align: left; border-left: 1px solid var(--color-outline-variant); border-right: 1px solid var(--color-outline-variant);">LANÇAMENTO MANUAL NO ERP</th>
+                <th style="padding: 8px 10px; text-align: left;">AÇÃO DE CONFERÊNCIA</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linhasHtml}
+            </tbody>
+          </table>
+        </div>
+      `,
+      onConfirm: () => {
+        this.renderListaExtrato();
+        this.renderListaPreLancamentos();
+        this.atualizarBotaoGerarLote();
+        this.desenharLinhasConexao();
+        window.EMCUtils.showToast('Decisões de conferência aplicadas com sucesso!', 'success');
+        return true;
+      }
+    });
   },
 
   async executarImportacaoLote() {
     const ativos = this.preLancamentosImportacao.filter(p => !p.descartado);
     if (!ativos.length || !this.contaSelecionadaId) return;
 
-    const pendentes = ativos.filter(p => !p.categoria_id);
+    const pendentes = ativos.filter(p => !p.categoria_id && (!p.lancamento_existente_id || p.acao_duplicidade !== 'VINCULAR'));
     if (pendentes.length > 0) {
       window.EMCUtils.showToast(`Selecione a categoria contábil (DRE) de todos os ${pendentes.length} lançamento(s) pendente(s) antes de gerar o lote.`, 'warning');
       return;
     }
 
-    window.EMCUtils.openModal({
-      title: 'CONFIRMAÇÃO DE IMPORTAÇÃO EM LOTE',
-      size: 'sm',
-      confirmText: 'GERAR E CONCILIAR AGORA',
-      content: `
-        <p>Confirmar a criação de <strong>${ativos.length} lançamentos financeiros</strong> no ERP?</p>
+    const totalVinculados = ativos.filter(p => p.acao_duplicidade === 'VINCULAR' && p.lancamento_existente_id).length;
+    const totalNovos = ativos.length - totalVinculados;
+
+    let resumoAcoes = `<p>Confirmar a importação de <strong>${ativos.length} movimentação(ões)</strong> do extrato bancário?</p>`;
+    if (totalVinculados > 0 && totalNovos > 0) {
+      resumoAcoes += `
+        <div class="mono-text" style="font-size: 12px; margin-top: 8px; padding: 8px; background: var(--color-surface-variant); border-left: 3px solid #69f0ae;">
+          🔗 <strong>${totalVinculados}</strong> serão <strong>VINCULADOS</strong> a lançamentos manuais existentes (evitando duplicidade).<br>
+          ✨ <strong>${totalNovos}</strong> serão <strong>CRIADOS</strong> como novos lançamentos financeiros.
+        </div>
+      `;
+    } else if (totalVinculados > 0) {
+      resumoAcoes += `
+        <div class="mono-text" style="font-size: 12px; margin-top: 8px; padding: 8px; background: var(--color-surface-variant); border-left: 3px solid #69f0ae;">
+          🔗 Todos os <strong>${totalVinculados}</strong> lançamentos serão <strong>VINCULADOS</strong> a lançamentos manuais existentes no ERP (sem duplicar saldo ou registros).
+        </div>
+      `;
+    } else {
+      resumoAcoes += `
         <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-top: 8px;">
           Todos os lançamentos serão criados, liquidados como PAGO e já carimbados como CONCILIADOS na conta bancária selecionada, atualizando o saldo real.
         </p>
-      `,
+      `;
+    }
+
+    window.EMCUtils.openModal({
+      title: 'CONFIRMAÇÃO DE IMPORTAÇÃO EM LOTE',
+      size: 'sm',
+      confirmText: 'IMPORTAR E CONCILIAR AGORA',
+      content: resumoAcoes,
       onConfirm: async () => {
         try {
           const payload = {
@@ -799,7 +1037,8 @@ window.ConciliacaoView = {
               cliente_fornecedor_id: p.cliente_fornecedor_id || null,
               fatura_id: p.fatura_id || null,
               comprovante_path: p.comprovante_path || null,
-              nome_arquivo_comprovante: p.nome_arquivo_comprovante || null
+              nome_arquivo_comprovante: p.nome_arquivo_comprovante || null,
+              lancamento_existente_id: p.acao_duplicidade === 'VINCULAR' ? (p.lancamento_existente_id || null) : null
             }))
           };
 

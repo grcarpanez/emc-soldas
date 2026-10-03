@@ -359,3 +359,21 @@ Utilize o padrão abaixo para cada novo erro registrado:
   3. Adição de testes unitários automatizados em `backend/apps/financeiro/tests.py` cobrindo PATCH com caminho relativo, desvinculação com `null` e criação via POST.
 - **Como evitar no futuro:** Em modelos do DRF onde o fluxo de upload de arquivos é desacoplado (o upload do arquivo binário ocorre em um endpoint auxiliar e a persistência do vínculo ocorre posteriormente via PATCH/POST em JSON), utilizar serializers fields customizados que aceitem tanto instâncias de arquivo quanto caminhos de arquivos já salvos.
 
+---
+
+## 2026-10-03 - Duplicidade de Lançamentos e de Saldo na Importação de Extratos Bancários com Lançamentos Manuais Pré-existentes
+
+- **Sintoma:** Ao realizar um lançamento manual no Caixa Real (ex: entrada de R$ 6.770,00 em 02/06/2025) e posteriormente importar o extrato bancário (OFX/CSV) daquele período, o sistema criava um segundo lançamento idêntico no Caixa Real para o mesmo dia, duplicando a movimentação financeira e o saldo da conta bancária.
+- **Causa:**
+  1. O serviço `enriquecer_transacao_inteligencia` apenas buscava lançamentos com `is_conciliado=True` ou com mesmo `fitid`. Lançamentos manuais feitos no Caixa Real iniciam com `is_conciliado=False` e sem `fitid`, passando despercebidos pela triagem.
+  2. A comparação não considerava discrepâncias de nomenclatura entre o extrato bancário (ex: "PIX RECEBIDO CAVENGE ENGENHARIA") e o lançamento manual informado pelo operador (ex: "SERVICO DE SOLDA FLANGE"), exigindo conferência baseada em valor ($\pm$ R$ 0,05) e janela temporal ($\pm$ 3 dias).
+  3. Na importação em lote (`executar_importacao_lote`), o backend sempre criava um novo registro `LancamentoFinanceiro` e recalculava o saldo da conta, creditando/debitando o valor pela segunda vez quando o lançamento manual já havia sido lançado como `PAGO`.
+- **Solução aplicada:**
+  1. No backend (`backend/apps/conciliacao/services.py`), implementação da detecção de correspondências de lançamentos manuais não conciliados (`is_conciliado=False`) baseada em conta, direção (`ENTRADA`/`SAIDA`), valor exato ($\pm$ R$ 0,05) e janela temporal de até $\pm$ 3 dias, anexando o objeto `lancamento_correspondente`.
+  2. Atualização de `ItemImportacaoLoteSerializer` para aceitar `lancamento_existente_id` e tornar `categoria_id` opcional na vinculação.
+  3. No serviço `executar_importacao_lote`, suporte a `lancamento_existente_id`: se o lançamento manual já estava `PAGO` na mesma conta (`ja_impactou_saldo`), o sistema apenas concilia o lançamento existente (`is_conciliado=True`, `fitid`, `data_conciliacao=now`) e **não altera o saldo da conta novamente**, prevenindo 100% da duplicidade contábil e patrimonial.
+  4. No frontend (`frontend/assets/js/views/conciliacao-view.js`), abertura automática do modal industrial de conferência anti-duplicidade ao importar extratos com correspondências, permitindo ao usuário escolher entre "VINCULAR E CONCILIAR (Recomendado)", "CRIAR NOVO" ou "DESCARTAR", além de controles contextuais nos cards da Mesa de Triagem e atualização do botão de importação.
+  5. Incremento de versão do Service Worker PWA para `v4.34` e sufixos de cache-busting `?v=4.34` no `index.html`.
+  6. Adição de testes unitários automatizados cobrindo detecção de correspondência e vinculação atômica em `backend/apps/conciliacao/tests.py`.
+- **Como evitar no futuro:** Sempre que um fluxo de importação em lote interagir com o Razão Contábil / Caixa Real, verificar se já existem títulos ou lançamentos equivalentes pendentes de conciliação por valor e data antes de criar novos registros, fornecendo conferência assistida ao operador com opção preferencial de vinculação.
+
