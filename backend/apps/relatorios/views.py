@@ -48,8 +48,9 @@ class DashboardFlipCardsView(APIView):
         serializer.is_valid(raise_exception=True)
         data_inicio = serializer.validated_data.get('data_inicio')
         data_fim = serializer.validated_data.get('data_fim')
+        periodo = serializer.validated_data.get('periodo') or request.query_params.get('periodo')
 
-        dados = DashboardService.obter_flip_cards(data_inicio, data_fim)
+        dados = DashboardService.obter_flip_cards(data_inicio, data_fim, periodo=periodo)
         return Response(dados, status=status.HTTP_200_OK)
 
 

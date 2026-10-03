@@ -377,3 +377,21 @@ Utilize o padrão abaixo para cada novo erro registrado:
   6. Adição de testes unitários automatizados cobrindo detecção de correspondência e vinculação atômica em `backend/apps/conciliacao/tests.py`.
 - **Como evitar no futuro:** Sempre que um fluxo de importação em lote interagir com o Razão Contábil / Caixa Real, verificar se já existem títulos ou lançamentos equivalentes pendentes de conciliação por valor e data antes de criar novos registros, fornecendo conferência assistida ao operador com opção preferencial de vinculação.
 
+---
+
+## 2026-10-03 - Dashboard Zerado por Incompatibilidade de Contrato de Dados e Falha Silenciosa de CONVERT_TZ no MySQL
+
+- **Sintoma:** O Dashboard Principal (`#/dashboard`) exibia todos os 5 Flip Cards zerados (`0` ou `R$ 0,00`), o gráfico de Receitas x Despesas vazio com mensagem *"Sem dados suficientes para exibição do gráfico"* e o feed de atividades recentes como *"Nenhuma atividade recente registrada"*, mesmo havendo lançamentos financeiros, saldo em contas e títulos em atraso no banco de dados.
+- **Causa:**
+  1. **Mismatch de Contrato nos Flip Cards:** O frontend tentava ler `const cards = res.cards || {}`, mas o backend retornava os cards diretamente na raiz (`res.operacao`, `res.faturamento`, etc.). Além disso, os nomes dos atributos internos divergiam (ex: `op.aprovados` vs `op.orcamentos_aprovados`, `rec.faturamento_real` vs `rec.receita_real`, `cxa.saldo_bancario_real` vs `cxa.saldo_real_consolidado`).
+  2. **Falha Silenciosa no MySQL (`CONVERT_TZ`):** No gráfico mensal, o backend usava filtros ORM `data_pagamento__year=ano, data_pagamento__month=mes`. No MySQL com `USE_TZ = True`, isso gerava SQL `EXTRACT(MONTH FROM CONVERT_TZ(data_pagamento, 'UTC', 'America/Sao_Paulo')) = mes`. Sem tabelas de timezone populadas no MySQL (padrão no Windows/XAMPP), `CONVERT_TZ` retorna `NULL`, fazendo a cláusula avaliar como falso para 100% das linhas e zerando o gráfico. No frontend, buscava-se `res.historico` enquanto o backend devolvia `res.meses`.
+  3. **Incompatibilidade no Feed:** O backend retornava uma lista direta `[...]` e o frontend esperava `res.atividades`, além de buscar `item.data_hora` em vez de `item.timestamp`.
+  4. **Filtros de Período Ignorados:** Os botões "HOJE", "MÊS ATUAL" e "ANO" passavam `?periodo=X`, ignorado pelo backend.
+- **Solução aplicada:**
+  1. **Contrato Universal nos Flip Cards:** Backend atualizado para retornar as chaves de topo e também a chave `cards: { ... }` como espelho, com todos os aliases de propriedades esperados pelo frontend (`aprovados`, `em_execucao`, `concluidos`, `cancelados`, `rascunhos`, `faturadas`, `pagas`, `faturamento_real`, `saldo_bancario_real`, `vencidas`, etc.). Frontend atualizado com `res.cards || res || {}` e fallbacks defensivos.
+  2. **Consultas Range SARGable no Gráfico:** Substituição dos lookups `__year` e `__month` por faixas SARGable `data_pagamento__gte=dt_ini_mes, data_pagamento__lt=dt_fim_mes` via `converter_periodo_para_datetime_range`. Isso elimina dependência de tabelas de fuso horário do MySQL, utiliza o índice B-Tree e funciona 100% em qualquer SGBD. Retornados `meses` e `historico`, `mes_nome` e `mes_sigla`, e determinação inteligente de ano caso o ano corrente não possua dados.
+  3. **Compatibilização do Feed:** Backend retorna `timestamp` e `data_hora`, e frontend suporta tanto lista direta quanto objeto com chave `atividades`.
+  4. **Filtros de Período:** Suporte implementado em `FiltroPeriodoSerializer` e `DashboardFlipCardsView` (`hoje`, `mes`, `ano`).
+  5. **Versionamento PWA:** Cache sincronizado para `v4.36` no `sw.js` e `index.html`.
+- **Como evitar no futuro:** Nunca utilizar lookups `__year` ou `__month` em campos `DateTimeField` quando operando com MySQL/MariaDB com `USE_TZ = True`; preferir sempre faixas explícitas de data/hora (`__gte` e `__lt`) com datetimes cientes de fuso horário. Adotar contratos de API defensivos com espelhos de propriedades e fallbacks seguros.
+

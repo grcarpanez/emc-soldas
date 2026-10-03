@@ -9,6 +9,7 @@ class FiltroPeriodoSerializer(serializers.Serializer):
     data_inicio = serializers.DateField(required=False, format='%Y-%m-%d', input_formats=['%Y-%m-%d', '%d/%m/%Y'])
     data_fim = serializers.DateField(required=False, format='%Y-%m-%d', input_formats=['%Y-%m-%d', '%d/%m/%Y'])
     ano = serializers.IntegerField(required=False, min_value=2000, max_value=2100)
+    periodo = serializers.CharField(required=False, allow_blank=True)
     conta_id = serializers.IntegerField(required=False)
     regime = serializers.ChoiceField(choices=['competencia', 'caixa'], required=False, default='competencia')
 
@@ -21,12 +22,14 @@ class DashboardFlipCardsResponseSerializer(serializers.Serializer):
     receita = serializers.DictField()
     caixa = serializers.DictField()
     alertas = serializers.DictField()
+    cards = serializers.DictField(required=False)
 
 
 class GraficosReceitasDespesasSerializer(serializers.Serializer):
     """Estrutura de resposta do gráfico de evolução de receitas e despesas."""
     ano = serializers.IntegerField()
     meses = serializers.ListField(child=serializers.DictField())
+    historico = serializers.ListField(child=serializers.DictField(), required=False)
     totais_ano = serializers.DictField()
 
 
@@ -38,3 +41,4 @@ class FeedAtividadeSerializer(serializers.Serializer):
     descricao = serializers.CharField()
     status = serializers.CharField()
     timestamp = serializers.DateTimeField()
+    data_hora = serializers.DateTimeField(required=False)

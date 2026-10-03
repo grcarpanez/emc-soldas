@@ -34,7 +34,7 @@ window.DashboardView = {
         <!-- Gráfico / Comparativo Mensal -->
         <div class="card">
           <div class="card-header">
-            <h3>RECEITAS X DESPESAS (ÚLTIMOS 6 MESES)</h3>
+            <h3 id="dashboard-chart-title">RECEITAS X DESPESAS</h3>
             <span class="status-chip info">REGIME DE CAIXA</span>
           </div>
           <div id="dashboard-chart-container" style="min-height: 240px; display: flex; align-items: center; justify-content: center;">
@@ -86,13 +86,38 @@ window.DashboardView = {
 
     try {
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.RELATORIOS.DASHBOARD_FLIP_CARDS}?periodo=${this.currentPeriodo}`);
-      const cards = res.cards || {};
+      const cards = res.cards || res || {};
 
       const op = cards.operacao || {};
       const fat = cards.faturamento || {};
       const rec = cards.receita || {};
       const cxa = cards.caixa || {};
       const alt = cards.alertas || {};
+
+      const totalOrc = op.total_orcamentos ?? 0;
+      const aprovadosOrc = op.aprovados ?? op.orcamentos_aprovados ?? 0;
+      const emExecucaoOrc = op.em_execucao ?? 0;
+      const concluidosOrc = op.concluidos ?? op.orcamentos_concluidos ?? 0;
+      const canceladosOrc = op.cancelados ?? 0;
+
+      const totalFat = fat.total_faturas ?? 0;
+      const faturadasFat = fat.faturadas ?? fat.faturas_faturadas ?? 0;
+      const rascunhosFat = fat.rascunhos ?? fat.faturas_rascunho ?? 0;
+      const pagasFat = fat.pagas ?? fat.faturas_pagas ?? 0;
+      const canceladasFat = fat.canceladas ?? fat.faturas_canceladas ?? 0;
+
+      const faturamentoReal = rec.faturamento_real ?? rec.receita_real ?? 0;
+      const faturamentoProj = rec.faturamento_projetado ?? rec.receita_projetada ?? 0;
+      const aReceberPend = rec.a_receber_pendente ?? 0;
+
+      const saldoReal = cxa.saldo_bancario_real ?? cxa.saldo_real_consolidado ?? 0;
+      const saldoProj = cxa.saldo_projetado ?? 0;
+      const pagarPend = cxa.contas_a_pagar_pendente ?? cxa.previsao_saidas ?? 0;
+      const receberPend = cxa.contas_a_receber_pendente ?? cxa.previsao_entradas ?? 0;
+
+      const vencidasAlt = alt.vencidas ?? ((alt.contas_a_pagar_vencidas_qtd || 0) + (alt.contas_a_receber_vencidas_qtd || 0));
+      const vencendoHojeAlt = alt.vencendo_hoje ?? alt.vencendo_hoje_qtd ?? 0;
+      const prox7DiasAlt = alt.proximos_7_dias ?? alt.proximos_7_dias_qtd ?? 0;
 
       container.innerHTML = `
         <!-- Card 1: Operação -->
@@ -104,11 +129,11 @@ window.DashboardView = {
                   <span>OPERAÇÃO DE OFICINA</span>
                   <span class="mono-text" style="color: var(--color-rust-orange); font-size: 10px;">GIRE ↻</span>
                 </div>
-                <div class="flip-card-value">${op.total_orcamentos || 0}</div>
+                <div class="flip-card-value">${totalOrc}</div>
                 <div class="flip-card-sub">Orçamentos gerados no período</div>
               </div>
               <div class="flip-card-footer">
-                <span class="mono-text" style="font-size: 11px; color: var(--color-success);">${op.aprovados || 0} Aprovados</span>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-success);">${aprovadosOrc} Aprovados</span>
                 <button class="flip-card-btn-detail" onclick="window.location.hash='#/orcamentos'">Ver detalhes ➔</button>
               </div>
             </div>
@@ -116,10 +141,10 @@ window.DashboardView = {
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-operacao')">
                 <div class="flip-card-title">DETALHAMENTO OPERACIONAL</div>
                 <div style="font-size: 13px; line-height: 1.8;">
-                  • <strong>Aprovados:</strong> ${op.aprovados || 0}<br>
-                  • <strong>Em Execução:</strong> ${op.em_execucao || 0}<br>
-                  • <strong>Concluídos:</strong> ${op.concluidos || 0}<br>
-                  • <strong>Cancelados:</strong> ${op.cancelados || 0}
+                  • <strong>Aprovados:</strong> ${aprovadosOrc}<br>
+                  • <strong>Em Execução:</strong> ${emExecucaoOrc}<br>
+                  • <strong>Concluídos:</strong> ${concluidosOrc}<br>
+                  • <strong>Cancelados:</strong> ${canceladosOrc}
                 </div>
               </div>
               <div class="flip-card-footer">
@@ -139,11 +164,11 @@ window.DashboardView = {
                   <span>FATURAMENTO</span>
                   <span class="mono-text" style="color: var(--color-rust-orange); font-size: 10px;">GIRE ↻</span>
                 </div>
-                <div class="flip-card-value">${fat.total_faturas || 0}</div>
+                <div class="flip-card-value">${totalFat}</div>
                 <div class="flip-card-sub">Faturas emitidas / consolidadas</div>
               </div>
               <div class="flip-card-footer">
-                <span class="mono-text" style="font-size: 11px; color: #8ac8f0;">${fat.faturadas || 0} Faturadas</span>
+                <span class="mono-text" style="font-size: 11px; color: #8ac8f0;">${faturadasFat} Faturadas</span>
                 <button class="flip-card-btn-detail" onclick="window.location.hash='#/faturamento'">Ver detalhes ➔</button>
               </div>
             </div>
@@ -151,10 +176,10 @@ window.DashboardView = {
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-faturamento')">
                 <div class="flip-card-title">STATUS DE FATURAS</div>
                 <div style="font-size: 13px; line-height: 1.8;">
-                  • <strong>Pré-Faturas (Rascunho):</strong> ${fat.rascunhos || 0}<br>
-                  • <strong>Faturadas em Aberto:</strong> ${fat.faturadas || 0}<br>
-                  • <strong>Quitadas 100%:</strong> ${fat.pagas || 0}<br>
-                  • <strong>Canceladas:</strong> ${fat.canceladas || 0}
+                  • <strong>Pré-Faturas (Rascunho):</strong> ${rascunhosFat}<br>
+                  • <strong>Faturadas em Aberto:</strong> ${faturadasFat}<br>
+                  • <strong>Quitadas 100%:</strong> ${pagasFat}<br>
+                  • <strong>Canceladas:</strong> ${canceladasFat}
                 </div>
               </div>
               <div class="flip-card-footer">
@@ -174,11 +199,11 @@ window.DashboardView = {
                   <span>RECEITA TOTAL</span>
                   <span class="mono-text" style="color: var(--color-rust-orange); font-size: 10px;">GIRE ↻</span>
                 </div>
-                <div class="flip-card-value">${window.EMCUtils.formatarMoeda(rec.faturamento_real || 0)}</div>
+                <div class="flip-card-value">${window.EMCUtils.formatarMoeda(faturamentoReal)}</div>
                 <div class="flip-card-sub">Efetivamente liquidado no caixa</div>
               </div>
               <div class="flip-card-footer">
-                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Projetado: ${window.EMCUtils.formatarMoeda(rec.faturamento_projetado || 0)}</span>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Projetado: ${window.EMCUtils.formatarMoeda(faturamentoProj)}</span>
                 <button class="flip-card-btn-detail" onclick="window.location.hash='#/tesouraria'">Ver detalhes ➔</button>
               </div>
             </div>
@@ -186,9 +211,9 @@ window.DashboardView = {
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-receita')">
                 <div class="flip-card-title">COMPETÊNCIA X CAIXA</div>
                 <div style="font-size: 13px; line-height: 1.8;">
-                  • <strong>Caixa Real (Recebido):</strong> ${window.EMCUtils.formatarMoeda(rec.faturamento_real || 0)}<br>
-                  • <strong>A Receber (Previsão):</strong> ${window.EMCUtils.formatarMoeda(rec.a_receber_pendente || 0)}<br>
-                  • <strong>Total Faturado:</strong> ${window.EMCUtils.formatarMoeda(rec.faturamento_projetado || 0)}
+                  • <strong>Caixa Real (Recebido):</strong> ${window.EMCUtils.formatarMoeda(faturamentoReal)}<br>
+                  • <strong>A Receber (Previsão):</strong> ${window.EMCUtils.formatarMoeda(aReceberPend)}<br>
+                  • <strong>Total Faturado:</strong> ${window.EMCUtils.formatarMoeda(faturamentoProj)}
                 </div>
               </div>
               <div class="flip-card-footer">
@@ -208,11 +233,11 @@ window.DashboardView = {
                   <span>SALDO EM CONTAS</span>
                   <span class="mono-text" style="color: var(--color-rust-orange); font-size: 10px;">GIRE ↻</span>
                 </div>
-                <div class="flip-card-value">${window.EMCUtils.formatarMoeda(cxa.saldo_bancario_real || 0)}</div>
+                <div class="flip-card-value">${window.EMCUtils.formatarMoeda(saldoReal)}</div>
                 <div class="flip-card-sub">Disponível em bancos e caixa físico</div>
               </div>
               <div class="flip-card-footer">
-                <span class="mono-text" style="font-size: 11px; color: var(--color-warning);">Projetado: ${window.EMCUtils.formatarMoeda(cxa.saldo_projetado || 0)}</span>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-warning);">Projetado: ${window.EMCUtils.formatarMoeda(saldoProj)}</span>
                 <button class="flip-card-btn-detail" onclick="window.location.hash='#/tesouraria'">Ver contas ➔</button>
               </div>
             </div>
@@ -220,9 +245,9 @@ window.DashboardView = {
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-caixa')">
                 <div class="flip-card-title">GAVETAS BANCÁRIAS</div>
                 <div style="font-size: 13px; line-height: 1.8;">
-                  • <strong>Saldo Real:</strong> ${window.EMCUtils.formatarMoeda(cxa.saldo_bancario_real || 0)}<br>
-                  • <strong>Contas a Pagar:</strong> -${window.EMCUtils.formatarMoeda(cxa.contas_a_pagar_pendente || 0)}<br>
-                  • <strong>Contas a Receber:</strong> +${window.EMCUtils.formatarMoeda(cxa.contas_a_receber_pendente || 0)}
+                  • <strong>Saldo Real:</strong> ${window.EMCUtils.formatarMoeda(saldoReal)}<br>
+                  • <strong>Contas a Pagar:</strong> -${window.EMCUtils.formatarMoeda(pagarPend)}<br>
+                  • <strong>Contas a Receber:</strong> +${window.EMCUtils.formatarMoeda(receberPend)}
                 </div>
               </div>
               <div class="flip-card-footer">
@@ -236,19 +261,19 @@ window.DashboardView = {
         <!-- Card 5: Alertas -->
         <div class="flip-card-wrapper" id="card-alertas">
           <div class="flip-card-inner">
-            <div class="flip-card-front" style="border-top-color: ${alt.vencidas > 0 ? 'var(--color-error)' : 'var(--color-success)'};">
+            <div class="flip-card-front" style="border-top-color: ${vencidasAlt > 0 ? 'var(--color-error)' : 'var(--color-success)'};">
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-alertas')">
                 <div class="flip-card-title">
                   <span>ALERTAS & PENDÊNCIAS</span>
                   <span class="mono-text" style="color: var(--color-rust-orange); font-size: 10px;">GIRE ↻</span>
                 </div>
-                <div class="flip-card-value" style="color: ${alt.vencidas > 0 ? 'var(--color-error)' : 'var(--color-success)'};">
-                  ${alt.vencidas || 0}
+                <div class="flip-card-value" style="color: ${vencidasAlt > 0 ? 'var(--color-error)' : 'var(--color-success)'};">
+                  ${vencidasAlt}
                 </div>
                 <div class="flip-card-sub">Contas/Faturas em atraso</div>
               </div>
               <div class="flip-card-footer">
-                <span class="mono-text" style="font-size: 11px; color: var(--color-warning);">${alt.vencendo_hoje || 0} Vencendo hoje</span>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-warning);">${vencendoHojeAlt} Vencendo hoje</span>
                 <button class="flip-card-btn-detail" onclick="window.location.hash='#/relatorios'">Auditar ➔</button>
               </div>
             </div>
@@ -256,9 +281,9 @@ window.DashboardView = {
               <div class="flip-card-body" onclick="window.DashboardView.toggleFlip('card-alertas')">
                 <div class="flip-card-title">CRONOGRAMA DE VENCIMENTOS</div>
                 <div style="font-size: 13px; line-height: 1.8;">
-                  • <strong>Vencidas em atraso:</strong> ${alt.vencidas || 0}<br>
-                  • <strong>Vencem Hoje:</strong> ${alt.vencendo_hoje || 0}<br>
-                  • <strong>Próximos 7 Dias:</strong> ${alt.proximos_7_dias || 0}
+                  • <strong>Vencidas em atraso:</strong> ${vencidasAlt}<br>
+                  • <strong>Vencem Hoje:</strong> ${vencendoHojeAlt}<br>
+                  • <strong>Próximos 7 Dias:</strong> ${prox7DiasAlt}
                 </div>
               </div>
               <div class="flip-card-footer">
@@ -291,7 +316,13 @@ window.DashboardView = {
 
     try {
       const res = await window.api.get(window.CONFIG.ENDPOINTS.RELATORIOS.DASHBOARD_GRAFICOS);
-      const meses = res.historico || [];
+      const meses = res.historico || res.meses || [];
+      const anoVisualizado = res.ano || new Date().getFullYear();
+
+      const elTitulo = document.getElementById('dashboard-chart-title');
+      if (elTitulo) {
+        elTitulo.textContent = `RECEITAS X DESPESAS (${anoVisualizado})`;
+      }
 
       if (!meses.length) {
         container.innerHTML = '<p class="mono-text" style="color: var(--color-on-surface-variant);">Sem dados suficientes para exibição do gráfico.</p>';
@@ -306,6 +337,7 @@ window.DashboardView = {
       meses.forEach((m) => {
         const altRec = Math.round(((m.receitas || 0) / maxValor) * 140);
         const altDes = Math.round(((m.despesas || 0) / maxValor) * 140);
+        const siglaMes = m.mes_sigla || m.mes_nome || m.mes;
 
         html += `
           <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end;">
@@ -315,7 +347,7 @@ window.DashboardView = {
               <!-- Barra de Despesa -->
               <div style="width: 45%; max-width: 24px; height: ${Math.max(altDes, 4)}px; background-color: var(--color-error); title: 'Despesas: ${window.EMCUtils.formatarMoeda(m.despesas)}';"></div>
             </div>
-            <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">${m.mes_sigla || m.mes}</span>
+            <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">${siglaMes}</span>
           </div>
         `;
       });
@@ -346,7 +378,7 @@ window.DashboardView = {
 
     try {
       const res = await window.api.get(window.CONFIG.ENDPOINTS.RELATORIOS.DASHBOARD_FEED);
-      const items = res.atividades || [];
+      const items = Array.isArray(res) ? res : (res.atividades || []);
 
       if (!items.length) {
         container.innerHTML = '<p class="mono-text" style="color: var(--color-on-surface-variant); font-size: 13px; padding: 16px 0;">Nenhuma atividade recente registrada.</p>';
@@ -355,9 +387,10 @@ window.DashboardView = {
 
       let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
       items.forEach((item) => {
+        const dataHora = item.data_hora || item.timestamp;
         html += `
           <div style="border-left: 2px solid var(--color-steel-gray); padding-left: 10px; font-size: 13px;">
-            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">${window.EMCUtils.formatarDataHoraPtBr(item.data_hora)}</div>
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">${window.EMCUtils.formatarDataHoraPtBr(dataHora)}</div>
             <div><strong>${window.EMCUtils.escapeHtml(item.titulo)}</strong></div>
             <div style="color: var(--color-on-surface-variant); font-size: 12px;">${window.EMCUtils.escapeHtml(item.descricao || '')}</div>
           </div>

@@ -256,6 +256,21 @@ class DashboardViewsTestCase(RelatoriosBaseTestCase):
         # Alertas
         self.assertGreaterEqual(dados['alertas']['contas_a_receber_vencidas_qtd'], 1)
         self.assertEqual(dados['alertas']['proximos_7_dias_qtd'], 1)
+        self.assertIn('cards', dados)
+        self.assertEqual(dados['cards']['caixa']['saldo_bancario_real'], dados['caixa']['saldo_real_consolidado'])
+        self.assertGreaterEqual(dados['cards']['alertas']['vencidas'], 1)
+
+    def test_dashboard_flip_cards_filtro_periodo(self):
+        """Valida que os filtros de período hoje, mes e ano ajustam data_inicio e data_fim."""
+        self.client.force_authenticate(user=self.admin)
+
+        for p in ['hoje', 'mes', 'ano']:
+            res = self.client.get(f'/api/dashboard/flip-cards/?periodo={p}')
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            d = res.json()
+            self.assertIn('periodo', d)
+            self.assertIn('data_inicio', d['periodo'])
+            self.assertIn('data_fim', d['periodo'])
 
     def test_dashboard_graficos_receitas_despesas(self):
         """Valida retorno do gráfico mensal de receitas vs despesas."""
@@ -266,6 +281,9 @@ class DashboardViewsTestCase(RelatoriosBaseTestCase):
         dados = response.json()
         self.assertEqual(dados['ano'], self.hoje.year)
         self.assertEqual(len(dados['meses']), 12)
+        self.assertIn('historico', dados)
+        self.assertEqual(len(dados['historico']), 12)
+        self.assertIn('mes_sigla', dados['meses'][0])
         self.assertIn('totais_ano', dados)
 
     def test_dashboard_feed_atividades(self):
@@ -277,6 +295,8 @@ class DashboardViewsTestCase(RelatoriosBaseTestCase):
         dados = response.json()
         self.assertIsInstance(dados, list)
         self.assertGreaterEqual(len(dados), 2)
+        self.assertIn('data_hora', dados[0])
+        self.assertIn('timestamp', dados[0])
 
 
 class RelatoriosEstrategicosTestCase(RelatoriosBaseTestCase):

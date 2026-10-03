@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Governança de Commits Semânticos por Implementation Plan no AGENTS.md)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
+**Última Atualização:** 2026-10-03 (Correção Integral do Dashboard: Flip Cards, Gráfico SARGable, Feed e Filtros - PWA v4.36)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW, Paginação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -503,6 +503,14 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Proibição de Aglutinação de Planos:** Vedação expressa ao acúmulo de múltiplos planos ou tarefas em um único commit genérico.
   - **Padronização Estrita com FSD Seção 30:** Normatização do formato canônico `<tipo>[escopo]: <descrição no imperativo e em pt-BR>`, tabela resumida de prefixos válidos (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `security`), as 7 regras de ouro da mensagem (50-72 caracteres, minúsculas, sem ponto final, imperativo em pt-BR) e proibição absoluta de versionar credenciais/segredos.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_04_governanca_commits_ciclo_trabalho_agents.md`.
+- [x] **Correção Integral do Dashboard: 5 Flip Cards 3D, Gráfico SARGable, Feed e Filtros (PWA v4.36):**
+  - **Contrato Universal nos 5 Flip Cards:** Resolução da divergência de payload entre backend e frontend. O endpoint `/api/dashboard/flip-cards/` passa a fornecer tanto a raiz plana quanto a chave espelho `cards: { ... }`, enriquecendo as entidades com todos os aliases esperados pelo frontend (`aprovados`, `em_execucao`, `concluidos`, `cancelados`, `rascunhos`, `faturadas`, `pagas`, `faturamento_real`, `saldo_bancario_real`, `vencidas`), e o frontend adota extração defensiva `res.cards || res || {}` com fallbacks seguros (`?? 0`).
+  - **Gráfico Mensal SARGable e Resolução de `CONVERT_TZ` no MySQL:** Substituição de filtros `__year` e `__month` por faixas SARGable `data_pagamento__gte=dt_ini, data_pagamento__lt=dt_fim` com timezone-aware datetimes. Isso elimina a dependência das tabelas de fuso horário do MySQL no Windows/XAMPP (onde `CONVERT_TZ` retornava `NULL`), permitindo que dados reais apareçam de imediato. Implementada determinação inteligente de ano (adotando o ano do último lançamento caso o ano corrente ainda não possua movimentações) e sincronização de chaves (`meses` e `historico`, `mes_nome` e `mes_sigla`), além da exibição do ano real consultado no cabeçalho do card (`RECEITAS X DESPESAS (ANO)`).
+  - **Feed de Atividades Recentes em Tempo Real:** Inclusão dos campos `data_hora` e `timestamp` em cada atividade (orçamentos, faturas, baixas de caixa e estornos) e tratamento resiliente no frontend aceitando tanto listas diretas `[...]` quanto payloads encapsulados.
+  - **Filtros Temporais Ágeis:** Implementado suporte nativo ao parâmetro `?periodo=hoje`, `?periodo=mes` e `?periodo=ano` em `FiltroPeriodoSerializer`, `DashboardFlipCardsView` e `DashboardService`, calculando automaticamente as janelas temporais de agregação.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.36` em `frontend/sw.js` e sufixos de cache-busting `?v=4.36` em `frontend/index.html`.
+  - **Homologação:** 14 testes de `apps.relatorios` e 193 testes da suíte global executados com 100% de sucesso (OK em 79.4s).
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_05_correcao_dashboard_flip_cards_graficos_feed.md`.
 
 
 

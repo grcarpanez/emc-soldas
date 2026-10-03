@@ -29,12 +29,22 @@ def converter_periodo_para_datetime_range(data_inicio, data_fim):
     return dt_inicio, dt_fim
 
 
-def normalizar_datas(data_inicio=None, data_fim=None):
+def normalizar_datas(data_inicio=None, data_fim=None, periodo=None):
     """
-    Normaliza parâmetros de data. Se não informados, assume o mês corrente.
-    Retorna objetos datetime.date.
+    Normaliza parâmetros de data. Se não informados, analisa periodo ('hoje', 'mes', 'ano')
+    ou assume o mês corrente. Retorna objetos datetime.date.
     """
     hoje = timezone.localdate()
+
+    if periodo and not data_inicio and not data_fim:
+        p = str(periodo).strip().lower()
+        if p == 'hoje':
+            return hoje, hoje
+        elif p == 'ano':
+            return hoje.replace(month=1, day=1), hoje.replace(month=12, day=31)
+        elif p == 'mes':
+            return hoje.replace(day=1), hoje
+
     if not data_inicio:
         data_inicio = hoje.replace(day=1)
     elif isinstance(data_inicio, str):
@@ -58,7 +68,7 @@ class DashboardService:
     """Serviço de agregação e métricas do Dashboard Principal."""
 
     @staticmethod
-    def obter_flip_cards(data_inicio=None, data_fim=None):
+    def obter_flip_cards(data_inicio=None, data_fim=None, periodo=None):
         """
         Calcula os indicadores analíticos dos 5 Flip Cards interativos do Dashboard:
         1. Operação (Orçamentos)
@@ -67,7 +77,7 @@ class DashboardService:
         4. Caixa (Real vs Projetado)
         5. Alertas Financeiros
         """
-        data_inicio, data_fim = normalizar_datas(data_inicio, data_fim)
+        data_inicio, data_fim = normalizar_datas(data_inicio, data_fim, periodo=periodo)
         hoje = timezone.localdate()
 
         # ==========================================
@@ -78,19 +88,16 @@ class DashboardService:
             data_geracao__range=(data_inicio, data_fim)
         )
         total_orcamentos = orcamentos_qs.count()
-        orcamentos_aprovados = orcamentos_qs.filter(
-            status_operacional__in=['APROVADO', 'EM_EXECUCAO', 'CONCLUIDO']
-        ).count()
-        orcamentos_concluidos = orcamentos_qs.filter(
-            status_operacional='CONCLUIDO'
-        ).count()
-        orcamentos_gerados = orcamentos_qs.filter(
-            status_operacional='GERADO'
-        ).count()
+        orcamentos_gerados = orcamentos_qs.filter(status_operacional='GERADO').count()
+        aprovados = orcamentos_qs.filter(status_operacional='APROVADO').count()
+        em_execucao = orcamentos_qs.filter(status_operacional='EM_EXECUCAO').count()
+        concluidos = orcamentos_qs.filter(status_operacional='CONCLUIDO').count()
+        cancelados = orcamentos_qs.filter(status_operacional='CANCELADO').count()
+        total_aprovados_ou_em_frente = aprovados + em_execucao + concluidos
 
         taxa_aprovacao = Decimal('0.00')
         if total_orcamentos > 0:
-            taxa_aprovacao = (Decimal(orcamentos_aprovados) / Decimal(total_orcamentos) * Decimal('100.00')).quantize(Decimal('0.01'))
+            taxa_aprovacao = (Decimal(total_aprovados_ou_em_frente) / Decimal(total_orcamentos) * Decimal('100.00')).quantize(Decimal('0.01'))
 
         valor_total_orcado = orcamentos_qs.aggregate(total=Sum('valor_bruto'))['total'] or Decimal('0.00')
         valor_aprovado = orcamentos_qs.filter(
@@ -102,8 +109,12 @@ class DashboardService:
         card_operacao = {
             'total_orcamentos': total_orcamentos,
             'orcamentos_gerados': orcamentos_gerados,
-            'orcamentos_aprovados': orcamentos_aprovados,
-            'orcamentos_concluidos': orcamentos_concluidos,
+            'orcamentos_aprovados': total_aprovados_ou_em_frente,
+            'orcamentos_concluidos': concluidos,
+            'aprovados': aprovados,
+            'em_execucao': em_execucao,
+            'concluidos': concluidos,
+            'cancelados': cancelados,
             'taxa_aprovacao_percentual': taxa_aprovacao,
             'valor_total_orcado': valor_total_orcado,
             'valor_total_aprovado': valor_aprovado,
@@ -120,6 +131,7 @@ class DashboardService:
         faturas_rascunho = faturas_qs.filter(status='RASCUNHO').count()
         faturas_faturadas = faturas_qs.filter(status='FATURADA').count()
         faturas_pagas = faturas_qs.filter(status='PAGA').count()
+        faturas_canceladas = faturas_qs.filter(status='CANCELADA').count()
 
         valor_bruto_faturado = faturas_qs.filter(
             status__in=['FATURADA', 'PAGA']
@@ -138,6 +150,11 @@ class DashboardService:
             'faturas_rascunho': faturas_rascunho,
             'faturas_faturadas': faturas_faturadas,
             'faturas_pagas': faturas_pagas,
+            'faturas_canceladas': faturas_canceladas,
+            'rascunhos': faturas_rascunho,
+            'faturadas': faturas_faturadas,
+            'pagas': faturas_pagas,
+            'canceladas': faturas_canceladas,
             'valor_bruto_faturado': valor_bruto_faturado,
             'desconto_total_concedido': desconto_faturado,
             'valor_liquido_faturado': valor_liquido_faturado,
@@ -146,7 +163,6 @@ class DashboardService:
         # ==========================================
         # 3. CARD: RECEITA (REAL VS PROJETADO)
         # ==========================================
-        # Receita Real: baixas efetivadas de entrada com status PAGO
         dt_ini_receita, dt_fim_receita = converter_periodo_para_datetime_range(data_inicio, data_fim)
         receita_real = LancamentoFinanceiro.objects.filter(
             deleted_at__isnull=True,
@@ -155,11 +171,17 @@ class DashboardService:
             data_pagamento__range=(dt_ini_receita, dt_fim_receita)
         ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
-        # Receita Projetada: todas as previsões a receber com vencimento no período
         receita_projetada = LancamentoFinanceiro.objects.filter(
             deleted_at__isnull=True,
             tipo_lancamento='ENTRADA',
             status_pagamento__in=['A_VENCER', 'VENCIDO', 'PAGO'],
+            data_vencimento__range=(data_inicio, data_fim)
+        ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+
+        a_receber_pendente = LancamentoFinanceiro.objects.filter(
+            deleted_at__isnull=True,
+            tipo_lancamento='ENTRADA',
+            status_pagamento__in=['A_VENCER', 'VENCIDO'],
             data_vencimento__range=(data_inicio, data_fim)
         ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
@@ -170,6 +192,9 @@ class DashboardService:
         card_receita = {
             'receita_real': receita_real,
             'receita_projetada': receita_projetada,
+            'faturamento_real': receita_real,
+            'faturamento_projetado': receita_projetada,
+            'a_receber_pendente': a_receber_pendente,
             'taxa_realizacao_percentual': taxa_realizacao_receita,
             'diferenca_projetado_real': receita_projetada - receita_real,
         }
@@ -199,8 +224,11 @@ class DashboardService:
 
         card_caixa = {
             'saldo_real_consolidado': saldo_real_consolidado,
+            'saldo_bancario_real': saldo_real_consolidado,
             'previsao_entradas': previsao_entradas_caixa,
+            'contas_a_receber_pendente': previsao_entradas_caixa,
             'previsao_saidas': previsao_saidas_caixa,
+            'contas_a_pagar_pendente': previsao_saidas_caixa,
             'saldo_projetado': saldo_projetado,
         }
 
@@ -255,13 +283,16 @@ class DashboardService:
             'contas_a_pagar_vencidas_valor': contas_vencidas_valor,
             'contas_a_receber_vencidas_qtd': recebimentos_vencidos_qtd,
             'contas_a_receber_vencidas_valor': recebimentos_vencidos_valor,
+            'vencidas': contas_vencidas_qtd + recebimentos_vencidos_qtd,
             'vencendo_hoje_qtd': vencendo_hoje_qtd,
+            'vencendo_hoje': vencendo_hoje_qtd,
             'vencendo_hoje_valor': vencendo_hoje_valor,
             'proximos_7_dias_qtd': proximos_7d_qtd,
+            'proximos_7_dias': proximos_7d_qtd,
             'proximos_7_dias_valor': proximos_7d_valor,
         }
 
-        return {
+        resultado = {
             'periodo': {
                 'data_inicio': data_inicio.strftime('%Y-%m-%d'),
                 'data_fim': data_fim.strftime('%Y-%m-%d'),
@@ -272,15 +303,45 @@ class DashboardService:
             'caixa': card_caixa,
             'alertas': card_alertas,
         }
+        resultado['cards'] = {
+            'operacao': card_operacao,
+            'faturamento': card_faturamento,
+            'receita': card_receita,
+            'caixa': card_caixa,
+            'alertas': card_alertas,
+        }
+        return resultado
 
     @staticmethod
     def obter_graficos_receitas_despesas(ano=None):
         """
         Retorna a evolução mensal de Receitas Líquidas vs Despesas Pagas (12 meses do ano).
+        Executa consultas range SARGable timezone-aware compatíveis com MySQL, SQLite e PostgreSQL.
         """
         hoje = timezone.localdate()
         if not ano:
-            ano = hoje.year
+            # Verifica se o ano corrente tem dados; caso contrário, busca o ano do último lançamento existente
+            ano_candidato = hoje.year
+            dt_ini_ano = timezone.make_aware(datetime(ano_candidato, 1, 1, 0, 0, 0))
+            dt_fim_ano = timezone.make_aware(datetime(ano_candidato, 12, 31, 23, 59, 59, 999999))
+            tem_dados_ano_atual = LancamentoFinanceiro.objects.filter(
+                deleted_at__isnull=True,
+                status_pagamento='PAGO',
+                data_pagamento__range=(dt_ini_ano, dt_fim_ano)
+            ).exists()
+
+            if not tem_dados_ano_atual:
+                ultimo_lanc = LancamentoFinanceiro.objects.filter(
+                    deleted_at__isnull=True,
+                    status_pagamento='PAGO',
+                    data_pagamento__isnull=False
+                ).order_by('-data_pagamento').first()
+                if ultimo_lanc and ultimo_lanc.data_pagamento:
+                    ano = ultimo_lanc.data_pagamento.year
+                else:
+                    ano = hoje.year
+            else:
+                ano = hoje.year
         else:
             try:
                 ano = int(ano)
@@ -293,22 +354,31 @@ class DashboardService:
         total_ano_despesas = Decimal('0.00')
 
         for mes in range(1, 13):
-            # Receitas Pagas no Mês
+            primeiro_dia = datetime(ano, mes, 1).date()
+            if mes == 12:
+                proximo_mes = datetime(ano + 1, 1, 1).date()
+            else:
+                proximo_mes = datetime(ano, mes + 1, 1).date()
+
+            dt_ini_mes, _ = converter_periodo_para_datetime_range(primeiro_dia, primeiro_dia)
+            dt_fim_mes, _ = converter_periodo_para_datetime_range(proximo_mes, proximo_mes)
+
+            # Receitas Pagas no Mês (SARGable range query sem CONVERT_TZ)
             rec = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='ENTRADA',
                 status_pagamento='PAGO',
-                data_pagamento__year=ano,
-                data_pagamento__month=mes
+                data_pagamento__gte=dt_ini_mes,
+                data_pagamento__lt=dt_fim_mes
             ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
-            # Despesas Pagas no Mês
+            # Despesas Pagas no Mês (SARGable range query sem CONVERT_TZ)
             desp = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='SAIDA',
                 status_pagamento='PAGO',
-                data_pagamento__year=ano,
-                data_pagamento__month=mes
+                data_pagamento__gte=dt_ini_mes,
+                data_pagamento__lt=dt_fim_mes
             ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
             resultado = rec - desp
@@ -318,6 +388,7 @@ class DashboardService:
             meses_dados.append({
                 'mes': mes,
                 'mes_nome': nomes_meses[mes - 1],
+                'mes_sigla': nomes_meses[mes - 1],
                 'receitas': rec,
                 'despesas': desp,
                 'resultado_liquido': resultado,
@@ -326,6 +397,7 @@ class DashboardService:
         return {
             'ano': ano,
             'meses': meses_dados,
+            'historico': meses_dados,
             'totais_ano': {
                 'receitas_total': total_ano_receitas,
                 'despesas_total': total_ano_despesas,
@@ -351,6 +423,7 @@ class DashboardService:
                 'descricao': f"Cliente: {cliente_nome} | Valor: R$ {orc.valor_bruto}",
                 'status': orc.status_operacional,
                 'timestamp': orc.created_at,
+                'data_hora': orc.created_at,
             })
 
         # 2. Faturas recentes
@@ -364,6 +437,7 @@ class DashboardService:
                 'descricao': f"Cliente: {cliente_nome} | Total: R$ {fat.valor_total_faturado}",
                 'status': fat.status,
                 'timestamp': fat.created_at,
+                'data_hora': fat.created_at,
             })
 
         # 3. Lançamentos Financeiros Pagos recentes
@@ -381,6 +455,7 @@ class DashboardService:
                 'descricao': f"{lanc.descricao or 'Sem descrição'} ({lanc.categoria.nome if lanc.categoria else 'Geral'})",
                 'status': lanc.tipo_lancamento,
                 'timestamp': ts,
+                'data_hora': ts,
             })
 
         # 4. Estornos recentes
@@ -393,6 +468,7 @@ class DashboardService:
                 'descricao': f"Motivo: {est.justificativa}",
                 'status': 'ESTORNADO',
                 'timestamp': est.data_estorno,
+                'data_hora': est.data_estorno,
             })
 
         # Ordena unificado por timestamp decrescente
