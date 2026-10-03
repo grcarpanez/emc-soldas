@@ -971,3 +971,37 @@ class CategoriasGovernancaETesourariaTestCase(TestCase):
         self.conta.refresh_from_db()
         self.assertEqual(self.conta.saldo, Decimal('1100.00'))
 
+    def test_paginacao_lancamentos_financeiros(self):
+        """Valida paginação e query param page_size no endpoint de Lançamentos Financeiros."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+        # Limpa e cria 30 lançamentos
+        LancamentoFinanceiro.objects.all().delete()
+        for i in range(1, 31):
+            LancamentoFinanceiro.objects.create(
+                tipo_lancamento="ENTRADA",
+                descricao=f"RECEITA TESTE {i}",
+                valor=Decimal("100.00"),
+                categoria=self.cat_receita,
+                conta=self.conta,
+                data_vencimento=timezone.localdate(),
+                data_pagamento=timezone.now(),
+                status_pagamento="PAGO"
+            )
+
+        # 1. Página padrão (25 itens)
+        response1 = self.client.get('/api/lancamentos-financeiros/?status_pagamento=PAGO')
+        self.assertEqual(response1.status_code, status.HTTP_200_OK)
+        self.assertEqual(response1.data['count'], 30)
+        self.assertEqual(len(response1.data['results']), 25)
+        self.assertIsNotNone(response1.data['next'])
+        self.assertIsNone(response1.data['previous'])
+
+        # 2. Página 2 com page_size=10
+        response2 = self.client.get('/api/lancamentos-financeiros/?status_pagamento=PAGO&page=2&page_size=10')
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        self.assertEqual(response2.data['count'], 30)
+        self.assertEqual(len(response2.data['results']), 10)
+        self.assertIsNotNone(response2.data['next'])
+        self.assertIsNotNone(response2.data['previous'])
+
+

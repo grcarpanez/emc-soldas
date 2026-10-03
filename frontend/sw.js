@@ -3,7 +3,7 @@
  * Sistema EMC Soldas - Industrial Integrity PWA
  */
 
-const CACHE_NAME = 'emc-soldas-v4.34';
+const CACHE_NAME = 'emc-soldas-v4.35';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

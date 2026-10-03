@@ -379,3 +379,43 @@ class ModelosFase2TestCase(TestCase):
         self.assertGreater(ContaBancaria.objects.count(), 0)
         self.assertTrue(ConfiguracaoGlobal.objects.filter(id=1).exists())
         self.assertTrue(Usuario.objects.filter(email="admin@emcsoldas.com.br").exists())
+
+    def test_09_standard_results_set_pagination(self):
+        """Valida que StandardResultsSetPagination suporta page e page_size dinâmico."""
+        from django.test import RequestFactory
+        from rest_framework.request import Request
+        from core.pagination import StandardResultsSetPagination
+        from apps.catalogo.models import DicionarioUom
+
+        # Cria 30 registros
+        DicionarioUom.objects.all().delete()
+        for i in range(1, 31):
+            DicionarioUom.objects.create(sigla=f"U{i}", descricao=f"Unidade {i}")
+
+        paginator = StandardResultsSetPagination()
+        factory = RequestFactory()
+
+        # Requisição padrão: page_size = 25
+        req1 = Request(factory.get('/api/test/'))
+        qs = DicionarioUom.objects.all().order_by('id')
+        res1 = paginator.paginate_queryset(qs, req1)
+        self.assertEqual(len(res1), 25)
+        self.assertEqual(paginator.page.paginator.count, 30)
+        self.assertEqual(paginator.page.paginator.num_pages, 2)
+
+        # Requisição com page_size customizado: page_size = 10, page = 2
+        req2 = Request(factory.get('/api/test/?page=2&page_size=10'))
+        res2 = paginator.paginate_queryset(qs, req2)
+        self.assertEqual(len(res2), 10)
+        self.assertEqual(paginator.page.number, 2)
+        self.assertEqual(paginator.page.paginator.num_pages, 3)
+
+        # Verifica formato da resposta serializada
+        resp_data = paginator.get_paginated_response(res2).data
+        self.assertIn('count', resp_data)
+        self.assertIn('next', resp_data)
+        self.assertIn('previous', resp_data)
+        self.assertIn('results', resp_data)
+        self.assertEqual(resp_data['count'], 30)
+
+

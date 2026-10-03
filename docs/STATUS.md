@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Detecção de Correspondência e Conferência Anti-Duplicidade na Importação de Extratos - PWA v4.34)  
+**Última Atualização:** 2026-10-03 (Paginação Industrial do Extrato Real e Tesouraria - PWA v4.35)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -491,6 +491,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Mesa de Triagem com Ação Contextual:** Cards com correspondência identificada recebem destaque âmbar/verde no padrão *Industrial Integrity*, opções de rádio para alternância ágil de ação e atualização automática do texto do botão `⚡ IMPORTAR EM LOTE (X: Y VINCULADOS)`.
   - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.34` em `frontend/sw.js` e sufixos de cache-busting `?v=4.34` em `frontend/index.html`.
   - **Homologação:** 15 testes de `apps.conciliacao`, 27 testes de `apps.financeiro` e 100% dos testes globais aprovados com sucesso.
+- [x] **Paginação Industrial do Extrato Real (Caixa Real) e Padronização na Tesouraria (PWA v4.35):**
+  - **Backend - Paginação Customizada (`backend/core/pagination.py` & `settings.py`):** Criação da classe `StandardResultsSetPagination` baseada em `PageNumberPagination`, habilitando `page_size_query_param = 'page_size'` com `max_page_size = 1000` e padrão de 25 itens. Resolvida a limitação do DRF que ignorava limites de itens por página na API.
+  - **Frontend - Utilitário Centralizado de Paginação (`frontend/assets/js/utils.js`):** Implementada a função `renderPagination` no `window.EMCUtils` com design system *Industrial Integrity* (0px border-radius, tipografia técnica `JetBrains Mono` em números e contadores, janelamento inteligente de páginas com elipses `1 ... 4 [5] 6 ... 12`, botões direcionais `«`, `‹`, `›`, `»`, bloqueio seguro nas extremidades, seletor dinâmico de linhas por página de 25, 50 e 100 itens, e responsividade fluida para mobile).
+  - **Módulo Financeiro (`frontend/assets/js/views/financeiro-view.js`):** Implementada a paginação na aba **Extrato Real (Caixa Real)** com ordenação cronológica decrescente estrita por data de liquidação (`ordering=-data_pagamento,-id`), contagem real no badge de total (`res.count`), reset para página 1 em filtros e buscas, e manutenção da página corrente em operações de adição, edição, estorno ou anexo de comprovantes.
+  - **Padronização em Contas a Pagar e Receber:** A mesma mecânica de paginação foi estendida às abas **Contas a Pagar** e **Contas a Receber**, eliminando o limite rígido de 25 registros em toda a Tesouraria.
+  - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.35` em `frontend/sw.js` e sufixos de cache-busting `?v=4.35` em `frontend/index.html`.
+  - **Homologação:** 37 testes de `core` e `apps.financeiro` e 192 testes da suíte global executados com 100% de aprovação (OK em 76.7s).
 
 
 

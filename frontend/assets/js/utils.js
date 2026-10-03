@@ -1248,6 +1248,114 @@ function aplicarMascarasEmContainer(container = document) {
   });
 }
 
+/**
+ * Renderiza uma barra de paginação padronizada (Industrial Integrity) em um container.
+ */
+function renderPagination({
+  container,
+  currentPage = 1,
+  pageSize = 25,
+  totalCount = 0,
+  pageSizeOptions = [25, 50, 100],
+  itemLabel = 'ITENS',
+  onPageChange,
+  onPageSizeChange
+}) {
+  const el = typeof container === 'string' ? document.querySelector(container) : container;
+  if (!el) return;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startRecord = totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endRecord = Math.min(safePage * pageSize, totalCount);
+
+  // Calcula janela inteligente de páginas a exibir
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (safePage > 4) {
+      pages.push('...');
+    }
+    const startRange = Math.max(2, safePage - 1);
+    const endRange = Math.min(totalPages - 1, safePage + 1);
+
+    for (let i = startRange; i <= endRange; i++) {
+      if (!pages.includes(i)) pages.push(i);
+    }
+
+    if (safePage < totalPages - 3) {
+      pages.push('...');
+    }
+    if (!pages.includes(totalPages)) {
+      pages.push(totalPages);
+    }
+  }
+
+  let pagesHtml = '';
+  pages.forEach((p) => {
+    if (p === '...') {
+      pagesHtml += `<span class="emc-pagination-ellipsis">...</span>`;
+    } else if (p === safePage) {
+      pagesHtml += `<button type="button" class="btn btn-primary btn-sm emc-pagination-btn active" data-page="${p}">${p}</button>`;
+    } else {
+      pagesHtml += `<button type="button" class="btn btn-secondary btn-sm emc-pagination-btn" data-page="${p}">${p}</button>`;
+    }
+  });
+
+  const sizeSelectHtml = pageSizeOptions && pageSizeOptions.length ? `
+    <div class="emc-pagination-size-wrapper">
+      <span style="color: var(--color-on-surface-variant); font-size: 11px;">POR PÁG:</span>
+      <select class="form-control form-control-sm emc-pagination-size-select">
+        ${pageSizeOptions.map(opt => `<option value="${opt}" ${opt === pageSize ? 'selected' : ''}>${opt}</option>`).join('')}
+      </select>
+    </div>
+  ` : '';
+
+  el.innerHTML = `
+    <div class="emc-pagination">
+      <div class="emc-pagination-info">
+        <span>EXIBINDO <strong>${startRecord}</strong> A <strong>${endRecord}</strong> DE <strong>${totalCount}</strong> ${escapeHtml(itemLabel.toUpperCase())}</span>
+        ${sizeSelectHtml}
+      </div>
+
+      <div class="emc-pagination-controls">
+        <button type="button" class="btn btn-secondary btn-sm emc-pagination-btn emc-btn-first" data-page="1" ${safePage <= 1 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''} title="Primeira Página">«</button>
+        <button type="button" class="btn btn-secondary btn-sm emc-pagination-btn emc-btn-prev" data-page="${safePage - 1}" ${safePage <= 1 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''} title="Página Anterior">‹</button>
+        ${pagesHtml}
+        <button type="button" class="btn btn-secondary btn-sm emc-pagination-btn emc-btn-next" data-page="${safePage + 1}" ${safePage >= totalPages ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''} title="Próxima Página">›</button>
+        <button type="button" class="btn btn-secondary btn-sm emc-pagination-btn emc-btn-last" data-page="${totalPages}" ${safePage >= totalPages ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''} title="Última Página">»</button>
+        <span class="emc-pagination-counter">PÁG. <strong>${safePage}</strong> DE <strong>${totalPages}</strong></span>
+      </div>
+    </div>
+  `;
+
+  // Event Listeners dos botões de página
+  el.querySelectorAll('.emc-pagination-btn[data-page]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (btn.hasAttribute('disabled')) return;
+      const targetPage = parseInt(btn.dataset.page, 10);
+      if (targetPage && targetPage !== safePage && typeof onPageChange === 'function') {
+        onPageChange(targetPage);
+      }
+    });
+  });
+
+  // Event Listener do seletor de tamanho de página
+  const sizeSelect = el.querySelector('.emc-pagination-size-select');
+  if (sizeSelect && typeof onPageSizeChange === 'function') {
+    sizeSelect.addEventListener('change', (e) => {
+      const newSize = parseInt(e.target.value, 10);
+      if (newSize) {
+        onPageSizeChange(newSize);
+      }
+    });
+  }
+}
+
 // Disponibilização no escopo global para consumo da SPA
 window.EMCUtils = {
   sanitizarTextoEmTempoReal,
@@ -1275,5 +1383,6 @@ window.EMCUtils = {
   closeModal,
   initSearchableSelect,
   initMultiSelectCombobox,
-  aplicarMascarasEmContainer
+  aplicarMascarasEmContainer,
+  renderPagination
 };

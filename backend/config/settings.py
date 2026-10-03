@@ -222,7 +222,7 @@ REST_FRAMEWORK = {
         'heavy_reports': '5/minute',
     },
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 25,
 }
 

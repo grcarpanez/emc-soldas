@@ -5,6 +5,15 @@
 
 window.FinanceiroView = {
   currentTab: 'extrato',
+  extratoCurrentPage: 1,
+  extratoPageSize: 25,
+  extratoTotalCount: 0,
+  pagarCurrentPage: 1,
+  pagarPageSize: 25,
+  pagarTotalCount: 0,
+  receberCurrentPage: 1,
+  receberPageSize: 25,
+  receberTotalCount: 0,
 
   render(container) {
     container.innerHTML = `
@@ -126,11 +135,12 @@ window.FinanceiroView = {
           </tbody>
         </table>
       </div>
+      <div id="extrato-pagination-container"></div>
     `;
 
     // Carrega contas para o filtro com flags multi-seleção
     const contas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS).catch(() => []);
-    const listaContas = contas.results || contas || [];
+    const listaContas = contas.results || (Array.isArray(contas) ? contas : []);
     let options = '<option value="">TODAS AS CONTAS BANCÁRIAS</option>';
     listaContas.forEach((c) => {
       options += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)}</option>`;
@@ -141,42 +151,60 @@ window.FinanceiroView = {
       window.EMCUtils.initMultiSelectCombobox(selConta, {
         placeholder: 'TODAS AS CONTAS BANCÁRIAS',
         prefix: 'CONTAS',
-        onChange: () => this.carregarListaExtrato()
+        onChange: () => {
+          this.extratoCurrentPage = 1;
+          this.carregarListaExtrato(1);
+        }
       });
     }
 
-    document.getElementById('filtro-extrato-tipo')?.addEventListener('change', () => this.carregarListaExtrato());
-    document.getElementById('filtro-extrato-busca')?.addEventListener('input', () => this.carregarListaExtrato());
+    document.getElementById('filtro-extrato-tipo')?.addEventListener('change', () => {
+      this.extratoCurrentPage = 1;
+      this.carregarListaExtrato(1);
+    });
+    document.getElementById('filtro-extrato-busca')?.addEventListener('input', () => {
+      this.extratoCurrentPage = 1;
+      this.carregarListaExtrato(1);
+    });
 
-    this.carregarListaExtrato();
+    this.carregarListaExtrato(this.extratoCurrentPage || 1);
   },
 
-  async carregarListaExtrato() {
+  async carregarListaExtrato(page = this.extratoCurrentPage || 1) {
     const tbody = document.getElementById('lista-extrato-tbody');
     if (!tbody) return;
 
+    this.extratoCurrentPage = page;
     const busca = document.getElementById('filtro-extrato-busca')?.value.trim() || '';
     const selConta = document.getElementById('filtro-extrato-conta');
     const contaMulti = selConta?._emcMultiSelect ? selConta._emcMultiSelect.getValues().join(',') : (selConta?.value || '');
     const tipo = document.getElementById('filtro-extrato-tipo')?.value || '';
 
     try {
-      const query = new URLSearchParams({ status_pagamento: 'PAGO' });
+      const query = new URLSearchParams({
+        status_pagamento: 'PAGO',
+        ordering: '-data_pagamento,-id',
+        page: this.extratoCurrentPage,
+        page_size: this.extratoPageSize
+      });
       if (busca) query.append('search', busca);
       if (contaMulti) query.append('conta_id', contaMulti);
       if (tipo) query.append('tipo_lancamento', tipo);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
-      const lista = res.results || res || [];
+      const lista = res.results || (Array.isArray(res) ? res : []);
+      const total = res.count !== undefined ? res.count : lista.length;
+      this.extratoTotalCount = total;
 
       const badge = document.getElementById('total-extrato-badge');
       if (badge) {
-        const count = lista.length;
-        badge.textContent = `${count} ${count === 1 ? 'LANÇAMENTO' : 'LANÇAMENTOS'}`;
+        badge.textContent = `${total} ${total === 1 ? 'LANÇAMENTO' : 'LANÇAMENTOS'}`;
       }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="10" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma movimentação realizada no extrato.</td></tr>';
+        const pagContainer = document.getElementById('extrato-pagination-container');
+        if (pagContainer) pagContainer.innerHTML = '';
         return;
       }
 
@@ -220,8 +248,28 @@ window.FinanceiroView = {
         `;
       });
       tbody.innerHTML = html;
+
+      // Renderiza barra de paginação industrial
+      window.EMCUtils.renderPagination({
+        container: '#extrato-pagination-container',
+        currentPage: this.extratoCurrentPage,
+        pageSize: this.extratoPageSize,
+        totalCount: this.extratoTotalCount,
+        pageSizeOptions: [25, 50, 100],
+        itemLabel: 'lançamentos',
+        onPageChange: (newPage) => {
+          this.carregarListaExtrato(newPage);
+          document.getElementById('filtro-extrato-busca')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        onPageSizeChange: (newSize) => {
+          this.extratoPageSize = newSize;
+          this.carregarListaExtrato(1);
+        }
+      });
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      const pagContainer = document.getElementById('extrato-pagination-container');
+      if (pagContainer) pagContainer.innerHTML = '';
     }
   },
 
@@ -264,6 +312,7 @@ window.FinanceiroView = {
           </tbody>
         </table>
       </div>
+      <div id="pagar-pagination-container"></div>
     `;
 
     const selStatusPagar = document.getElementById('filtro-pagar-status');
@@ -271,40 +320,54 @@ window.FinanceiroView = {
       window.EMCUtils.initMultiSelectCombobox(selStatusPagar, {
         placeholder: 'TODOS OS STATUS',
         prefix: 'STATUS',
-        onChange: () => this.carregarListaContasPagar()
+        onChange: () => {
+          this.pagarCurrentPage = 1;
+          this.carregarListaContasPagar(1);
+        }
       });
     }
 
-    document.getElementById('filtro-pagar-busca')?.addEventListener('input', () => this.carregarListaContasPagar());
+    document.getElementById('filtro-pagar-busca')?.addEventListener('input', () => {
+      this.pagarCurrentPage = 1;
+      this.carregarListaContasPagar(1);
+    });
     document.getElementById('btn-novo-pagar-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('SAIDA'));
 
-    this.carregarListaContasPagar();
+    this.carregarListaContasPagar(this.pagarCurrentPage || 1);
   },
 
-  async carregarListaContasPagar() {
+  async carregarListaContasPagar(page = this.pagarCurrentPage || 1) {
     const tbody = document.getElementById('lista-pagar-tbody');
     if (!tbody) return;
 
+    this.pagarCurrentPage = page;
     const busca = document.getElementById('filtro-pagar-busca')?.value.trim() || '';
     const selStatus = document.getElementById('filtro-pagar-status');
     const statusVal = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
 
     try {
-      const query = new URLSearchParams({ tipo_lancamento: 'SAIDA' });
+      const query = new URLSearchParams({
+        tipo_lancamento: 'SAIDA',
+        page: this.pagarCurrentPage,
+        page_size: this.pagarPageSize
+      });
       if (busca) query.append('search', busca);
       if (statusVal) query.append('status_pagamento', statusVal);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
-      const lista = res.results || res || [];
+      const lista = res.results || (Array.isArray(res) ? res : []);
+      const total = res.count !== undefined ? res.count : lista.length;
+      this.pagarTotalCount = total;
 
       const badge = document.getElementById('total-pagar-badge');
       if (badge) {
-        const count = lista.length;
-        badge.textContent = `${count} ${count === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
+        badge.textContent = `${total} ${total === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
       }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma conta a pagar encontrada.</td></tr>';
+        const pagContainer = document.getElementById('pagar-pagination-container');
+        if (pagContainer) pagContainer.innerHTML = '';
         return;
       }
 
@@ -330,8 +393,28 @@ window.FinanceiroView = {
         `;
       });
       tbody.innerHTML = html;
+
+      // Renderiza barra de paginação industrial
+      window.EMCUtils.renderPagination({
+        container: '#pagar-pagination-container',
+        currentPage: this.pagarCurrentPage,
+        pageSize: this.pagarPageSize,
+        totalCount: this.pagarTotalCount,
+        pageSizeOptions: [25, 50, 100],
+        itemLabel: 'títulos',
+        onPageChange: (newPage) => {
+          this.carregarListaContasPagar(newPage);
+          document.getElementById('filtro-pagar-busca')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        onPageSizeChange: (newSize) => {
+          this.pagarPageSize = newSize;
+          this.carregarListaContasPagar(1);
+        }
+      });
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      const pagContainer = document.getElementById('pagar-pagination-container');
+      if (pagContainer) pagContainer.innerHTML = '';
     }
   },
 
@@ -373,6 +456,7 @@ window.FinanceiroView = {
           </tbody>
         </table>
       </div>
+      <div id="receber-pagination-container"></div>
     `;
 
     const selStatusReceber = document.getElementById('filtro-receber-status');
@@ -380,40 +464,54 @@ window.FinanceiroView = {
       window.EMCUtils.initMultiSelectCombobox(selStatusReceber, {
         placeholder: 'TODOS OS STATUS',
         prefix: 'STATUS',
-        onChange: () => this.carregarListaContasReceber()
+        onChange: () => {
+          this.receberCurrentPage = 1;
+          this.carregarListaContasReceber(1);
+        }
       });
     }
 
-    document.getElementById('filtro-receber-busca')?.addEventListener('input', () => this.carregarListaContasReceber());
+    document.getElementById('filtro-receber-busca')?.addEventListener('input', () => {
+      this.receberCurrentPage = 1;
+      this.carregarListaContasReceber(1);
+    });
     document.getElementById('btn-novo-receber-avulso')?.addEventListener('click', () => this.abrirModalNovoLancamento('ENTRADA'));
 
-    this.carregarListaContasReceber();
+    this.carregarListaContasReceber(this.receberCurrentPage || 1);
   },
 
-  async carregarListaContasReceber() {
+  async carregarListaContasReceber(page = this.receberCurrentPage || 1) {
     const tbody = document.getElementById('lista-receber-tbody');
     if (!tbody) return;
 
+    this.receberCurrentPage = page;
     const busca = document.getElementById('filtro-receber-busca')?.value.trim() || '';
     const selStatus = document.getElementById('filtro-receber-status');
     const statusVal = selStatus?._emcMultiSelect ? selStatus._emcMultiSelect.getValues().join(',') : (selStatus?.value || '');
 
     try {
-      const query = new URLSearchParams({ tipo_lancamento: 'ENTRADA' });
+      const query = new URLSearchParams({
+        tipo_lancamento: 'ENTRADA',
+        page: this.receberCurrentPage,
+        page_size: this.receberPageSize
+      });
       if (busca) query.append('search', busca);
       if (statusVal) query.append('status_pagamento', statusVal);
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
-      const lista = res.results || res || [];
+      const lista = res.results || (Array.isArray(res) ? res : []);
+      const total = res.count !== undefined ? res.count : lista.length;
+      this.receberTotalCount = total;
 
       const badge = document.getElementById('total-receber-badge');
       if (badge) {
-        const count = lista.length;
-        badge.textContent = `${count} ${count === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
+        badge.textContent = `${total} ${total === 1 ? 'TÍTULO' : 'TÍTULOS'}`;
       }
 
       if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum título a receber encontrado.</td></tr>';
+        const pagContainer = document.getElementById('receber-pagination-container');
+        if (pagContainer) pagContainer.innerHTML = '';
         return;
       }
 
@@ -438,8 +536,28 @@ window.FinanceiroView = {
         `;
       });
       tbody.innerHTML = html;
+
+      // Renderiza barra de paginação industrial
+      window.EMCUtils.renderPagination({
+        container: '#receber-pagination-container',
+        currentPage: this.receberCurrentPage,
+        pageSize: this.receberPageSize,
+        totalCount: this.receberTotalCount,
+        pageSizeOptions: [25, 50, 100],
+        itemLabel: 'títulos',
+        onPageChange: (newPage) => {
+          this.carregarListaContasReceber(newPage);
+          document.getElementById('filtro-receber-busca')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+        onPageSizeChange: (newSize) => {
+          this.receberPageSize = newSize;
+          this.carregarListaContasReceber(1);
+        }
+      });
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</td></tr>`;
+      const pagContainer = document.getElementById('receber-pagination-container');
+      if (pagContainer) pagContainer.innerHTML = '';
     }
   },
 
