@@ -204,6 +204,11 @@ Todos os planos de implementação, contendo o escopo, arquivos afetados, decis�
 
 ### 7.3 Ciclo de Trabalho Operacional (Passo a Passo)
 
+> [!IMPORTANT]
+> **OBRIGATORIEDADE DE COMMITS POR IMPLEMENTATION PLAN:**
+> Todo ciclo de trabalho derivado de um **Implementation Plan** aprovado representa uma unidade atômica de entrega. É **estritamente obrigatório** realizar o commit formal no Git antes de reportar a conclusão ao usuário ou iniciar qualquer nova demanda.
+> É terminantemente proibido aglutinar alterações de múltiplos planos ou tarefas em um único commit. Cada plano concluído exige seu commit correspondente, atômico e semântico, em estrita conformidade com a **Seção 30 do `docs/FSD.md`**.
+
 Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
 
 #### FASE 1: Análise e Planejamento Prévio (Sem Alterar Código)
@@ -234,12 +239,37 @@ Todo trabalho neste repositório deve seguir rigorosamente as 3 fases abaixo:
 2. **Atualizar `docs/ERROS.md` (se houver incidentes):**
    - Registrar qualquer erro, regressão ou lição técnica identificada (sintoma, causa raiz, solução aplicada e como evitar).
 3. **Atualizar o registro em `Planejamento/`:**
-   - Marcar o plano como `Concluído` e registrar os resultados obtidos.
-4. **Executar Commit Semântico Mandatório (Regra 13):**
-   - Realizar o commit no repositório Git com mensagem semântica no padrão Conventional Commits (ex: `feat(...)`, `fix(...)`, `style(...)`, `docs(...)`).
+   - Marcar o plano como `Concluído` e registrar os resultados obtidos e evidências de validação.
+4. **Executar Commit Semântico Mandatório por Plano (Regra 13 & FSD Seção 30):**
+   - **Critério de Saída Inegociável:** Nenhuma tarefa ou plano pode ser considerado concluído sem que o commit formal seja executado no Git local.
+   - **Commits Atômicos (FSD 30.5.1):** O commit deve conter exclusivamente os arquivos afetados pelo plano aprovado, sem misturar refatorações com correções ou features de outros planos.
+   - **Estrutura Canônica (FSD 30.1):** `<tipo>[escopo opcional]: <descrição concisa no imperativo e em pt-BR>`.
+   - **Prefixos Válidos (FSD 30.1):**
+     - `feat`: Nova funcionalidade no sistema ou API.
+     - `fix`: Correção de bug ou falha de fluxo.
+     - `docs`: Alterações exclusivas em documentações (`AGENTS.md`, `docs/`, `Planejamento/`).
+     - `style`: Formatação visual, CSS, espaçamento sem alteração na lógica de negócio.
+     - `refactor`: Refatoração estrutural de código sem ganho funcional direto nem correção de bug.
+     - `perf`: Melhoria estrita de desempenho e velocidade de execução.
+     - `test`: Criação, atualização ou ajuste de testes automatizados.
+     - `build`: Alterações no sistema de build, dependências (`requirements.txt`, pacotes) ou scripts.
+     - `ci`: Alterações em pipelines de CI/CD ou automações.
+     - `chore`: Manutenção interna rotineira, configurações, scripts auxiliares ou `.gitignore`.
+     - `revert`: Reversão explícita de commit anterior.
+     - `security`: Correções de vulnerabilidade, patches e reforço de segurança.
+   - **Regras de Ouro da Mensagem (FSD 30.4):**
+     1. Verbo no modo imperativo no título em `pt-BR` (ex: `feat(faturamento): implementar...`, `fix(conciliacao): corrigir...`, `docs(governanca): incluir...`).
+     2. Título limitado estritamente entre 50 e 72 caracteres.
+     3. Sem ponto final ao término do título/cabeçalho.
+     4. Título todo em letras minúsculas (salvo siglas técnicas como CPF/CNPJ, PWA, JWT, DRF, OFX).
+     5. Linha em branco separando o título do corpo explicativo (quando houver corpo).
+     6. Corpo explicando o *porquê* e o *como*, contextualizando a motivação.
+     7. Idioma estrito em português do Brasil (`pt-BR`).
+   - **Proibição Estrita de Versionamento (FSD 30.5.3):** É terminantemente proibido commitar segredos, senhas, tokens, arquivos `.env`, chaves criptográficas (`ENCRYPTION_KEY`, `SECRET_KEY`), certificados ou pastas temporárias/virtuais (`venv/`, `__pycache__/`, `logs/`).
 5. **Informar detalhadamente ao usuário:**
    - O que foi construído e alterado.
    - Roteiro prático com comandos e ações para testar/validar a entrega (incluindo instrução de `Ctrl + Shift + R` caso o frontend tenha sido alterado).
+   - Identificação do commit semântico realizado.
 
 > **Atenção:** Use sempre caminhos relativos à raiz do projeto. Não transformar estes caminhos em links absolutos. Não usar links `file:///`. Não registrar caminhos locais da máquina atual dentro do `AGENTS.md` ou nos arquivos de documentação.
 

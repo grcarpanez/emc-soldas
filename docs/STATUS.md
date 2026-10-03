@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Paginação Industrial do Extrato Real e Tesouraria - PWA v4.35)  
+**Última Atualização:** 2026-10-03 (Governança de Commits Semânticos por Implementation Plan no AGENTS.md)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW e Governança)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -498,6 +498,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Padronização em Contas a Pagar e Receber:** A mesma mecânica de paginação foi estendida às abas **Contas a Pagar** e **Contas a Receber**, eliminando o limite rígido de 25 registros em toda a Tesouraria.
   - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.35` em `frontend/sw.js` e sufixos de cache-busting `?v=4.35` em `frontend/index.html`.
   - **Homologação:** 37 testes de `core` e `apps.financeiro` e 192 testes da suíte global executados com 100% de aprovação (OK em 76.7s).
+- [x] **Governança de Commits Semânticos Mandatórios por Implementation Plan (AGENTS.md & FSD Seção 30):**
+  - **Obrigatoriedade Inegociável no Ciclo Operacional:** Atualização da subseção `7.3 Ciclo de Trabalho Operacional (Passo a Passo)` do `AGENTS.md`, consolidando que todo ciclo derivado de um Implementation Plan exige, como critério inegociável de conclusão, a realização de um commit semântico atômico no Git local.
+  - **Proibição de Aglutinação de Planos:** Vedação expressa ao acúmulo de múltiplos planos ou tarefas em um único commit genérico.
+  - **Padronização Estrita com FSD Seção 30:** Normatização do formato canônico `<tipo>[escopo]: <descrição no imperativo e em pt-BR>`, tabela resumida de prefixos válidos (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `security`), as 7 regras de ouro da mensagem (50-72 caracteres, minúsculas, sem ponto final, imperativo em pt-BR) e proibição absoluta de versionar credenciais/segredos.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_04_governanca_commits_ciclo_trabalho_agents.md`.
 
 
 
