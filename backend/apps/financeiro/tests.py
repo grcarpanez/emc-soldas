@@ -443,6 +443,68 @@ class TesourariaLancamentosTestCase(TestCase):
         self.assertEqual(log.usuario_id, self.operador_com_permissao.id)
         self.assertIn("CLIENTE DESISTIU", log.justificativa)
 
+    def test_estorno_lancamento_avulso_com_soft_delete_sem_gerar_conta_a_pagar(self):
+        """Valida que o estorno de um lançamento avulso reverte o saldo e aplica Soft Delete, sem virar conta a pagar."""
+        self.client.force_authenticate(user=self.operador_com_permissao)
+        saldo_inicial = self.conta_principal.saldo
+
+        # 1. Criação de despesa avulsa já paga via API (Regime de Caixa / Extrato)
+        res_novo = self.client.post(
+            '/api/lancamentos-financeiros/',
+            {
+                "origem": "AVULSO",
+                "categoria_id": self.categoria_despesa.id,
+                "tipo_lancamento": "SAIDA",
+                "descricao": "COMPRA MATERIAL AVULSO NO DEBITO",
+                "valor": "350.00",
+                "data_vencimento": str(timezone.localdate()),
+                "data_pagamento": str(timezone.now().isoformat()),
+                "status_pagamento": "PAGO",
+                "conta_id": self.conta_principal.id
+            },
+            format='json'
+        )
+        self.assertEqual(res_novo.status_code, status.HTTP_201_CREATED)
+        lanc_id = res_novo.data['id']
+        self.assertEqual(res_novo.data['origem'], 'AVULSO')
+
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial - Decimal("350.00"))
+
+        # 2. Executa Estorno do lançamento avulso
+        res_estorno = self.client.post(
+            f'/api/lancamentos-financeiros/{lanc_id}/estornar/',
+            {
+                "justificativa": "LANCAMENTO DIGITADO EM DUPLICIDADE NO EXTRATO"
+            },
+            format='json'
+        )
+        self.assertEqual(res_estorno.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_estorno.data['tipo_acao'], 'EXCLUIDO_AVULSO')
+        self.assertIn("excluída", res_estorno.data['message'])
+
+        # 3. Saldo bancário foi revertido com precisão
+        self.conta_principal.refresh_from_db()
+        self.assertEqual(self.conta_principal.saldo, saldo_inicial)
+
+        # 4. O lançamento sofreu soft delete e NÃO aparece na listagem ativa
+        self.assertFalse(LancamentoFinanceiro.objects.filter(id=lanc_id).exists())
+        self.assertTrue(LancamentoFinanceiro.all_objects.filter(id=lanc_id, deleted_at__isnull=False).exists())
+
+        # 5. O lançamento NÃO virou conta a pagar em aberto
+        lanc_inativo = LancamentoFinanceiro.all_objects.get(id=lanc_id)
+        self.assertEqual(lanc_inativo.status_pagamento, 'CANCELADO')
+        self.assertIn("ESTORNO:", lanc_inativo.motivo_cancelamento)
+        self.assertFalse(
+            LancamentoFinanceiro.objects.filter(tipo_lancamento='SAIDA', status_pagamento__in=['A_VENCER', 'VENCIDO']).filter(id=lanc_id).exists()
+        )
+
+        # 6. Log perpétuo de auditoria foi gravado
+        log = LogEstorno.objects.filter(lancamento_id=lanc_id).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.usuario_id, self.operador_com_permissao.id)
+        self.assertIn("LANCAMENTO DIGITADO EM DUPLICIDADE", log.justificativa)
+
     def test_transferencia_inter_contas_atomica(self):
         """Valida transferência entre contas bancárias com integridade matemática e neutra para DRE."""
         self.client.force_authenticate(user=self.operador_com_permissao)

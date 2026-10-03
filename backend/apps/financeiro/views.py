@@ -604,9 +604,16 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             justificativa=serializer.validated_data['justificativa'],
             user=request.user
         )
+        tipo_acao = resultado.get('tipo_acao', 'RETORNADO_AGENDA')
+        if tipo_acao == 'EXCLUIDO_AVULSO':
+            mensagem = 'Lançamento avulso estornado com sucesso. O saldo bancário foi revertido e a movimentação foi excluída.'
+        else:
+            mensagem = 'Baixa estornada com sucesso. O título retornou para a agenda de Contas a Pagar/Receber.'
+
         return Response({
             'status': 'success',
-            'message': 'Título estornado com sucesso e rastro perpétuo gravado.',
+            'message': mensagem,
+            'tipo_acao': tipo_acao,
             'lancamento': LancamentoFinanceiroSerializer(resultado['lancamento']).data,
             'log_estorno': LogEstornoSerializer(resultado['log_estorno']).data
         }, status=status.HTTP_200_OK)

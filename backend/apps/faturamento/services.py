@@ -346,6 +346,7 @@ def faturar_rascunho(fatura, regra_pagamento_id, desconto_global=None, numero_nf
                 valor_parcela = valor_base
 
             LancamentoFinanceiro.objects.create(
+                origem='FATURA',
                 fatura=fatura,
                 tipo_lancamento='ENTRADA',
                 status_pagamento='A_VENCER',
@@ -428,6 +429,7 @@ def receber_pagamento_fatura(fatura, valor, conta_id=None, meio_pagamento_id=Non
             parcela.save(update_fields=['valor', 'updated_at'])
 
             LancamentoFinanceiro.objects.create(
+                origem='FATURA',
                 fatura=fatura,
                 tipo_lancamento='ENTRADA',
                 status_pagamento='PAGO',
@@ -445,6 +447,7 @@ def receber_pagamento_fatura(fatura, valor, conta_id=None, meio_pagamento_id=Non
     # Se sobrou valor além das parcelas existentes (ex: adiantamento ou fatura sem parcelas)
     if valor_restante > Decimal('0.00'):
         LancamentoFinanceiro.objects.create(
+            origem='FATURA',
             fatura=fatura,
             tipo_lancamento='ENTRADA',
             status_pagamento='PAGO',
@@ -470,6 +473,7 @@ def receber_pagamento_fatura(fatura, valor, conta_id=None, meio_pagamento_id=Non
                 # Registra a despesa de taxa de maquininha para o DRE
                 categoria_taxa = obter_categoria_despesa_taxa()
                 LancamentoFinanceiro.objects.create(
+                    origem='FATURA',
                     fatura=fatura,
                     tipo_lancamento='SAIDA',
                     status_pagamento='PAGO',

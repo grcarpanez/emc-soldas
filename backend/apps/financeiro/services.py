@@ -186,6 +186,7 @@ def liquidar_lancamento(lancamento, conta_id, meio_pagamento_id=None, data_pagam
         lancamento.save(update_fields=['valor', 'updated_at', 'updated_by_id'])
 
         lancamento_liquidado = LancamentoFinanceiro.objects.create(
+            origem=lancamento.origem,
             fatura=lancamento.fatura,
             conta=conta,
             meio_pagamento=meio_pagamento,
@@ -307,8 +308,12 @@ def estornar_lancamento(lancamento, justificativa, user=None):
        - Se ENTRADA: debita da conta (validando se a conta suporta o débito com cheque especial).
        - Se SAIDA: credita de volta na conta.
     4. Anula/estorna automaticamente despesas de Taxa de Maquininha e ISS retido geradas na baixa do título.
-    5. Reverte o status do lançamento para 'A_VENCER' (ou cancela se foi gerado em baixa parcial), limpa data_pagamento e conta.
-    6. Se vinculado a uma Fatura que estava PAGA, reverte o status da Fatura para FATURADA e orçamentos para FATURADO.
+    5. Se for Conta Agendada (origem 'AGENDA', 'FATURA', 'CARTAO'):
+       - Reverte o status do lançamento para 'A_VENCER', limpa data_pagamento e conta, retornando à agenda financeira.
+       - Se vinculado a uma Fatura que estava PAGA, reverte o status da Fatura para FATURADA e orçamentos para FATURADO.
+    6. Se for Lançamento Avulso ou Conciliação (origem 'AVULSO', 'CONCILIACAO'):
+       - Marca status como 'CANCELADO' com a justificativa informada.
+       - Aplica Soft Delete, não gerando conta a pagar em aberto na agenda financeira.
     7. Grava registro perpétuo e imutável na tabela LogEstorno.
     """
     if lancamento.status_pagamento != 'PAGO':
@@ -367,25 +372,44 @@ def estornar_lancamento(lancamento, justificativa, user=None):
                 conta_destino.save(update_fields=['saldo', 'updated_at'])
                 conta_origem.save(update_fields=['saldo', 'updated_at'])
 
-    # 3. Transição do lançamento estornado
-    lancamento.status_pagamento = 'A_VENCER'
-    lancamento.data_pagamento = None
-    lancamento.conta = None
-    lancamento.updated_by_id = user.id
-    lancamento.save(update_fields=['status_pagamento', 'data_pagamento', 'conta', 'updated_at', 'updated_by_id'])
+    # 3. Transição ou Exclusão (Soft Delete) conforme a natureza do lançamento
+    eh_conta_agendada = getattr(lancamento, 'eh_conta_agendada', False)
+    if not eh_conta_agendada:
+        eh_conta_agendada = (
+            lancamento.origem in ['AGENDA', 'FATURA', 'CARTAO'] or
+            bool(lancamento.fatura_id) or
+            bool(lancamento.fatura_cartao_id)
+        )
 
-    # 4. Reversão de Fatura/Orçamentos caso necessário
-    if lancamento.fatura_id:
-        fatura = lancamento.fatura
-        if fatura.status == 'PAGA':
-            fatura.status = 'FATURADA'
-            fatura.updated_by_id = user.id
-            fatura.save(update_fields=['status', 'updated_at', 'updated_by_id'])
-            fatura.orcamentos_agrupados.filter(deleted_at__isnull=True).update(
-                status_financeiro='FATURADO',
-                updated_at=timezone.now()
-            )
-            logger.info(f"[FATURA REVERTIDA PARA FATURADA] Fatura #{fatura.id} revertida devido ao estorno do lançamento #{lancamento.id}.")
+    if eh_conta_agendada:
+        # Conta da agenda financeira liquidada por engano: retorna ao estado 'A_VENCER'
+        lancamento.status_pagamento = 'A_VENCER'
+        lancamento.data_pagamento = None
+        lancamento.conta = None
+        lancamento.updated_by_id = user.id
+        lancamento.save(update_fields=['status_pagamento', 'data_pagamento', 'conta', 'updated_at', 'updated_by_id'])
+        tipo_acao = 'RETORNADO_AGENDA'
+
+        # 4. Reversão de Fatura/Orçamentos caso necessário
+        if lancamento.fatura_id:
+            fatura = lancamento.fatura
+            if fatura.status == 'PAGA':
+                fatura.status = 'FATURADA'
+                fatura.updated_by_id = user.id
+                fatura.save(update_fields=['status', 'updated_at', 'updated_by_id'])
+                fatura.orcamentos_agrupados.filter(deleted_at__isnull=True).update(
+                    status_financeiro='FATURADO',
+                    updated_at=timezone.now()
+                )
+                logger.info(f"[FATURA REVERTIDA PARA FATURADA] Fatura #{fatura.id} revertida devido ao estorno do lançamento #{lancamento.id}.")
+    else:
+        # Lançamento Avulso / Compra Direta / Conciliação: não gera conta a pagar, aplica Soft Delete
+        lancamento.status_pagamento = 'CANCELADO'
+        lancamento.motivo_cancelamento = f"ESTORNO: {justificativa_sanitizada}"
+        lancamento.updated_by_id = user.id
+        lancamento.save(update_fields=['status_pagamento', 'motivo_cancelamento', 'updated_at', 'updated_by_id'])
+        lancamento.delete(user_id=user.id)
+        tipo_acao = 'EXCLUIDO_AVULSO'
 
     # 5. Gravação perpétua em LogEstorno
     log_estorno = LogEstorno.objects.create(
@@ -395,10 +419,11 @@ def estornar_lancamento(lancamento, justificativa, user=None):
         data_estorno=timezone.now()
     )
 
-    logger.info(f"[ESTORNO CONCLUIDO] Log #{log_estorno.id} para Lançamento #{lancamento.id} por {user.nome}.")
+    logger.info(f"[ESTORNO CONCLUIDO] Log #{log_estorno.id} ({tipo_acao}) para Lançamento #{lancamento.id} por {getattr(user, 'nome', 'Admin')}.")
     return {
         'lancamento': lancamento,
-        'log_estorno': log_estorno
+        'log_estorno': log_estorno,
+        'tipo_acao': tipo_acao
     }
 
 

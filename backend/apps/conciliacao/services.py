@@ -763,6 +763,7 @@ def realizar_lancamento_rapido(dados: Dict[str, Any], user=None) -> LancamentoFi
             dt_venc = date.fromisoformat(dt_venc.split('T')[0])
 
         lancamento = LancamentoFinanceiro.objects.create(
+            origem='CONCILIACAO',
             tipo_lancamento=tipo_lancamento,
             descricao=descricao,
             valor=valor,
@@ -1095,6 +1096,7 @@ def executar_importacao_lote(
             cli_forn_id = item.get('cliente_fornecedor_id')
 
             lanc = LancamentoFinanceiro.objects.create(
+                origem='CONCILIACAO',
                 conta=conta,
                 categoria=categoria,
                 meio_pagamento=meio,

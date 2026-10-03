@@ -193,6 +193,7 @@ window.FinanceiroView = {
 
       const res = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAMENTOS}?${query.toString()}`);
       const lista = res.results || (Array.isArray(res) ? res : []);
+      this.extratoListaAtual = lista;
       const total = res.count !== undefined ? res.count : lista.length;
       this.extratoTotalCount = total;
 
@@ -723,13 +724,23 @@ window.FinanceiroView = {
   },
 
   abrirModalEstorno(lancamentoId) {
+    const l = (this.extratoListaAtual || []).find((x) => x.id === lancamentoId);
+    const isContaAgendada = l ? (l.eh_conta_agendada || ['AGENDA', 'FATURA', 'CARTAO'].includes(l.origem)) : false;
+
     window.EMCUtils.openModal({
       title: `ESTORNO DE LANÇAMENTO #${lancamentoId}`,
       size: 'sm',
       confirmText: 'CONFIRMAR ESTORNO',
       content: `
-        <p style="color: var(--color-on-surface-variant); font-size: 13px; margin-bottom: 12px;">
-          O estorno reverterá o saldo na conta bancária e gravará compulsoriamente a justificativa no log perpétuo de auditoria.
+        <div style="background-color: var(--color-surface-container); border-left: 3px solid ${isContaAgendada ? 'var(--color-warning)' : 'var(--color-primary)'}; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.4; color: var(--color-on-surface);">
+          ${isContaAgendada ? `
+            ⚡ <strong>Conta Liquidada:</strong> Este lançamento foi originado de uma <strong>Conta a Pagar/Receber</strong> agendada. Ao estornar, o saldo bancário será revertido e o título voltará para o estado <strong>"NÃO PAGO" (A Vencer)</strong> na sua agenda financeira.
+          ` : `
+            ⚡ <strong>Lançamento Avulso (Compra Direta):</strong> Esta movimentação foi liquidada no ato da compra e não possui conta agendada. Ao estornar, o saldo bancário será revertido e o lançamento será <strong>excluído</strong> (não gerará conta a pagar pendente).
+          `}
+        </div>
+        <p style="color: var(--color-on-surface-variant); font-size: 12px; margin-bottom: 12px;">
+          O estorno gravará compulsoriamente a justificativa no log perpétuo de auditoria.
         </p>
         <div class="form-group">
           <label class="form-label">Justificativa do Estorno *</label>
@@ -745,8 +756,8 @@ window.FinanceiroView = {
 
         try {
           const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.ESTORNAR.replace('{id}', lancamentoId);
-          await window.api.post(endpoint, { justificativa });
-          window.EMCUtils.showToast('Lançamento estornado e saldo bancário revertido!', 'success');
+          const res = await window.api.post(endpoint, { justificativa });
+          window.EMCUtils.showToast(res.message || 'Lançamento estornado e saldo bancário revertido!', 'success');
           this.carregarListaExtrato();
           return true;
         } catch (err) {
@@ -999,6 +1010,9 @@ window.FinanceiroView = {
         if (isExtrato) {
           payload.status_pagamento = 'PAGO';
           payload.data_pagamento = `${data_vencimento}T12:00:00`;
+          payload.origem = 'AVULSO';
+        } else {
+          payload.origem = 'AGENDA';
         }
 
         const fileInput = document.getElementById('nl-comprovante');

@@ -287,6 +287,22 @@ class LancamentoFinanceiro(BaseModel):
         ('CANCELADO', 'CANCELADO'),
     ]
 
+    ORIGEM_CHOICES = [
+        ('AGENDA', 'Conta Agendada (Contas a Pagar/Receber)'),
+        ('AVULSO', 'Compra / Lançamento Avulso no Extrato'),
+        ('CONCILIACAO', 'Extrato / Conciliação Bancária'),
+        ('FATURA', 'Faturamento de Orçamentos'),
+        ('CARTAO', 'Fatura de Cartão de Crédito'),
+    ]
+
+    origem = models.CharField(
+        max_length=20,
+        choices=ORIGEM_CHOICES,
+        default='AGENDA',
+        db_index=True,
+        verbose_name="Origem do Lançamento"
+    )
+
     fatura = models.ForeignKey(
         'faturamento.Fatura',
         on_delete=models.SET_NULL,
@@ -448,6 +464,11 @@ class LancamentoFinanceiro(BaseModel):
 
     def __str__(self):
         return f"[{self.tipo_lancamento}] {self.descricao or self.categoria.nome} - R$ {self.valor} ({self.status_pagamento})"
+
+    @property
+    def eh_conta_agendada(self):
+        """Verifica se o lançamento possui natureza de conta agendada na agenda financeira."""
+        return self.origem in ['AGENDA', 'FATURA', 'CARTAO'] or bool(self.fatura_id) or bool(self.fatura_cartao_id)
 
 
 class LogEstorno(models.Model):

@@ -208,6 +208,7 @@ def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_comp
     desc = sanitizar_texto_maiusculo(descricao or f"COMPRA CARTAO {cartao.nome} - {categoria.nome}")
 
     lancamento = LancamentoFinanceiro.objects.create(
+        origem='CARTAO',
         cartao_credito=cartao,
         fatura_cartao=fatura,
         categoria=categoria,
@@ -319,6 +320,7 @@ def fechar_fatura_cartao(fatura, user=None):
 
         if not titulo_fatura:
             titulo_fatura = LancamentoFinanceiro.objects.create(
+                origem='CARTAO',
                 cartao_credito=fatura.cartao,
                 fatura_cartao=fatura,
                 conta=fatura.cartao.conta_bancaria,
@@ -434,6 +436,7 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
         categoria_cartao = obter_ou_criar_categoria_despesa_cartao()
 
         lancamento_rollover = LancamentoFinanceiro.objects.create(
+            origem='CARTAO',
             cartao_credito=fatura.cartao,
             fatura_cartao=fatura_proxima,
             categoria=categoria_cartao,

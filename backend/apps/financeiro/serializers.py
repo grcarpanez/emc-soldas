@@ -342,11 +342,16 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     cliente_fornecedor_nome = serializers.CharField(source='cliente_fornecedor.nome_razao', read_only=True, allow_null=True)
     comprovante = ComprovanteFileOrCharField(required=False, allow_null=True)
     nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+    origem_display = serializers.CharField(source='get_origem_display', read_only=True)
+    eh_conta_agendada = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = LancamentoFinanceiro
         fields = [
             'id',
+            'origem',
+            'origem_display',
+            'eh_conta_agendada',
             'fatura',
             'cliente_fornecedor',
             'cliente_fornecedor_nome',
@@ -435,6 +440,19 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "conta": "A conta bancária é obrigatória para lançamentos com status PAGO."
             })
+
+        # Inferência inteligente do campo origem caso não seja fornecido explicitamente
+        if not attrs.get('origem'):
+            if attrs.get('fatura') or getattr(self.instance, 'fatura', None):
+                attrs['origem'] = 'FATURA'
+            elif attrs.get('fatura_cartao') or getattr(self.instance, 'fatura_cartao', None):
+                attrs['origem'] = 'CARTAO'
+            elif attrs.get('is_conciliado') or getattr(self.instance, 'is_conciliado', False) or attrs.get('fitid'):
+                attrs['origem'] = 'CONCILIACAO'
+            elif status_pagto == 'PAGO':
+                attrs['origem'] = 'AVULSO'
+            else:
+                attrs['origem'] = 'AGENDA'
 
         return attrs
 

@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Correção Integral do Dashboard: Flip Cards, Gráfico SARGable, Feed e Filtros - PWA v4.36)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW, Paginação e Dashboard)  
+**Última Atualização:** 2026-10-03 (Diferenciação no Estorno: Contas a Pagar vs Lançamentos Avulsos com Soft Delete e Saneamento do Lançamento #63 - PWA v4.37)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Estorno Inteligente de Caixa vs Agenda, Modais Empilhados, Comboboxes Pesquisáveis, CEP Automático, Máscaras Flexíveis, Conciliação Mobile, Bypass SW, Paginação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -509,8 +509,17 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Feed de Atividades Recentes em Tempo Real:** Inclusão dos campos `data_hora` e `timestamp` em cada atividade (orçamentos, faturas, baixas de caixa e estornos) e tratamento resiliente no frontend aceitando tanto listas diretas `[...]` quanto payloads encapsulados.
   - **Filtros Temporais Ágeis:** Implementado suporte nativo ao parâmetro `?periodo=hoje`, `?periodo=mes` e `?periodo=ano` em `FiltroPeriodoSerializer`, `DashboardFlipCardsView` e `DashboardService`, calculando automaticamente as janelas temporais de agregação.
   - **Versionamento PWA:** Cache sincronizado para `emc-soldas-v4.36` em `frontend/sw.js` e sufixos de cache-busting `?v=4.36` em `frontend/index.html`.
-  - **Homologação:** 14 testes de `apps.relatorios` e 193 testes da suíte global executados com 100% de sucesso (OK em 79.4s).
-  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_05_correcao_dashboard_flip_cards_graficos_feed.md`.
+- [x] **Diferenciação no Estorno: Contas a Pagar vs Lançamentos Avulsos e Saneamento do Lançamento #63 (PWA v4.37):**
+  - **Rastreamento de Origem no Modelo:** Inclusão do campo `origem` (`AGENDA`, `AVULSO`, `CONCILIACAO`, `FATURA`, `CARTAO`) em `LancamentoFinanceiro` e na serialização, com inferência inteligente e migration retroativa para os registros existentes.
+  - **Lógica de Estorno Inteligente (`estornar_lancamento`):**
+    - Se for **Conta Agendada (`AGENDA`, `FATURA`, `CARTAO`)**: estorno reverte o saldo na conta bancária e retorna o título ao status `'A_VENCER'` ("não pago") na agenda financeira, limpando conta e data de pagamento.
+    - Se for **Lançamento Avulso / Compra Efetivada (`AVULSO`, `CONCILIACAO`)**: estorno reverte o impacto no saldo bancário, transita status para `'CANCELADO'` com justificativa e aplica **Soft Delete** (`deleted_at = timezone.now()`), **não gerando conta a pagar pendente**.
+    - Ambos os fluxos mantêm a trilha perpétua e imutável de auditoria na tabela `log_estornos`.
+  - **Saneamento do Lançamento #63:** Lançamento de teste duplicado de 02/06/2025 que havia sido estornado e permanecido indevidamente como conta a pagar em aberto teve sua origem classificada como `AVULSO`, status como `CANCELADO` e sofreu Soft Delete via data migration, zerando pendências indevidas no Contas a Pagar.
+  - **Experiência Visual (Frontend PWA):** Modal de confirmação de estorno inspeciona a natureza do título e apresenta alerta explicativo contextual (informando se o título voltará para o Contas a Pagar ou se será excluído como compra avulsa).
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.37` em `sw.js` e `?v=4.37` em `index.html`.
+  - **Homologação:** 29 testes de `apps.financeiro` e 184 testes da suíte global executados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_06_diferenciacao_estorno_contas_pagar_vs_avulsos.md`.
 
 
 
