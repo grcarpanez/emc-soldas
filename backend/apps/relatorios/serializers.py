@@ -25,11 +25,29 @@ class DashboardFlipCardsResponseSerializer(serializers.Serializer):
     cards = serializers.DictField(required=False)
 
 
+class CategoriaItemSerializer(serializers.Serializer):
+    """Categoria individual e seu valor acumulado no mês."""
+    categoria = serializers.CharField()
+    valor = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class MesGraficoSerializer(serializers.Serializer):
+    """Detalhamento mensal com evolução de receitas, despesas e segregação por categorias."""
+    mes = serializers.IntegerField()
+    mes_nome = serializers.CharField()
+    mes_sigla = serializers.CharField()
+    receitas = serializers.DecimalField(max_digits=12, decimal_places=2)
+    receitas_categorias = CategoriaItemSerializer(many=True, required=False)
+    despesas = serializers.DecimalField(max_digits=12, decimal_places=2)
+    despesas_categorias = CategoriaItemSerializer(many=True, required=False)
+    resultado_liquido = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
 class GraficosReceitasDespesasSerializer(serializers.Serializer):
     """Estrutura de resposta do gráfico de evolução de receitas e despesas."""
     ano = serializers.IntegerField()
-    meses = serializers.ListField(child=serializers.DictField())
-    historico = serializers.ListField(child=serializers.DictField(), required=False)
+    meses = MesGraficoSerializer(many=True)
+    historico = MesGraficoSerializer(many=True, required=False)
     totais_ano = serializers.DictField()
 
 

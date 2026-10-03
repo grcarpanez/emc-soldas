@@ -1879,5 +1879,125 @@ input[type="file"].form-control::file-selector-button:hover {
   }
 }
 
+/* ==========================================================================
+   INDUSTRIAL INTEGRITY - CHART TOOLTIPS (0px BORDER-RADIUS)
+   ========================================================================== */
+.chart-tooltip {
+  position: absolute;
+  background: #141414;
+  border: 1px solid var(--color-steel-gray);
+  border-radius: 0px;
+  padding: 10px 14px;
+  z-index: 1000;
+  min-width: 240px;
+  max-width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+  transform: translateY(4px);
+}
 
+.chart-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
 
+.chart-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(113, 121, 126, 0.4);
+}
+
+.chart-tooltip-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-tooltip-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 0px;
+  display: inline-block;
+}
+
+.chart-tooltip-badge.receita {
+  background-color: var(--color-success);
+}
+
+.chart-tooltip-badge.despesa {
+  background-color: var(--color-error);
+}
+
+.chart-tooltip-total {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chart-tooltip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.chart-tooltip-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  gap: 8px;
+}
+
+.chart-tooltip-cat-name {
+  color: var(--color-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+  font-weight: 500;
+}
+
+.chart-tooltip-cat-val {
+  font-family: var(--font-mono);
+  color: var(--color-on-surface);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chart-tooltip-cat-perc {
+  font-size: 10px;
+  color: var(--color-steel-gray);
+  margin-left: 4px;
+}
+
+.chart-tooltip-empty {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* Efeito hover nas barras do gráfico */
+.chart-bar-interactive {
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease, transform 0.1s ease;
+}
+
+.chart-bar-interactive:hover {
+  filter: brightness(1.25);
+  transform: scaleY(1.03);
+  transform-origin: bottom;
+}

@@ -329,23 +329,33 @@ window.DashboardView = {
         return;
       }
 
-      // Renderiza gráfico de barras em HTML/CSS puro
-      let html = '<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-end; height: 180px; gap: 12px; padding-top: 20px;">';
+      // Renderiza gráfico de barras em HTML/CSS puro com suporte a tooltips interativos
+      let html = '<div style="width: 100%; display: flex; justify-content: space-between; align-items: flex-end; height: 180px; gap: 8px; padding-top: 20px;">';
       
-      const maxValor = Math.max(...meses.map(m => Math.max(m.receitas || 0, m.despesas || 0)), 100);
+      const maxValor = Math.max(...meses.map(m => Math.max(Number(m.receitas || 0), Number(m.despesas || 0))), 100);
 
-      meses.forEach((m) => {
-        const altRec = Math.round(((m.receitas || 0) / maxValor) * 140);
-        const altDes = Math.round(((m.despesas || 0) / maxValor) * 140);
+      meses.forEach((m, idx) => {
+        const valRec = Number(m.receitas || 0);
+        const valDes = Number(m.despesas || 0);
+        const altRec = Math.round((valRec / maxValor) * 140);
+        const altDes = Math.round((valDes / maxValor) * 140);
         const siglaMes = m.mes_sigla || m.mes_nome || m.mes;
 
         html += `
           <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end;">
-            <div style="display: flex; gap: 4px; align-items: flex-end; width: 100%; justify-content: center;">
+            <div style="display: flex; gap: 3px; align-items: flex-end; width: 100%; justify-content: center;">
               <!-- Barra de Receita -->
-              <div style="width: 45%; max-width: 24px; height: ${Math.max(altRec, 4)}px; background-color: var(--color-success); title: 'Receitas: ${window.EMCUtils.formatarMoeda(m.receitas)}';"></div>
+              <div class="chart-bar-interactive chart-bar-receita" 
+                   data-mes-idx="${idx}" 
+                   data-tipo="RECEITA"
+                   style="width: 46%; max-width: 24px; height: ${Math.max(altRec, 4)}px; background-color: var(--color-success);"
+                   title=""></div>
               <!-- Barra de Despesa -->
-              <div style="width: 45%; max-width: 24px; height: ${Math.max(altDes, 4)}px; background-color: var(--color-error); title: 'Despesas: ${window.EMCUtils.formatarMoeda(m.despesas)}';"></div>
+              <div class="chart-bar-interactive chart-bar-despesa" 
+                   data-mes-idx="${idx}" 
+                   data-tipo="DESPESA"
+                   style="width: 46%; max-width: 24px; height: ${Math.max(altDes, 4)}px; background-color: var(--color-error);"
+                   title=""></div>
             </div>
             <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">${siglaMes}</span>
           </div>
@@ -367,6 +377,106 @@ window.DashboardView = {
       `;
 
       container.innerHTML = html;
+      container.style.position = 'relative';
+
+      // Tooltip flutuante interativo (0px border-radius Industrial Integrity)
+      const tooltipEl = document.createElement('div');
+      tooltipEl.id = 'dashboard-chart-tooltip';
+      tooltipEl.className = 'chart-tooltip';
+      container.appendChild(tooltipEl);
+
+      const mostrarTooltip = (e, mesData, tipo) => {
+        const isRec = tipo === 'RECEITA';
+        const total = isRec ? Number(mesData.receitas || 0) : Number(mesData.despesas || 0);
+        const categorias = isRec ? (mesData.receitas_categorias || []) : (mesData.despesas_categorias || []);
+        const sigla = mesData.mes_sigla || mesData.mes_nome || `MÊS ${mesData.mes}`;
+
+        let categoriasHtml = '';
+        if (!categorias.length || total <= 0) {
+          categoriasHtml = '<div class="chart-tooltip-empty">Nenhum lançamento liquidado no período</div>';
+        } else {
+          categoriasHtml = categorias.map((c) => {
+            const val = Number(c.valor || 0);
+            const perc = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+            const catNome = c.categoria || 'SEM CATEGORIA';
+            return `
+              <div class="chart-tooltip-item">
+                <span class="chart-tooltip-cat-name" title="${window.EMCUtils.escapeHtml(catNome)}">
+                  ${window.EMCUtils.escapeHtml(catNome)}
+                </span>
+                <span class="chart-tooltip-cat-val">
+                  ${window.EMCUtils.formatarMoeda(val)}
+                  <span class="chart-tooltip-cat-perc">(${perc}%)</span>
+                </span>
+              </div>
+            `;
+          }).join('');
+        }
+
+        tooltipEl.innerHTML = `
+          <div class="chart-tooltip-header">
+            <span class="chart-tooltip-title">
+              <span class="chart-tooltip-badge ${isRec ? 'receita' : 'despesa'}"></span>
+              ${sigla}/${anoVisualizado} • ${isRec ? 'RECEITAS' : 'DESPESAS'}
+            </span>
+            <span class="chart-tooltip-total" style="color: ${isRec ? 'var(--color-success)' : 'var(--color-error)'};">
+              ${window.EMCUtils.formatarMoeda(total)}
+            </span>
+          </div>
+          <div class="chart-tooltip-list">
+            ${categoriasHtml}
+          </div>
+        `;
+
+        tooltipEl.classList.add('visible');
+
+        // Cálculo de posicionamento relativo e clamps de borda
+        const barEl = e.currentTarget;
+        const barRect = barEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+
+        const tipWidth = tooltipEl.offsetWidth || 260;
+        const tipHeight = tooltipEl.offsetHeight || 120;
+
+        let left = (barRect.left - containerRect.left) + (barRect.width / 2) - (tipWidth / 2);
+        let top = (barRect.top - containerRect.top) - tipHeight - 12;
+
+        if (left < 8) left = 8;
+        if (left + tipWidth > containerRect.width - 8) {
+          left = containerRect.width - tipWidth - 8;
+        }
+
+        if (top < 8) {
+          top = (barRect.bottom - containerRect.top) + 12;
+        }
+
+        tooltipEl.style.left = `${Math.round(left)}px`;
+        tooltipEl.style.top = `${Math.round(top)}px`;
+      };
+
+      const ocultarTooltip = () => {
+        tooltipEl.classList.remove('visible');
+      };
+
+      container.querySelectorAll('.chart-bar-interactive').forEach((bar) => {
+        const idx = parseInt(bar.dataset.mesIdx, 10);
+        const tipo = bar.dataset.tipo;
+        const mesData = meses[idx];
+        if (!mesData) return;
+
+        bar.addEventListener('mouseenter', (e) => mostrarTooltip(e, mesData, tipo));
+        bar.addEventListener('mouseleave', ocultarTooltip);
+        bar.addEventListener('click', (e) => {
+          e.stopPropagation();
+          mostrarTooltip(e, mesData, tipo);
+        });
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+          ocultarTooltip();
+        }
+      }, { passive: true });
     } catch (err) {
       container.innerHTML = `<p class="mono-text" style="color: var(--color-error); font-size: 12px;">Erro ao carregar gráfico: ${window.EMCUtils.escapeHtml(err.message)}</p>`;
     }

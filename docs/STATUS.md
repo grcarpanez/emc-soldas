@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Detecção Heurística Universal de Meios de Pagamento, Gestão de Guias Fiscais da Receita Federal e Bloqueio Visual de Pendências no Extrato - PWA v4.38)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Detecção Universal de Meios OFX, Guias Fiscais, Bloqueio de Lacunas, Estorno Caixa vs Agenda, Modais Empilhados, Comboboxes Pesquisáveis, Paginação e Dashboard)  
+**Última Atualização:** 2026-10-03 (Tooltips Informativos nas Barras do Gráfico com Segregação por Categoria - PWA v4.39)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Tooltips no Gráfico com Categorias, Detecção de Meios OFX, Guias Fiscais, Estorno Caixa vs Agenda, Modais Empilhados e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -534,9 +534,21 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
     - **Aviso Contextual da Receita Federal:** Exibição do badge `"⚠️ GUIA RECEITA FEDERAL"` solicitando a escolha contábil exata pelo usuário.
     - **Reatividade em Tempo Real:** Conforme o operador seleciona os campos nos cards, o método `atualizarEstadoCard(idx)` reavalia o status e remove a borda de alerta e os badges instantaneamente.
     - **Bloqueio Duplo de Lacunas:** Bloqueio preventivo no frontend com contador de pendências no botão `btn-gerar-lote` e aviso Toast industrial caso haja campos em branco, além de validação estrita no backend (`ValidationError 400 Bad Request` em `executar_importacao_lote`).
-  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.38` em `frontend/sw.js` e sufixos de cache-busting `?v=4.38` em `frontend/index.html`.
-  - **Homologação:** 18 testes automatizados de `apps.conciliacao` e 197 testes da suíte global executados com 100% de sucesso.
-  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_07_deteccao_heuristica_universal_meios_pagamento_ofx.md`.
+- [x] **Tooltips Informativos nas Barras do Gráfico com Segregação por Categoria (PWA v4.39):**
+  - **Backend de Agregação SARGable (`apps.relatorios.services.obter_graficos_receitas_despesas`):**
+    - Agrupamento mensal de `LancamentoFinanceiro` por `categoria__nome` preservando compatibilidade SARGable sem `CONVERT_TZ`.
+    - Cada mês retorna o detalhamento de `receitas_categorias` e `despesas_categorias` ordenados por valor decrescente.
+    - Serialização tipada em `apps.relatorios.serializers` com `CategoriaItemSerializer` e `MesGraficoSerializer`.
+  - **Frontend PWA e Design System Industrial Integrity (`dashboard-view.js` & `industrial-integrity.css`):**
+    - Componente flutuante `.chart-tooltip` estritamente reto (0px border-radius), fundo escuro `#141414`, borda em cinza aço `#71797E` e sombra profunda `rgba(0, 0, 0, 0.85)`.
+    - Rótulo de cabeçalho com indicador verde (receitas) ou vermelho (despesas), mês/ano e valor total destacado.
+    - Lista discriminada de categorias com valor monetário em `JetBrains Mono` e percentual de participação no mês (`X.X%`).
+    - Posicionamento dinâmico relativo à barra com clamps de segurança para não ultrapassar as extremidades do card.
+    - Suporte a Desktop (hover) e Mobile/Tablet (toque/tap).
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.39` em `frontend/sw.js` e sufixos de cache-busting `?v=4.39` em `frontend/index.html`.
+  - **Homologação:** 14 testes de `apps.relatorios` e 197 testes globais aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_08_tooltips_grafico_categorias.md`.
+
 
 
 

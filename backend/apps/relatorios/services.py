@@ -363,23 +363,41 @@ class DashboardService:
             dt_ini_mes, _ = converter_periodo_para_datetime_range(primeiro_dia, primeiro_dia)
             dt_fim_mes, _ = converter_periodo_para_datetime_range(proximo_mes, proximo_mes)
 
-            # Receitas Pagas no Mês (SARGable range query sem CONVERT_TZ)
-            rec = LancamentoFinanceiro.objects.filter(
+            # Receitas Pagas no Mês segregadas por categoria (SARGable range query)
+            rec_qs = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='ENTRADA',
                 status_pagamento='PAGO',
                 data_pagamento__gte=dt_ini_mes,
                 data_pagamento__lt=dt_fim_mes
-            ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+            ).values('categoria__nome').annotate(total=Sum('valor')).order_by('-total')
 
-            # Despesas Pagas no Mês (SARGable range query sem CONVERT_TZ)
-            desp = LancamentoFinanceiro.objects.filter(
+            receitas_categorias = [
+                {
+                    'categoria': (item['categoria__nome'] or 'SEM CATEGORIA / GERAL').strip().upper(),
+                    'valor': item['total']
+                }
+                for item in rec_qs
+            ]
+            rec = sum((c['valor'] for c in receitas_categorias), Decimal('0.00'))
+
+            # Despesas Pagas no Mês segregadas por categoria (SARGable range query)
+            desp_qs = LancamentoFinanceiro.objects.filter(
                 deleted_at__isnull=True,
                 tipo_lancamento='SAIDA',
                 status_pagamento='PAGO',
                 data_pagamento__gte=dt_ini_mes,
                 data_pagamento__lt=dt_fim_mes
-            ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+            ).values('categoria__nome').annotate(total=Sum('valor')).order_by('-total')
+
+            despesas_categorias = [
+                {
+                    'categoria': (item['categoria__nome'] or 'SEM CATEGORIA / GERAL').strip().upper(),
+                    'valor': item['total']
+                }
+                for item in desp_qs
+            ]
+            desp = sum((c['valor'] for c in despesas_categorias), Decimal('0.00'))
 
             resultado = rec - desp
             total_ano_receitas += rec
@@ -390,7 +408,9 @@ class DashboardService:
                 'mes_nome': nomes_meses[mes - 1],
                 'mes_sigla': nomes_meses[mes - 1],
                 'receitas': rec,
+                'receitas_categorias': receitas_categorias,
                 'despesas': desp,
+                'despesas_categorias': despesas_categorias,
                 'resultado_liquido': resultado,
             })
 

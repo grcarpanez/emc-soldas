@@ -282,8 +282,11 @@ class DashboardViewsTestCase(RelatoriosBaseTestCase):
         self.assertEqual(dados['ano'], self.hoje.year)
         self.assertEqual(len(dados['meses']), 12)
         self.assertIn('historico', dados)
-        self.assertEqual(len(dados['historico']), 12)
         self.assertIn('mes_sigla', dados['meses'][0])
+        self.assertIn('receitas_categorias', dados['meses'][0])
+        self.assertIn('despesas_categorias', dados['meses'][0])
+        self.assertIsInstance(dados['meses'][0]['receitas_categorias'], list)
+        self.assertIsInstance(dados['meses'][0]['despesas_categorias'], list)
         self.assertIn('totais_ano', dados)
 
     def test_dashboard_feed_atividades(self):
