@@ -48,6 +48,46 @@ def retroalimentar_custo_item(item, valor_unitario: Decimal, data_compra=None, u
     return item
 
 
+def recalcular_custo_item_apos_alteracao(item, usuario=None):
+    """
+    Recalcula o ultimo_custo_compra e data_ultima_compra de um Item com base
+    na compra ativa mais recente em NotaCompraItem (onde documento_fiscal.deleted_at__isnull=True).
+    Caso não exista nenhuma compra ativa remanescente no histórico, zera data_ultima_compra.
+    """
+    from apps.compras.models import NotaCompraItem
+
+    if not isinstance(item, Item):
+        item = Item.objects.filter(pk=item).first()
+        if not item:
+            return None
+
+    ultima_compra = NotaCompraItem.objects.filter(
+        item=item,
+        documento_fiscal__deleted_at__isnull=True
+    ).select_related('documento_fiscal').order_by(
+        '-documento_fiscal__data_compra', '-documento_fiscal__id'
+    ).first()
+
+    if ultima_compra:
+        item.ultimo_custo_compra = Decimal(str(ultima_compra.valor_unitario))
+        data_c = ultima_compra.documento_fiscal.data_compra
+        if data_c:
+            from datetime import datetime, date
+            if isinstance(data_c, date) and not isinstance(data_c, datetime):
+                item.data_ultima_compra = timezone.make_aware(datetime.combine(data_c, datetime.min.time()))
+            else:
+                item.data_ultima_compra = data_c
+    else:
+        # Não restam compras ativas registradas para este item
+        item.data_ultima_compra = None
+
+    if usuario and getattr(usuario, 'id', None):
+        item.updated_by_id = usuario.id
+
+    item.save(update_fields=['ultimo_custo_compra', 'data_ultima_compra', 'updated_at', 'updated_by_id'])
+    return item
+
+
 # Extensões e Magic Bytes seguros permitidos para notas fiscais de entrada
 EXTENSOES_PERMITIDAS = {'.pdf', '.xml', '.png', '.jpg', '.jpeg'}
 

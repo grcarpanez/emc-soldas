@@ -2,8 +2,8 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Responsividade Mobile do Gráfico e Feed de Atividades do Dashboard - PWA v4.41)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Alinhamento Mobile do Gráfico e Feed, Tooltips com Scroll, Detecção OFX, Guias Fiscais e Dashboard)  
+**Última Atualização:** 2026-10-03 (Cadastro Rápido de Insumos, Edição e Cancelamento de Compras com Recálculo de Custos - PWA v4.42)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras com Edição, Cancelamento e Cadastro Rápido de Insumos, Dashboard, Conciliação e Guias)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -120,8 +120,11 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
 - [x] Implementar rotina de retroalimentação automática de custos no Catálogo de Itens (`ultimo_custo_compra` e `data_ultima_compra`).
 - [x] Configurar upload seguro de XML/PDF com validação de MIME-Type profundo, magic numbers e NoExec (`/api/documentos-fiscais-compra/{id}/anexar-arquivo/` e `download-anexo/`).
 - [x] Implementar consulta de histórico de compras e preços por fornecedor (`/api/documentos-fiscais-compra/historico-precos/`).
+- [x] Implementar modal de cadastro rápido de insumos (`Item`) no formulário de notas fiscais com seleção imediata e foco automático sem perda de estado da compra.
+- [x] Implementar fluxo completo de edição de notas fiscais de compra (`PUT`/`PATCH` em `/api/documentos-fiscais-compra/{id}/`) com suporte a alteração de cabeçalho, itens e anexo.
+- [x] Implementar cancelamento de compras com confirmação visual e recálculo inteligente e automático do último custo dos insumos para a compra anterior válida.
 - [x] Proteger todos os endpoints do módulo via RBAC dinâmico com o toggle `acesso_compras` (`HasComprasAccess`).
-- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (74 testes no total acumulado do projeto).
+- [x] Criar e executar suíte completa de testes automatizados com 100% de sucesso (28 testes dedicados em compras, 343 testes no acumulado do sistema).
 
 ### Fase 8 - Orçamentos Comerciais (Snapshot de Custos, Validade e Geração PDF)
 - [x] Implementar criação ágil de Orçamentos com 3 tipos de itens (Produtos, Itens e Lançamentos Livres).

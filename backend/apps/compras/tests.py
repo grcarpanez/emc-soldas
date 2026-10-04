@@ -760,3 +760,129 @@ class ComprasModuleTestCase(TestCase):
         self.assertEqual(dados.get('data_compra'), '2026-08-12')
         self.assertEqual(dados.get('valor_total'), '19.80')
 
+    # =========================================================================
+    # 8. TESTES DE CANCELAMENTO E EDIÇÃO COM RECÁLCULO DE CUSTOS
+    # =========================================================================
+
+    def test_cancelar_nota_compra_recalcula_custo_item_para_compra_anterior(self):
+        """Ao cancelar uma nota fiscal (Soft Delete), o custo do item é recalculado para a compra anterior."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        # Compra 1: Tubo por R$ 80,00 em 01/08/2026
+        doc1 = DocumentoFiscalCompra.objects.create(
+            num_nota="NF 101",
+            fornecedor=self.fornecedor_acos,
+            data_compra=date(2026, 8, 1),
+            valor_total=Decimal('80.00')
+        )
+        NotaCompraItem.objects.create(
+            documento_fiscal=doc1,
+            item=self.item_tubo,
+            quantidade_comprada=Decimal('1.0000'),
+            valor_unitario=Decimal('80.0000')
+        )
+
+        # Compra 2: Tubo por R$ 120,00 em 15/08/2026 (atualiza último custo para 120)
+        payload2 = {
+            "num_nota": "NF 102",
+            "fornecedor_id": self.fornecedor_acos.id,
+            "data_compra": "2026-08-15",
+            "valor_total": "120.00",
+            "itens_comprados": [
+                {
+                    "item_id": self.item_tubo.id,
+                    "quantidade_comprada": "1.0000",
+                    "valor_unitario": "120.0000"
+                }
+            ]
+        }
+        res2 = self.client.post('/api/documentos-fiscais-compra/', payload2, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED)
+        doc2_id = res2.data['id']
+
+        self.item_tubo.refresh_from_db()
+        self.assertEqual(self.item_tubo.ultimo_custo_compra, Decimal('120.00'))
+
+        # Cancela (Soft Delete) a Compra 2
+        del_res = self.client.delete(f'/api/documentos-fiscais-compra/{doc2_id}/')
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        # O item deve voltar a ter o custo da Compra 1 (R$ 80,00)
+        self.item_tubo.refresh_from_db()
+        self.assertEqual(self.item_tubo.ultimo_custo_compra, Decimal('80.00'))
+        self.assertEqual(self.item_tubo.data_ultima_compra.date(), date(2026, 8, 1))
+
+    def test_cancelar_unica_compra_zera_data_ultima_compra(self):
+        """Ao cancelar a única compra de um insumo, a data da última compra é limpa."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        payload = {
+            "num_nota": "NF 777",
+            "fornecedor_id": self.fornecedor_acos.id,
+            "data_compra": "2026-08-25",
+            "valor_total": "95.00",
+            "itens_comprados": [
+                {
+                    "item_id": self.item_arame.id,
+                    "quantidade_comprada": "1.0000",
+                    "valor_unitario": "95.0000"
+                }
+            ]
+        }
+        res = self.client.post('/api/documentos-fiscais-compra/', payload, format='json')
+        doc_id = res.data['id']
+
+        del_res = self.client.delete(f'/api/documentos-fiscais-compra/{doc_id}/')
+        self.assertEqual(del_res.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.item_arame.refresh_from_db()
+        self.assertIsNone(self.item_arame.data_ultima_compra)
+
+    def test_editar_nota_compra_recalcula_custo(self):
+        """Edição completa de nota de compra via PUT atualiza cabeçalho, itens e recalcula custos."""
+        self.client.force_authenticate(user=self.operador_compras)
+
+        payload_original = {
+            "num_nota": "NF 555",
+            "fornecedor_id": self.fornecedor_acos.id,
+            "data_compra": "2026-08-10",
+            "valor_total": "100.00",
+            "itens_comprados": [
+                {
+                    "item_id": self.item_tubo.id,
+                    "quantidade_comprada": "1.0000",
+                    "valor_unitario": "100.0000"
+                }
+            ]
+        }
+        res = self.client.post('/api/documentos-fiscais-compra/', payload_original, format='json')
+        doc_id = res.data['id']
+
+        # Altera a nota: troca o item para arame e altera número da nota
+        payload_edit = {
+            "num_nota": "NF 555-EDITADA",
+            "fornecedor_id": self.fornecedor_acos.id,
+            "data_compra": "2026-08-12",
+            "valor_total": "45.00",
+            "itens_comprados": [
+                {
+                    "item_id": self.item_arame.id,
+                    "quantidade_comprada": "1.0000",
+                    "valor_unitario": "45.0000"
+                }
+            ]
+        }
+        res_edit = self.client.put(f'/api/documentos-fiscais-compra/{doc_id}/', payload_edit, format='json')
+        self.assertEqual(res_edit.status_code, status.HTTP_200_OK)
+        self.assertEqual(res_edit.data['num_nota'], "NF 555-EDITADA")
+
+        # Verifica arame atualizado para 45.00
+        self.item_arame.refresh_from_db()
+        self.assertEqual(self.item_arame.ultimo_custo_compra, Decimal('45.00'))
+        self.assertEqual(self.item_arame.data_ultima_compra.date(), date(2026, 8, 12))
+
+        # Tubo que saiu da nota não tem mais compras ativas, sua data é limpa
+        self.item_tubo.refresh_from_db()
+        self.assertIsNone(self.item_tubo.data_ultima_compra)
+
+

@@ -10,7 +10,7 @@ from rest_framework.exceptions import ValidationError
 from apps.cadastros.models import ClienteFornecedor
 from apps.catalogo.models import Item
 from apps.compras.models import DocumentoFiscalCompra, NotaCompraItem
-from apps.compras.services import retroalimentar_custo_item
+from apps.compras.services import retroalimentar_custo_item, recalcular_custo_item_apos_alteracao
 from core.utils import sanitizar_texto_maiusculo, limpar_apenas_digitos
 
 
@@ -272,9 +272,14 @@ class DocumentoFiscalCompraSerializer(serializers.ModelSerializer):
         usuario = getattr(request, 'user', None) if request else None
 
         with transaction.atomic():
+            itens_antigos_ids = set(instance.itens_comprados.values_list('item_id', flat=True))
+            data_compra_alterada = 'data_compra' in validated_data and validated_data['data_compra'] != instance.data_compra
+
             for attr, value in validated_data.items():
                 setattr(instance, attr, value)
             instance.save()
+
+            itens_afetados = set(itens_antigos_ids)
 
             if itens_data is not None:
                 # Remove itens existentes e recria com os novos dados
@@ -290,14 +295,12 @@ class DocumentoFiscalCompraSerializer(serializers.ModelSerializer):
                         quantidade_comprada=qtd,
                         valor_unitario=vlr_unit
                     )
+                    itens_afetados.add(item_instance.id)
 
-                    # Retroalimenta custo no catálogo
-                    retroalimentar_custo_item(
-                        item=item_instance,
-                        valor_unitario=vlr_unit,
-                        data_compra=instance.data_compra,
-                        usuario=usuario
-                    )
+            # Recalcula o custo de todos os itens impactados (tanto os que saíram quanto os que entraram/permaneceram)
+            if itens_data is not None or data_compra_alterada:
+                for item_id in itens_afetados:
+                    recalcular_custo_item_apos_alteracao(item_id, usuario=usuario)
 
             return instance
 

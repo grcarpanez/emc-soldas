@@ -26,7 +26,8 @@ from apps.compras.serializers import (
 from apps.compras.services import (
     validar_arquivo_anexo_compra,
     extrair_dados_xml_nfe,
-    extrair_dados_pdf_danfe
+    extrair_dados_pdf_danfe,
+    recalcular_custo_item_apos_alteracao
 )
 from apps.cadastros.utils_cnpj import consultar_cnpj_externo
 from core.permissions import HasComprasAccess
@@ -103,8 +104,11 @@ class DocumentoFiscalCompraViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_destroy(self, instance):
-        # Soft Delete mandatório
+        # Soft Delete mandatório com recálculo dos custos dos insumos no catálogo
+        itens_ids = list(instance.itens_comprados.values_list('item_id', flat=True))
         instance.soft_delete(user=self.request.user)
+        for item_id in itens_ids:
+            recalcular_custo_item_apos_alteracao(item_id, usuario=self.request.user)
 
     @action(detail=True, methods=['get'])
     def itens(self, request, pk=None):

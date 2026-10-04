@@ -127,7 +127,9 @@ window.ComprasView = {
             <td class="mono-text" style="font-size: 11px; max-width: 220px; word-break: break-all;">${chaveFmt}</td>
             <td style="text-align: right; white-space: nowrap;">
               ${btnDanfe}
-              <button class="btn btn-secondary btn-sm" onclick="window.ComprasView.verDetalhesNota(${nota.id})">ITENS</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.ComprasView.verDetalhesNota(${nota.id})" title="Ver Itens da Nota" style="margin-right: 4px;">ITENS</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.ComprasView.abrirModalCompra(${nota.id})" title="Editar Nota Fiscal" style="margin-right: 4px;">EDITAR</button>
+              <button class="btn btn-danger btn-sm" onclick="window.ComprasView.confirmarCancelamentoNota(${nota.id}, '${window.EMCUtils.escapeHtml(nota.num_nota)}', '${window.EMCUtils.escapeHtml(nota.fornecedor_nome || 'Fornecedor')}', '${window.EMCUtils.formatarMoeda(nota.valor_total)}')" title="Cancelar Compra">CANCELAR</button>
             </td>
           </tr>
         `;
@@ -138,42 +140,83 @@ window.ComprasView = {
     }
   },
 
-  async abrirModalCompra() {
+  async abrirModalCompra(notaId = null) {
     try {
-      // Carrega fornecedores e itens para o formulário
-      const [fornecedores, itens] = await Promise.all([
+      const isEdit = Boolean(notaId);
+
+      // Carrega fornecedores, catálogo de itens e a nota existente (se for edição)
+      const promessas = [
         window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?tipo=FORNECEDOR`),
         window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS)
-      ]);
+      ];
+      if (isEdit) {
+        promessas.push(window.api.get(`${window.CONFIG.ENDPOINTS.COMPRAS.NOTAS}${notaId}/`));
+      }
 
-    const listaForn = fornecedores.results || fornecedores || [];
-    const listaItens = itens.results || itens || [];
+      const resultados = await Promise.all(promessas);
+      const fornecedores = resultados[0];
+      const itens = resultados[1];
+      const notaExistente = isEdit ? resultados[2] : null;
 
-    let optionsForn = '<option value="">SELECIONE O FORNECEDOR...</option>';
-    listaForn.forEach((f) => {
-      optionsForn += `<option value="${f.id}">${window.EMCUtils.escapeHtml(f.nome_razao)}</option>`;
-    });
+      const listaForn = fornecedores.results || fornecedores || [];
+      const listaItens = itens.results || itens || [];
 
-    let optionsItens = '<option value="">SELECIONE UM INSUMO...</option>';
-    listaItens.forEach((it) => {
-      const uom = it.unidade_compra_sigla || 'UN';
-      optionsItens += `<option value="${it.id}">${window.EMCUtils.escapeHtml(it.nome)} (${uom})</option>`;
-    });
+      const notaFornecedorId = notaExistente ? (notaExistente.fornecedor || notaExistente.fornecedor_id) : '';
+      const notaNumero = notaExistente ? (notaExistente.num_nota || '') : '';
+      const notaData = notaExistente ? (notaExistente.data_compra || '') : new Date().toISOString().split('T')[0];
+      const notaChave = notaExistente && notaExistente.chave_acesso ? window.EMCUtils.formatarChaveAcessoNfe(notaExistente.chave_acesso) : '';
+      const temAnexoExistente = Boolean(notaExistente && notaExistente.caminho_arquivo_anexo);
 
-    window.EMCUtils.openModal({
-      title: 'LANÇAR NOTA FISCAL DE ENTRADA (COMPRA)',
-      size: 'lg',
-      confirmText: 'REGISTRAR COMPRA',
-      content: `
+      let optionsForn = '<option value="">SELECIONE O FORNECEDOR...</option>';
+      listaForn.forEach((f) => {
+        const isSel = String(f.id) === String(notaFornecedorId);
+        optionsForn += `<option value="${f.id}" ${isSel ? 'selected' : ''}>${window.EMCUtils.escapeHtml(f.nome_razao)}</option>`;
+      });
+
+      let optionsItens = '<option value="">SELECIONE UM INSUMO...</option>';
+      listaItens.forEach((it) => {
+        const uom = it.unidade_compra_sigla || 'UN';
+        optionsItens += `<option value="${it.id}">${window.EMCUtils.escapeHtml(it.nome)} (${uom})</option>`;
+      });
+
+      // Inicializa a lista temporária de itens
+      if (isEdit && notaExistente && Array.isArray(notaExistente.itens_comprados)) {
+        this.itensTemp = notaExistente.itens_comprados.map(it => ({
+          item_id: it.item || it.item_id,
+          item_nome: it.item_nome || 'Insumo',
+          quantidade_comprada: parseFloat(it.quantidade_comprada) || 1,
+          valor_unitario: parseFloat(it.valor_unitario) || 0
+        }));
+      } else {
+        this.itensTemp = [];
+      }
+
+      window.EMCUtils.openModal({
+        title: isEdit ? `EDITAR NOTA FISCAL DE ENTRADA #${notaNumero}` : 'LANÇAR NOTA FISCAL DE ENTRADA (COMPRA)',
+        size: 'lg',
+        confirmText: isEdit ? 'SALVAR ALTERAÇÕES' : 'REGISTRAR COMPRA',
+        content: `
         <form id="form-compra-nota">
           <!-- 1º CAMPO EM DESTAQUE NO TOPO: IMPORTAÇÃO INTELIGENTE DO DOCUMENTO FISCAL -->
           <div class="card mb-16" style="background-color: var(--color-surface-container-high); border-left: 3px solid var(--color-rust-orange);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
               <label class="form-label" for="nota-arquivo-anexo" style="margin-bottom: 0; font-weight: 700;">
-                1. IMPORTAR DOCUMENTO FISCAL (DANFE EM PDF OU XML DA NF-E)
+                1. ${isEdit ? 'ARQUIVO ANEXO DA NOTA FISCAL (DANFE EM PDF OU XML)' : 'IMPORTAR DOCUMENTO FISCAL (DANFE EM PDF OU XML DA NF-E)'}
               </label>
               <span id="status-analise-doc" class="mono-text" style="font-size: 11px; display: none;"></span>
             </div>
+            ${temAnexoExistente ? `
+              <div class="mb-8 p-8" style="background: var(--color-surface-container-low); border: 1px solid var(--color-steel-gray); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="font-size: 12px;">
+                  <strong style="color: var(--color-rust-orange);">📄 ARQUIVO ATUAL:</strong>
+                  <span class="mono-text" style="font-size: 11px; margin-left: 4px;">${window.EMCUtils.escapeHtml(notaExistente.caminho_arquivo_anexo.split('/').pop())}</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.ComprasView.baixarDanfe(${notaId}, '${window.EMCUtils.escapeHtml(notaNumero)}')">BAIXAR ANEXO</button>
+              </div>
+              <small class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: block; margin-bottom: 6px;">
+                Para manter o anexo atual, deixe o campo abaixo vazio. Selecione um novo arquivo apenas se desejar substituí-lo.
+              </small>
+            ` : ''}
             <div style="display: flex; gap: 10px; align-items: center;">
               <input type="file" id="nota-arquivo-anexo" class="form-control" accept=".pdf,.xml,application/pdf,text/xml" style="flex: 1;">
             </div>
@@ -195,13 +238,13 @@ window.ComprasView = {
               <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-numero" style="margin-bottom: 0; white-space: nowrap;">Nº Nota (NF-e/Recibo) *</label>
               </div>
-              <input type="text" id="nota-numero" class="form-control mono-text" placeholder="EX: 123456" required style="width: 100%;">
+              <input type="text" id="nota-numero" class="form-control mono-text" placeholder="EX: 123456" value="${window.EMCUtils.escapeHtml(notaNumero)}" required style="width: 100%;">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-data" style="margin-bottom: 0; white-space: nowrap;">Data Emissão *</label>
               </div>
-              <input type="date" id="nota-data" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required style="width: 100%; box-sizing: border-box;">
+              <input type="date" id="nota-data" class="form-control mono-text" value="${notaData}" required style="width: 100%; box-sizing: border-box;">
             </div>
           </div>
 
@@ -210,13 +253,16 @@ window.ComprasView = {
               <div style="display: flex; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-chave" style="margin-bottom: 0;">Chave de Acesso (NF-e 44 Dígitos / NFS-e 50 Dígitos - Opcional)</label>
               </div>
-              <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000" style="width: 100%;">
+              <input type="text" id="nota-chave" class="form-control mono-text" data-mask="chave-nfe" placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000" value="${notaChave}" style="width: 100%;">
             </div>
           </div>
 
           <!-- Sub-Grid de Itens Comprados -->
           <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
-            <h4 style="margin-bottom: 12px;">ITENS COMPRADOS (RETROALIMENTAÇÃO DE CUSTOS)</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin-bottom: 0;">ITENS COMPRADOS (RETROALIMENTAÇÃO DE CUSTOS)</h4>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-compras-novo-item" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Insumo">+ NOVO INSUMO</button>
+            </div>
             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Insumo</label>
@@ -297,28 +343,35 @@ window.ComprasView = {
             }))
           };
 
-          const novaNota = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.NOTAS, payload);
+          let notaSalva = null;
+          if (isEdit) {
+            notaSalva = await window.api.put(`${window.CONFIG.ENDPOINTS.COMPRAS.NOTAS}${notaId}/`, payload);
+          } else {
+            notaSalva = await window.api.post(window.CONFIG.ENDPOINTS.COMPRAS.NOTAS, payload);
+          }
+
+          const targetId = isEdit ? notaId : (notaSalva ? notaSalva.id : null);
 
           // Se o usuário selecionou arquivo da DANFE / XML, realiza o upload seguro
-          if (arquivoAnexo && novaNota && novaNota.id) {
+          if (arquivoAnexo && targetId) {
             try {
               const formData = new FormData();
               formData.append('arquivo', arquivoAnexo);
-              const endpointAnexo = window.CONFIG.ENDPOINTS.COMPRAS.ANEXAR_ARQUIVO.replace('{id}', novaNota.id);
+              const endpointAnexo = window.CONFIG.ENDPOINTS.COMPRAS.ANEXAR_ARQUIVO.replace('{id}', targetId);
               await window.api.post(endpointAnexo, formData);
-              window.EMCUtils.showToast('Nota registrada e arquivo da DANFE anexado com sucesso!', 'success');
+              window.EMCUtils.showToast(isEdit ? 'Nota fiscal e novo anexo atualizados com sucesso!' : 'Nota registrada e arquivo da DANFE anexado com sucesso!', 'success');
             } catch (errAnexo) {
               console.warn('Nota salva, mas erro ao enviar anexo:', errAnexo);
-              window.EMCUtils.showToast('Nota registrada, porém houve erro ao anexar a DANFE: ' + (errAnexo.message || 'formato ou cabeçalho inválido'), 'warning');
+              window.EMCUtils.showToast('Nota salva, porém houve erro ao anexar a DANFE: ' + (errAnexo.message || 'formato ou cabeçalho inválido'), 'warning');
             }
           } else {
-            window.EMCUtils.showToast('Nota registrada e custos dos insumos atualizados com sucesso!', 'success');
+            window.EMCUtils.showToast(isEdit ? 'Nota fiscal atualizada e custos dos insumos recalculados com sucesso!' : 'Nota registrada e custos dos insumos atualizados com sucesso!', 'success');
           }
 
           this.carregarListaCompras();
           return true;
         } catch (err) {
-          window.EMCUtils.showToast(err.message || 'Erro ao registrar nota fiscal.', 'error');
+          window.EMCUtils.showToast(err.message || (isEdit ? 'Erro ao atualizar nota fiscal.' : 'Erro ao registrar nota fiscal.'), 'error');
           return false;
         }
       }
@@ -602,9 +655,137 @@ window.ComprasView = {
       });
     }
 
+    const dispararCadastroNovoInsumo = async () => {
+      try {
+        const resUom = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.UOM);
+        const uoms = resUom.results || resUom || [];
+        uoms.sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
+
+        let optionsUom = '';
+        uoms.forEach((u) => {
+          const isUn = u.sigla.toUpperCase() === 'UN';
+          optionsUom += `<option value="${u.id}" ${isUn ? 'selected' : ''}>${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+        });
+
+        window.EMCUtils.openModal({
+          title: 'NOVO INSUMO / ITEM (CADASTRO RÁPIDO)',
+          size: 'md',
+          confirmText: 'CADASTRAR E SELECIONAR',
+          content: `
+            <form id="form-novo-insumo-rapido">
+              <div class="form-group mb-12">
+                <label class="form-label" for="novo-item-nome">Nome do Insumo *</label>
+                <input type="text" id="novo-item-nome" class="form-control" placeholder="EX: ARAME DE SOLDA TUBULAR 1.2MM" required autofocus>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="novo-item-uom-compra">Unidade de Compra (NF-e) *</label>
+                  <select id="novo-item-uom-compra" class="form-control">${optionsUom}</select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="novo-item-uom-consumo">Unidade de Consumo (Oficina) *</label>
+                  <select id="novo-item-uom-consumo" class="form-control">${optionsUom}</select>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="novo-item-fator">Fator de Conversão</label>
+                  <input type="text" id="novo-item-fator" class="form-control mono-text" value="1,0000" placeholder="1,0000">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="novo-item-tipo-uso">Tipo de Uso *</label>
+                  <select id="novo-item-tipo-uso" class="form-control">
+                    <option value="INSUMO_PRODUTIVO" selected>INSUMO PRODUTIVO</option>
+                    <option value="MATERIAL_CONSUMO">MATERIAL DE CONSUMO</option>
+                    <option value="EPI">EPI</option>
+                    <option value="FERRAMENTAL">FERRAMENTAL</option>
+                  </select>
+                </div>
+              </div>
+            </form>
+          `,
+          onConfirm: async () => {
+            const nome = document.getElementById('novo-item-nome')?.value.trim();
+            const uomCompra = parseInt(document.getElementById('novo-item-uom-compra')?.value) || null;
+            const uomConsumo = parseInt(document.getElementById('novo-item-uom-consumo')?.value) || uomCompra;
+            const fatorStr = document.getElementById('novo-item-fator')?.value.replace(',', '.').trim() || '1.0';
+            const fator = parseFloat(fatorStr) || 1.0;
+            const tipoUso = document.getElementById('novo-item-tipo-uso')?.value || 'INSUMO_PRODUTIVO';
+
+            if (!nome) {
+              window.EMCUtils.showToast('Informe o nome do insumo.', 'warning');
+              return false;
+            }
+
+            if (!uomCompra) {
+              window.EMCUtils.showToast('Selecione a unidade de medida.', 'warning');
+              return false;
+            }
+
+            try {
+              const payloadItem = {
+                nome: window.EMCUtils.sanitizarTextoMaiusculo(nome),
+                unidade_compra: uomCompra,
+                unidade_consumo: uomConsumo,
+                fator_conversao: fator,
+                tipo_uso: tipoUso,
+                ultimo_custo_compra: '0.00'
+              };
+
+              const novoItem = await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.ITENS, payloadItem);
+
+              // Recarrega itens do catálogo
+              const itensAtualizados = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS);
+              const listaItensAtualizada = itensAtualizados.results || itensAtualizados || [];
+              listaItensAtualizada.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+              let novasOptionsItens = '<option value="">SELECIONE UM INSUMO...</option>';
+              listaItensAtualizada.forEach((it) => {
+                const uom = it.unidade_compra_sigla || 'UN';
+                novasOptionsItens += `<option value="${it.id}" ${it.id === novoItem.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(it.nome)} (${uom})</option>`;
+              });
+
+              if (selItem) {
+                if (selItem._emcCombobox) {
+                  selItem._emcCombobox.updateOptions(novasOptionsItens, novoItem.id);
+                } else {
+                  selItem.innerHTML = novasOptionsItens;
+                  selItem.value = novoItem.id;
+                }
+              }
+
+              // Posiciona o foco no campo de quantidade para agilizar o lançamento
+              setTimeout(() => {
+                const qtdInput = document.getElementById('sub-item-qtd');
+                if (qtdInput) {
+                  qtdInput.focus();
+                  qtdInput.select();
+                }
+              }, 100);
+
+              window.EMCUtils.showToast(`Insumo "${novoItem.nome}" cadastrado e selecionado!`, 'success');
+              return true;
+            } catch (errItem) {
+              window.EMCUtils.showToast(errItem.message || 'Erro ao cadastrar insumo.', 'error');
+              return false;
+            }
+          }
+        });
+      } catch (err) {
+        console.error('Erro ao abrir modal de cadastro de insumo:', err);
+        window.EMCUtils.showToast('Erro ao carregar unidades de medida.', 'error');
+      }
+    };
+
     if (selItem) {
       window.EMCUtils.initSearchableSelect(selItem, {
-        placeholder: 'PESQUISE UM INSUMO...'
+        placeholder: 'PESQUISE UM INSUMO...',
+        action: {
+          label: '+ CADASTRAR NOVO INSUMO',
+          onClick: () => dispararCadastroNovoInsumo()
+        }
       });
     }
 
@@ -613,7 +794,13 @@ window.ComprasView = {
       dispararCadastroNovoFornecedor();
     });
 
-    this.itensTemp = [];
+    document.getElementById('btn-compras-novo-item')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      dispararCadastroNovoInsumo();
+    });
+
+    // Atualiza a grid de itens com itens existentes (no caso de edição) ou vazia
+    this.atualizarGridItensNota();
     const btnAdd = document.getElementById('btn-add-item-nota');
     btnAdd?.addEventListener('click', () => {
       const selectItem = document.getElementById('sub-item-id');
@@ -729,10 +916,12 @@ window.ComprasView = {
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
               ${nota.caminho_arquivo_anexo 
                 ? `<button type="button" class="btn btn-secondary btn-sm" onclick="window.ComprasView.baixarDanfe(${nota.id}, '${window.EMCUtils.escapeHtml(nota.num_nota)}')">📄 BAIXAR ANEXO (DANFE / XML)</button>` 
-                : '<span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Nenhum anexo importado para esta nota.</span>'}
+                : '<span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">Nenhum anexo importado.</span>'}
+              <button type="button" class="btn btn-secondary btn-sm" onclick="window.EMCUtils.closeModal(); window.ComprasView.abrirModalCompra(${nota.id});">EDITAR NOTA</button>
+              <button type="button" class="btn btn-danger btn-sm" onclick="window.EMCUtils.closeModal(); window.ComprasView.confirmarCancelamentoNota(${nota.id}, '${window.EMCUtils.escapeHtml(nota.num_nota)}', '${window.EMCUtils.escapeHtml(nota.fornecedor_nome || 'Fornecedor')}', '${window.EMCUtils.formatarMoeda(nota.valor_total)}');">CANCELAR NOTA</button>
             </div>
             <div class="text-right">
               <span class="mono-text" style="font-size: 16px; color: var(--color-rust-orange); font-weight: 700;">
@@ -757,5 +946,38 @@ window.ComprasView = {
       console.error('Erro ao baixar anexo:', err);
       window.EMCUtils.showToast(err.message || 'Erro ao realizar download do anexo da compra.', 'error');
     }
+  },
+
+  confirmarCancelamentoNota(notaId, numNota, fornecedorNome, valorTotal) {
+    window.EMCUtils.openModal({
+      title: 'CANCELAR NOTA FISCAL DE ENTRADA',
+      size: 'md',
+      confirmText: 'SIM, CANCELAR COMPRA',
+      cancelText: 'VOLTAR',
+      content: `
+        <div class="alert-banner alert-danger mb-16">
+          <strong>CONFIRMAÇÃO DE CANCELAMENTO (SOFT DELETE)</strong>
+        </div>
+        <p style="font-size: 14px; margin-bottom: 12px; line-height: 1.5; color: var(--color-on-surface);">
+          Deseja realmente cancelar a <strong>Nota Fiscal #${window.EMCUtils.escapeHtml(numNota)}</strong> do fornecedor <strong>${window.EMCUtils.escapeHtml(fornecedorNome)}</strong> no valor de <strong>${valorTotal}</strong>?
+        </p>
+        <div class="p-12 mb-16" style="background: var(--color-surface-container-low); border: 1px solid var(--color-steel-gray); font-size: 12px; line-height: 1.6;">
+          <strong style="color: var(--color-rust-orange);">IMPACTO DO CANCELAMENTO:</strong><br>
+          • A nota fiscal será inativada e poderá ser auditada ou restaurada na Lixeira.<br>
+          • O custo de compra de todos os insumos desta nota será <strong>recalculado automaticamente</strong> no Catálogo para a compra ativa anterior válida.
+        </div>
+      `,
+      onConfirm: async () => {
+        try {
+          await window.api.delete(`${window.CONFIG.ENDPOINTS.COMPRAS.NOTAS}${notaId}/`);
+          window.EMCUtils.showToast(`Nota Fiscal #${numNota} cancelada e custos recalculados!`, 'success');
+          this.carregarListaCompras();
+          return true;
+        } catch (err) {
+          window.EMCUtils.showToast(err.message || 'Erro ao cancelar nota fiscal.', 'error');
+          return false;
+        }
+      }
+    });
   }
 };
