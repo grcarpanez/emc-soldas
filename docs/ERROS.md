@@ -401,3 +401,9 @@ Utilize o padrÃ£o abaixo para cada novo erro registrado:
 - **Causa:** O z-index configurado na classe .chart-tooltip era 1000, enquanto as sobreposições de modais (.modal-overlay) e modais (.modal-card) possuíam z-index 9999 ou 10000, e outros componentes como dropdowns usavam até 100050.
 - **Solução aplicada:** O z-index da classe .chart-tooltip no arquivo industrial-integrity.css foi alterado para 999999 garantindo sobreposição universal. O cache do PWA foi invalidado incrementando a versão em sw.js e index.html.
 - **Como evitar no futuro:** Sempre que criar elementos "flutuantes" universais (como tooltips ou toasts), garantir que seu z-index seja hierarquicamente superior ao dos containers modais no Design System.
+## 2026-10-03 - Toasts de erro escondidos atrás dos modais
+
+- **Sintoma:** O balão de notificação (toast) indicando erros ("preencha os campos em vermelho") estava sendo ocultado pela máscara do modal de compras.
+- **Causa:** O .toast-container possuía z-index 10000 estático, enquanto a mecânica de empilhamento de modais no JS atribuía z-index a partir de 100000 (modalStack.length * 20).
+- **Solução aplicada:** O z-index da classe .toast-container foi alterado para 999999 e os dropdowns (combobox e multiselect) para 999998 no industrial-integrity.css. Cache PWA atualizado para v4.47.
+- **Como evitar no futuro:** Avaliar o peso do z-index ao utilizar empilhamento dinâmico no JS, documentando a hierarquia máxima permitida para que elementos globais (toasts) sempre fiquem no topo.
