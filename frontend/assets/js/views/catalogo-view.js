@@ -432,39 +432,55 @@ window.CatalogoView = {
     try {
       const [prod, itensCatalogo] = await Promise.all([
         window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${produtoId}/`),
-        window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS)
+        window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}?page_size=1000`)
       ]);
 
       const listaItens = itensCatalogo.results || itensCatalogo || [];
       listaItens.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
-      const ficha = prod.ficha_tecnica_itens || prod.ficha_tecnica || [];
 
-      let optionsItens = '<option value="">SELECIONE UM INSUMO / MATÉRIA-PRIMA...</option>';
-      listaItens.forEach((it) => {
-        const uom = it.unidade_consumo_sigla || it.unidade_compra_sigla || 'UN';
-        const custoConsumo = parseFloat(it.custo_unitario_consumo) || 0;
-        optionsItens += `<option value="${it.id}" data-custo="${custoConsumo}" data-uom="${uom}">${window.EMCUtils.escapeHtml(it.nome)} [${uom}] - ${window.EMCUtils.formatarMoeda(custoConsumo)}/${uom}</option>`;
-      });
+      const montarOptionsItens = (fichaAtual) => {
+        const idsUsados = new Set(fichaAtual.map(f => (f.item && typeof f.item === 'object' ? f.item.id : f.item)));
+        let options = '<option value="">SELECIONE UM INSUMO / MATÉRIA-PRIMA...</option>';
+        listaItens.forEach((it) => {
+          const uom = it.unidade_consumo_sigla || it.unidade_compra_sigla || 'UN';
+          const custoConsumo = parseFloat(it.custo_unitario_consumo) || 0;
+          const jaIncluso = idsUsados.has(it.id);
+          if (!jaIncluso) {
+            options += `<option value="${it.id}" data-custo="${custoConsumo}" data-uom="${uom}">${window.EMCUtils.escapeHtml(it.nome)} [${uom}] - ${window.EMCUtils.formatarMoeda(custoConsumo)}/${uom}</option>`;
+          }
+        });
+        return options;
+      };
 
-      let rowsFicha = '';
-      ficha.forEach((f) => {
-        const custoUnit = parseFloat(f.item_custo_unitario_consumo || f.custo_unitario_consumo) || 0;
-        const qtd = parseFloat(f.quantidade_utilizada) || 0;
-        const subtotal = parseFloat(f.subtotal_custo) || (qtd * custoUnit);
-        const uomSigla = f.item_unidade_consumo_sigla || f.unidade_sigla || '';
+      const renderizarLinhasFicha = (ficha) => {
+        if (!ficha || !ficha.length) {
+          return '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px; color: var(--color-on-surface-variant);">Nenhum insumo adicionado a esta Ficha Técnica BOM.</td></tr>';
+        }
+        let rows = '';
+        ficha.forEach((f) => {
+          const custoUnit = parseFloat(f.item_custo_unitario_consumo || f.custo_unitario_consumo) || 0;
+          const qtd = parseFloat(f.quantidade_utilizada) || 0;
+          const subtotal = parseFloat(f.subtotal_custo) || (qtd * custoUnit);
+          const uomSigla = f.item_unidade_consumo_sigla || f.unidade_sigla || '';
 
-        rowsFicha += `
-          <tr id="ficha-row-${f.id}">
-            <td><strong>${window.EMCUtils.escapeHtml(f.item_nome || 'Insumo')}</strong></td>
-            <td class="mono-text">${qtd.toFixed(4)} ${uomSigla}</td>
-            <td class="mono-text">${window.EMCUtils.formatarMoeda(custoUnit)}</td>
-            <td class="mono-text" style="color: var(--color-rust-orange); font-weight: 700;">${window.EMCUtils.formatarMoeda(subtotal)}</td>
-            <td style="text-align: right;">
-              <button class="btn btn-danger btn-sm" onclick="window.CatalogoView.removerItemFicha(${produtoId}, ${f.id})">REMOVER</button>
-            </td>
-          </tr>
-        `;
-      });
+          rows += `
+            <tr id="ficha-row-${f.id}">
+              <td><strong>${window.EMCUtils.escapeHtml(f.item_nome || 'Insumo')}</strong></td>
+              <td class="mono-text">${qtd.toFixed(4)} ${uomSigla}</td>
+              <td class="mono-text">${window.EMCUtils.formatarMoeda(custoUnit)}</td>
+              <td class="mono-text" style="color: var(--color-rust-orange); font-weight: 700;">${window.EMCUtils.formatarMoeda(subtotal)}</td>
+              <td style="text-align: right;">
+                <button type="button" class="btn btn-danger btn-sm" onclick="window.CatalogoView.removerItemFicha(${produtoId}, ${f.id})">REMOVER</button>
+              </td>
+            </tr>
+          `;
+        });
+        return rows;
+      };
+
+      const fichaInicial = prod.ficha_tecnica_itens || prod.ficha_tecnica || [];
+      const optionsItens = montarOptionsItens(fichaInicial);
+      const rowsFicha = renderizarLinhasFicha(fichaInicial);
 
       const taxaMo = parseFloat(prod.taxa_mao_de_obra_hora_aplicada) || 0;
       const horasMo = parseFloat(prod.tempo_estimado_execucao) || 0;
@@ -477,52 +493,54 @@ window.CatalogoView = {
         size: 'lg',
         hideFooter: true,
         content: `
-          <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
-            <h4 style="margin-bottom: 8px;">+ COMPOSIÇÃO DE MATERIAIS (BOM - BILL OF MATERIALS)</h4>
-            <p class="mono-text mb-12" style="font-size: 11px; color: var(--color-on-surface-variant);">Adicione matérias-primas e insumos consumidos por unidade deste produto fabricado.</p>
-            <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: flex-end;">
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Insumo do Catálogo *</label>
-                <select id="add-ficha-item-id" class="form-control">${optionsItens}</select>
+          <div id="ficha-tecnica-container" data-produto-id="${produtoId}">
+            <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
+              <h4 style="margin-bottom: 8px;">+ COMPOSIÇÃO DE MATERIAIS (BOM - BILL OF MATERIALS)</h4>
+              <p class="mono-text mb-12" style="font-size: 11px; color: var(--color-on-surface-variant);">Adicione matérias-primas e insumos consumidos por unidade deste produto fabricado.</p>
+              <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: flex-end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="add-ficha-item-id">Insumo do Catálogo *</label>
+                  <select id="add-ficha-item-id" class="form-control">${optionsItens}</select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" for="add-ficha-qtd">Quantidade Consumida *</label>
+                  <input type="text" id="add-ficha-qtd" class="form-control mono-text" placeholder="Ex: 2,5 ou 10">
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-add-item-ficha" style="height: 40px;">+ ADICIONAR</button>
               </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Quantidade Consumida *</label>
-                <input type="text" id="add-ficha-qtd" class="form-control mono-text" placeholder="Ex: 2,5 ou 10">
+            </div>
+
+            <div class="table-container mb-16">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>INSUMO / MATÉRIA-PRIMA</th>
+                    <th>QUANTIDADE CONSUMIDA</th>
+                    <th>CUSTO UNITÁRIO</th>
+                    <th>SUBTOTAL</th>
+                    <th style="text-align: right;">AÇÕES</th>
+                  </tr>
+                </thead>
+                <tbody id="ficha-tecnica-tbody">
+                  ${rowsFicha}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Memória de Cálculo em Tempo Real -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; background-color: var(--color-surface-container-lowest); padding: 16px; border: 1px solid var(--color-steel-gray);">
+              <div>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">CUSTO MATERIAIS (BOM):</span>
+                <div class="mono-text" id="bom-custo-materiais" style="font-size: 16px; font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(custoMat)}</div>
               </div>
-              <button class="btn btn-primary" id="btn-add-item-ficha" style="height: 40px;">+ ADICIONAR</button>
-            </div>
-          </div>
-
-          <div class="table-container mb-16">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>INSUMO / MATÉRIA-PRIMA</th>
-                  <th>QUANTIDADE CONSUMIDA</th>
-                  <th>CUSTO UNITÁRIO</th>
-                  <th>SUBTOTAL</th>
-                  <th style="text-align: right;">AÇÕES</th>
-                </tr>
-              </thead>
-              <tbody id="ficha-tecnica-tbody">
-                ${rowsFicha || '<tr><td colspan="5" class="text-center mono-text" style="padding: 24px; color: var(--color-on-surface-variant);">Nenhum insumo adicionado a esta Ficha Técnica BOM.</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Memória de Cálculo em Tempo Real -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; background-color: var(--color-surface-container-lowest); padding: 16px; border: 1px solid var(--color-steel-gray);">
-            <div>
-              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">CUSTO MATERIAIS (BOM):</span>
-              <div class="mono-text" style="font-size: 16px; font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(custoMat)}</div>
-            </div>
-            <div>
-              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">MÃO DE OBRA (${horasMo.toFixed(2)}h @ ${window.EMCUtils.formatarMoeda(taxaMo)}/h):</span>
-              <div class="mono-text" style="font-size: 16px; font-weight: 700; color: var(--color-on-surface);">${window.EMCUtils.formatarMoeda(custoMo)}</div>
-            </div>
-            <div style="text-align: right;">
-              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PREÇO DE CUSTO APURADO:</span>
-              <div class="mono-text" style="font-size: 18px; font-weight: 700; color: var(--color-success);">${window.EMCUtils.formatarMoeda(precoApurado)}</div>
+              <div>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">MÃO DE OBRA (${horasMo.toFixed(2)}h @ ${window.EMCUtils.formatarMoeda(taxaMo)}/h):</span>
+                <div class="mono-text" id="bom-custo-mo" style="font-size: 16px; font-weight: 700; color: var(--color-on-surface);">${window.EMCUtils.formatarMoeda(custoMo)}</div>
+              </div>
+              <div style="text-align: right;">
+                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">PREÇO DE CUSTO APURADO:</span>
+                <div class="mono-text" id="bom-preco-apurado" style="font-size: 18px; font-weight: 700; color: var(--color-success);">${window.EMCUtils.formatarMoeda(precoApurado)}</div>
+              </div>
             </div>
           </div>
         `
@@ -538,10 +556,57 @@ window.CatalogoView = {
         }
       }, 50);
 
-      document.getElementById('btn-add-item-ficha')?.addEventListener('click', async () => {
-        const item_id = parseInt(document.getElementById('add-ficha-item-id').value);
-        const qtdStr = document.getElementById('add-ficha-qtd').value.replace(',', '.').trim();
+      // Função reativa para atualizar o modal sem fechá-lo nem recriá-lo
+      this._atualizarFichaModal = async (pId) => {
+        const containerModal = document.getElementById('ficha-tecnica-container');
+        if (!containerModal) return;
+
+        const prodAtualizado = await window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${pId}/`);
+        const fichaAtualizada = prodAtualizado.ficha_tecnica_itens || prodAtualizado.ficha_tecnica || [];
+
+        // Atualiza a tabela
+        const tbody = document.getElementById('ficha-tecnica-tbody');
+        if (tbody) {
+          tbody.innerHTML = renderizarLinhasFicha(fichaAtualizada);
+        }
+
+        // Atualiza a memória de cálculo
+        const tMo = parseFloat(prodAtualizado.taxa_mao_de_obra_hora_aplicada) || 0;
+        const hMo = parseFloat(prodAtualizado.tempo_estimado_execucao) || 0;
+        const cMo = parseFloat(prodAtualizado.custo_mao_de_obra) || (hMo * tMo);
+        const cMat = parseFloat(prodAtualizado.custo_total_materiais) || 0;
+        const pApurado = parseFloat(prodAtualizado.preco_custo_apurado) || (cMat + cMo);
+
+        const elMat = document.getElementById('bom-custo-materiais');
+        if (elMat) elMat.textContent = window.EMCUtils.formatarMoeda(cMat);
+
+        const elMo = document.getElementById('bom-custo-mo');
+        if (elMo) elMo.textContent = window.EMCUtils.formatarMoeda(cMo);
+
+        const elApurado = document.getElementById('bom-preco-apurado');
+        if (elApurado) elApurado.textContent = window.EMCUtils.formatarMoeda(pApurado);
+
+        // Atualiza as opções da combobox excluindo insumos já inseridos
+        const sel = document.getElementById('add-ficha-item-id');
+        if (sel && sel._emcCombobox) {
+          sel._emcCombobox.updateOptions(montarOptionsItens(fichaAtualizada), '');
+        }
+
+        // Limpa o campo de quantidade
+        const inputQtd = document.getElementById('add-ficha-qtd');
+        if (inputQtd) inputQtd.value = '';
+
+        // Sincroniza a tabela de produtos na tela principal
+        this.carregarListaProdutos();
+      };
+
+      const acaoAdicionarInsumo = async () => {
+        const selItem = document.getElementById('add-ficha-item-id');
+        const item_id = parseInt(selItem?.value);
+        const inputQtd = document.getElementById('add-ficha-qtd');
+        const qtdStr = (inputQtd?.value || '').replace(',', '.').trim();
         const quantidade_utilizada = parseFloat(qtdStr);
+        const btnAdd = document.getElementById('btn-add-item-ficha');
 
         if (!item_id) {
           window.EMCUtils.showToast('Selecione um insumo do catálogo.', 'warning');
@@ -550,22 +615,35 @@ window.CatalogoView = {
 
         if (!quantidade_utilizada || quantidade_utilizada <= 0) {
           window.EMCUtils.showToast('Informe uma quantidade válida maior que zero.', 'warning');
+          inputQtd?.focus();
           return;
         }
 
         try {
+          if (btnAdd) btnAdd.disabled = true;
           await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.FICHAS_TECNICAS, {
             produto: produtoId,
             item: item_id,
             quantidade_utilizada
           });
           window.EMCUtils.showToast('Insumo adicionado à Ficha Técnica!', 'success');
-          this.gerenciarFichaTecnica(produtoId);
-          this.carregarListaProdutos();
+          await this._atualizarFichaModal(produtoId);
         } catch (e) {
           window.EMCUtils.showToast(e.message || 'Erro ao adicionar insumo na ficha.', 'error');
+        } finally {
+          if (btnAdd) btnAdd.disabled = false;
+        }
+      };
+
+      document.getElementById('btn-add-item-ficha')?.addEventListener('click', acaoAdicionarInsumo);
+
+      document.getElementById('add-ficha-qtd')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          acaoAdicionarInsumo();
         }
       });
+
     } catch (err) {
       window.EMCUtils.showToast('Erro ao carregar Ficha Técnica.', 'error');
     }
@@ -575,8 +653,12 @@ window.CatalogoView = {
     try {
       await window.api.delete(`${window.CONFIG.ENDPOINTS.CATALOGO.FICHAS_TECNICAS}${fichaId}/`);
       window.EMCUtils.showToast('Insumo removido da Ficha Técnica.', 'info');
-      this.gerenciarFichaTecnica(produtoId);
-      this.carregarListaProdutos();
+      if (this._atualizarFichaModal && document.getElementById('ficha-tecnica-container')) {
+        await this._atualizarFichaModal(produtoId);
+      } else {
+        this.gerenciarFichaTecnica(produtoId);
+        this.carregarListaProdutos();
+      }
     } catch (e) {
       window.EMCUtils.showToast(e.message || 'Erro ao remover insumo.', 'error');
     }

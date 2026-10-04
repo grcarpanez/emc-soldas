@@ -1,4 +1,4 @@
-﻿# STATUS DO PROJETO - EMC SOLDAS
+# STATUS DO PROJETO - EMC SOLDAS
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
@@ -598,7 +598,15 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
     - PreservaÃ§Ã£o integral e estabilidade do mÃ³dulo `utils.js` sem alteraÃ§Ãµes desnecessÃ¡rias.
   - **Versionamento PWA:** SincronizaÃ§Ã£o do cache para `emc-soldas-v4.44` em `frontend/sw.js` e sufixos de cache-busting `?v=4.44` em `frontend/index.html`.
   - **HomologaÃ§Ã£o:** 28 testes de `apps.compras` aprovados com 100% de sucesso.
-  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_13_correcao_chamada_sanitizacao_insumos.md`.
+- [x] **Correção da Adição Sequencial de Insumos na Ficha Técnica BOM (PWA v4.49):**
+  - **Single Modal Lifecycle & Reatividade In-Modal (`catalogo-view.js`):**
+    - Eliminação do empilhamento recursivo de modais (`openModal`) que gerava sobreposição de overlays no DOM e deixava os botões de ação sem listeners de clique.
+    - Implementação da rotina reativa `_atualizarFichaModal`: atualização dinâmica de linhas na tabela `#ficha-tecnica-tbody`, recálculo em tempo real de materiais, mão de obra e preço apurado, limpeza de campos de entrada e sincronização da listagem de catálogo em background.
+    - Atualização dinâmica da combobox de insumos (`updateOptions`) filtrando itens já presentes na receita.
+    - Suporte à tecla `Enter` no input de quantidade e debounce no botão `+ ADICIONAR`.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.49` em `frontend/sw.js` e query strings `?v=4.49` em `frontend/index.html`.
+  - **Homologação:** 200 testes automatizados de backend executados e aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-04_01_correcao_adicao_multiplos_insumos_ficha_tecnica_bom.md`.
 
 
 
