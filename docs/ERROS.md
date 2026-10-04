@@ -407,3 +407,10 @@ Utilize o padrÃ£o abaixo para cada novo erro registrado:
 - **Causa:** O .toast-container possuía z-index 10000 estático, enquanto a mecânica de empilhamento de modais no JS atribuía z-index a partir de 100000 (modalStack.length * 20).
 - **Solução aplicada:** O z-index da classe .toast-container foi alterado para 999999 e os dropdowns (combobox e multiselect) para 999998 no industrial-integrity.css. Cache PWA atualizado para v4.47.
 - **Como evitar no futuro:** Avaliar o peso do z-index ao utilizar empilhamento dinâmico no JS, documentando a hierarquia máxima permitida para que elementos globais (toasts) sempre fiquem no topo.
+## 2026-10-03 - Combobox customizada não destaca borda vermelha na validação
+
+- **Sintoma:** Ao tentar salvar a Nota de Entrada sem selecionar o fornecedor, o Toast de erro exibia a mensagem, mas a combobox não recebia a borda de validação em vermelho.
+- **Causa:** O código JavaScript tentava resgatar a instância customizada buscando pelo pai closest('.emc-combobox-wrapper'). Porém, o utils.js constrói o combobox customizado com a classe .emc-combobox como elemento irmão ao <select> nativo, apontando para ele via atributo data-for. A variável ornecedorTrigger ficava como 
+ull, falhando silenciosamente a troca de estilo.
+- **Solução aplicada:** Substituição da busca pelo seletor apropriado usando .emc-combobox[data-for=""].
+- **Como evitar no futuro:** Sempre mapear as instâncias customizadas injetadas no DOM pelos atributos de relação (como data-for) ao invés de usar closest(), já que a estrutura dom de injeção paralela (irmão) rompe com as buscas ancestrais.

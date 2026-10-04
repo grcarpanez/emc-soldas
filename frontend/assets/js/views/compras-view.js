@@ -321,7 +321,7 @@ window.ComprasView = {
         });
         
         // Tratar borda do combobox se houver
-        const fornecedorWrapper = fornecedorSelect ? fornecedorSelect.closest('.emc-combobox-wrapper') : null;
+        const fornecedorWrapper = (fornecedorSelect && fornecedorSelect.id) ? document.querySelector(`.emc-combobox[data-for="${fornecedorSelect.id}"]`) : null;
         const fornecedorTrigger = fornecedorWrapper ? fornecedorWrapper.querySelector('.emc-combobox-trigger') : null;
         if (fornecedorTrigger) fornecedorTrigger.style.border = '';
 
