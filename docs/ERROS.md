@@ -395,3 +395,9 @@ Utilize o padrÃ£o abaixo para cada novo erro registrado:
   5. **Versionamento PWA:** Cache sincronizado para `v4.36` no `sw.js` e `index.html`.
 - **Como evitar no futuro:** Nunca utilizar lookups `__year` ou `__month` em campos `DateTimeField` quando operando com MySQL/MariaDB com `USE_TZ = True`; preferir sempre faixas explÃ­citas de data/hora (`__gte` e `__lt`) com datetimes cientes de fuso horÃ¡rio. Adotar contratos de API defensivos com espelhos de propriedades e fallbacks seguros.
 
+## 2026-10-03 - Tooltips exibidas atrás dos modais
+
+- **Sintoma:** O componente visual de tooltip dos gráficos (.chart-tooltip) não estava se sobrepondo a janelas modais ativas, ficando escondido.
+- **Causa:** O z-index configurado na classe .chart-tooltip era 1000, enquanto as sobreposições de modais (.modal-overlay) e modais (.modal-card) possuíam z-index 9999 ou 10000, e outros componentes como dropdowns usavam até 100050.
+- **Solução aplicada:** O z-index da classe .chart-tooltip no arquivo industrial-integrity.css foi alterado para 999999 garantindo sobreposição universal. O cache do PWA foi invalidado incrementando a versão em sw.js e index.html.
+- **Como evitar no futuro:** Sempre que criar elementos "flutuantes" universais (como tooltips ou toasts), garantir que seu z-index seja hierarquicamente superior ao dos containers modais no Design System.
