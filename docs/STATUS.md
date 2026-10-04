@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Cadastro Rápido de Insumos, Edição e Cancelamento de Compras com Recálculo de Custos - PWA v4.42)  
+**Última Atualização:** 2026-10-03 (Correção do Carregamento de UOM no Cadastro Rápido de Insumo - PWA v4.43)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras com Edição, Cancelamento e Cadastro Rápido de Insumos, Dashboard, Conciliação e Guias)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -574,6 +574,24 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.41` em `frontend/sw.js` e sufixos de cache-busting `?v=4.41` em `frontend/index.html`.
   - **Homologação:** 14 testes de `apps.relatorios` aprovados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_10_responsividade_mobile_grafico_feed_dashboard.md`.
+- [x] **Cadastro Rápido de Insumos, Edição e Cancelamento de Compras com Recálculo de Custos (PWA v4.42):**
+  - **Recálculo Automático de Custos (`compras.services.recalcular_custo_item_apos_alteracao`):**
+    - Ao editar itens ou cancelar uma nota de compra (`perform_destroy` com soft delete), o sistema busca a nota fiscal de compra ativa mais recente do insumo e restaura seu `ultimo_custo_compra` no catálogo.
+  - **Edição e Cancelamento na Interface (`compras-view.js`):**
+    - Ações de "EDITAR" e "CANCELAR" inseridas na listagem e na visualização detalhada da nota de compra.
+    - Modal de confirmação seguro com auditoria completa.
+  - **Modal de Cadastro Rápido de Insumos (`dispararCadastroNovoInsumo`):**
+    - Permite cadastrar um novo insumo diretamente na digitação da nota de compra sem perder os dados já preenchidos.
+  - **Versionamento PWA:** Atualizado para `v4.42`.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_11_cadastro_rapido_insumo_edicao_e_cancelamento_compras.md`.
+- [x] **Correção da Rota de Dicionário UOM no Modal de Cadastro Rápido de Insumo (PWA v4.43):**
+  - **Resolução de Rota e Fallback Defensivo (`compras-view.js` & `config.js`):**
+    - Adicionados os aliases `UOM` e `DICIONARIO_UOM` em `window.CONFIG.ENDPOINTS.CATALOGO` apontando para `/dicionario-uom/`.
+    - Resolução defensiva da URL do endpoint de unidades de medida com fallback em cascata (`CATALOGO.UOM` -> `CADASTROS.DICIONARIO_UOM` -> `'/dicionario-uom/'`) e captura de erro (`.catch(() => [])`).
+    - Fallback estático com unidades universais (`UN`, `KG`, `M`, `M2`, `BARRA`) caso a API esteja temporariamente inacessível, impedindo que o modal trave.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.43` em `frontend/sw.js` e sufixos de cache-busting `?v=4.43` em `frontend/index.html`.
+  - **Homologação:** 28 testes de `apps.compras` e 15 testes de `apps.catalogo` aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_12_correcao_endpoint_dicionario_uom_cadastro_insumo.md`.
 
 
 

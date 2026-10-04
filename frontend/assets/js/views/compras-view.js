@@ -657,13 +657,25 @@ window.ComprasView = {
 
     const dispararCadastroNovoInsumo = async () => {
       try {
-        const resUom = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.UOM);
-        const uoms = resUom.results || resUom || [];
+        const uomEndpoint = (window.CONFIG.ENDPOINTS.CATALOGO && window.CONFIG.ENDPOINTS.CATALOGO.UOM) ||
+                            (window.CONFIG.ENDPOINTS.CADASTROS && window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM) ||
+                            '/dicionario-uom/';
+        const resUom = await window.api.get(uomEndpoint).catch(() => []);
+        let uoms = resUom.results || resUom || [];
+        if (!Array.isArray(uoms) || !uoms.length) {
+          uoms = [
+            { id: 1, sigla: 'UN', descricao: 'UNIDADE' },
+            { id: 2, sigla: 'KG', descricao: 'QUILOGRAMA' },
+            { id: 3, sigla: 'M', descricao: 'METRO' },
+            { id: 4, sigla: 'M2', descricao: 'METRO QUADRADO' },
+            { id: 5, sigla: 'BARRA', descricao: 'BARRA DE 6 METROS' }
+          ];
+        }
         uoms.sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
 
         let optionsUom = '';
         uoms.forEach((u) => {
-          const isUn = u.sigla.toUpperCase() === 'UN';
+          const isUn = (u.sigla || '').toUpperCase() === 'UN';
           optionsUom += `<option value="${u.id}" ${isUn ? 'selected' : ''}>${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
         });
 

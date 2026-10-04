@@ -53,7 +53,9 @@ const CONFIG = {
       FICHAS_TECNICAS: '/fichas-tecnicas/',
       ITEM_ONDE_USADO: '/itens/{id}/onde-usado/',
       PRODUTO_CUSTO_DETALHADO: '/produtos/{id}/custo-detalhado/',
-      PRODUTO_ATUALIZAR_FICHA: '/produtos/{id}/atualizar-ficha-tecnica/'
+      PRODUTO_ATUALIZAR_FICHA: '/produtos/{id}/atualizar-ficha-tecnica/',
+      UOM: '/dicionario-uom/',
+      DICIONARIO_UOM: '/dicionario-uom/'
     },
     COMPRAS: {
       NOTAS: '/documentos-fiscais-compra/',
