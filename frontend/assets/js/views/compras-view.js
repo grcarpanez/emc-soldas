@@ -311,9 +311,67 @@ window.ComprasView = {
         const inputArquivo = document.getElementById('nota-arquivo-anexo');
         const arquivoAnexo = inputArquivo && inputArquivo.files && inputArquivo.files[0] ? inputArquivo.files[0] : null;
 
-        if (!fornecedor_id || !num_nota || !data_compra) {
-          window.EMCUtils.showToast('Preencha os campos obrigatórios da nota.', 'error');
+        // 1. Limpar bordas vermelhas anteriores
+        const fornecedorSelect = document.getElementById('nota-fornecedor');
+        const numNotaInput = document.getElementById('nota-numero');
+        const dataInput = document.getElementById('nota-data');
+        
+        [fornecedorSelect, numNotaInput, dataInput].forEach(el => {
+          if(el) el.style.border = '';
+        });
+        
+        // Tratar borda do combobox se houver
+        const fornecedorWrapper = fornecedorSelect ? fornecedorSelect.closest('.emc-combobox-wrapper') : null;
+        const fornecedorTrigger = fornecedorWrapper ? fornecedorWrapper.querySelector('.emc-combobox-trigger') : null;
+        if (fornecedorTrigger) fornecedorTrigger.style.border = '';
+
+        let hasError = false;
+        let firstErrorEl = null;
+
+        // 2. Validar cada campo e aplicar borda vermelha se vazio
+        if (!fornecedor_id) {
+          hasError = true;
+          if (fornecedorTrigger) {
+            fornecedorTrigger.style.setProperty('border', '2px solid var(--color-error)', 'important');
+            if (!firstErrorEl) firstErrorEl = fornecedorTrigger;
+          } else if (fornecedorSelect) {
+            fornecedorSelect.style.setProperty('border', '2px solid var(--color-error)', 'important');
+            if (!firstErrorEl) firstErrorEl = fornecedorSelect;
+          }
+        }
+        
+        if (!num_nota) {
+          hasError = true;
+          if(numNotaInput) numNotaInput.style.setProperty('border', '2px solid var(--color-error)', 'important');
+          if (!firstErrorEl) firstErrorEl = numNotaInput;
+        }
+
+        if (!data_compra) {
+          hasError = true;
+          if(dataInput) dataInput.style.setProperty('border', '2px solid var(--color-error)', 'important');
+          if (!firstErrorEl) firstErrorEl = dataInput;
+        }
+
+        // 3. Foco no primeiro elemento com erro
+        if (hasError) {
+          window.EMCUtils.showToast('Por favor, preencha os campos destacados em vermelho.', 'error');
+          if (firstErrorEl && typeof firstErrorEl.focus === 'function') {
+            firstErrorEl.focus();
+          }
           return false;
+        }
+
+        // 4. Auto-inclusão de item esquecido nos campos do sub-grid
+        const subItemId = document.getElementById('sub-item-id') ? document.getElementById('sub-item-id').value : null;
+        const subItemQtd = document.getElementById('sub-item-qtd') ? parseFloat(document.getElementById('sub-item-qtd').value) : 0;
+        const subItemUnitText = document.getElementById('sub-item-unit') ? document.getElementById('sub-item-unit').value : 'R$ 0,00';
+        const subItemUnit = window.EMCUtils.converterMoedaATMParaFloat(subItemUnitText);
+        const btnAddItem = document.getElementById('btn-add-item-nota');
+        
+        if (subItemId && subItemQtd > 0 && subItemUnit > 0) {
+          if (btnAddItem) {
+            btnAddItem.click(); // Dispara o evento de adicionar item existente
+          }
         }
 
         if (!this.itensTemp || !this.itensTemp.length) {
