@@ -2,7 +2,7 @@
 
 Este documento é um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o próximo passo recomendado.
 
-**Última Atualização:** 2026-10-03 (Correção do Carregamento de UOM no Cadastro Rápido de Insumo - PWA v4.43)  
+**Última Atualização:** 2026-10-03 (Correção da Chamada de Sanitização no Cadastro Rápido de Insumo - PWA v4.44)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras com Edição, Cancelamento e Cadastro Rápido de Insumos, Dashboard, Conciliação e Guias)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -592,6 +592,13 @@ Este documento é um arquivo vivo que registra o estado atual do desenvolvimento
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.43` em `frontend/sw.js` e sufixos de cache-busting `?v=4.43` em `frontend/index.html`.
   - **Homologação:** 28 testes de `apps.compras` e 15 testes de `apps.catalogo` aprovados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_12_correcao_endpoint_dicionario_uom_cadastro_insumo.md`.
+- [x] **Correção da Chamada de Sanitização no Cadastro Rápido de Insumos (PWA v4.44):**
+  - **Uso da Função Canônica do Frontend (`compras-view.js`):**
+    - Correção do método chamado na linha 741 para utilizar a função oficial padrão de todo o frontend: `window.EMCUtils.sanitizarTextoEmTempoReal(nome)`.
+    - Preservação integral e estabilidade do módulo `utils.js` sem alterações desnecessárias.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.44` em `frontend/sw.js` e sufixos de cache-busting `?v=4.44` em `frontend/index.html`.
+  - **Homologação:** 28 testes de `apps.compras` aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-03_13_correcao_chamada_sanitizacao_insumos.md`.
 
 
 

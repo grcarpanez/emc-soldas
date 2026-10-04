@@ -738,7 +738,7 @@ window.ComprasView = {
 
             try {
               const payloadItem = {
-                nome: window.EMCUtils.sanitizarTextoMaiusculo(nome),
+                nome: window.EMCUtils.sanitizarTextoEmTempoReal(nome),
                 unidade_compra: uomCompra,
                 unidade_consumo: uomConsumo,
                 fator_conversao: fator,
