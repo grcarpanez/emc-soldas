@@ -189,6 +189,15 @@ Todos os controles interativos de nível padrão possuem altura externa total es
   - Item ativo no dropdown: `background-color: rgba(183, 65, 14, 0.25);`
   - Botões de cabeçalho da combobox (`[✓ TODOS]` e `[✕ LIMPAR]`): tipografia `JetBrains Mono` 11px, borda cinza e hover em Rust Orange
 
+### 3.1 Combobox Pesquisável com Ação Rápida Embutida (`.emc-combobox-action`)
+- **Posicionamento Canônico:** A ação de cadastro rápido reside **estritamente dentro do dropdown** da combobox, logo abaixo da caixa de pesquisa (`.emc-combobox-search-wrapper`), antecedendo a lista de opções (`.emc-combobox-options`).
+- **Tipografia e Estilo:**
+  - Tipografia: `var(--font-mono)` (`JetBrains Mono`), 11px, peso 700, caixa alta (`text-transform: uppercase`), espaçamento entre letras `letter-spacing: 0.5px`.
+  - Cores: Fundo `var(--color-surface-container-highest)`, texto em `var(--color-rust-orange-bright)` (`#ff6b35`), borda inferior `1px solid var(--color-steel-gray)`.
+  - Hover: Transição suave para fundo `var(--color-rust-orange)` (`#B7410E`) e texto em branco puro (`#FFFFFF`).
+- **Proibição de Botões Externos:** É terminantemente vedado posicionar botões de atalho de cadastro rápido (ex: `+ NOVO CLIENTE`, `+ NOVO EQUIPAMENTO`) nos rótulos de campos (`<label>`), barras laterais ou cabeçalhos de formulários, mantendo as grids uniformes e sem encavalamento vertical.
+- **Governança RBAC Mandatória:** A exibição da ação `.emc-combobox-action` é dinamicamente condicionada ao papel e permissões ativas do usuário (`window.auth`). Caso o usuário não tenha permissão de escrita para a respectiva entidade (ex: operador não-administrador em seletores de UOM, ou operador sem `acesso_comercial` em clientes), a ação rápida é omitida do DOM e a combobox opera puramente como filtro de busca.
+
 ### 4. Barras de Ação e Filtros (Flex Container)
 - **Estrutura padrão de barra de controle:**
   ```css

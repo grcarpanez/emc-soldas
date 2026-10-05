@@ -1237,7 +1237,28 @@ window.CadastrosView = {
       const selectEl = document.getElementById('equip-cliente');
       if (selectEl) {
         window.EMCUtils.initSearchableSelect(selectEl, {
-          placeholder: 'SELECIONE OU DIGITE O NOME DO CLIENTE...'
+          placeholder: 'SELECIONE OU DIGITE O NOME DO CLIENTE...',
+          action: {
+            label: '+ CADASTRAR NOVO CLIENTE',
+            permission: 'acesso_comercial',
+            onClick: () => {
+              this.abrirModalCadastroRapido({
+                tipoPredefinido: 'CLIENTE',
+                onSuccess: async (novoCli) => {
+                  const clientesAtualizados = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?limit=1000`);
+                  const listaClientes = clientesAtualizados.results || clientesAtualizados || [];
+                  listaClientes.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+                  let novasOpts = '<option value="">SELECIONE UM CLIENTE...</option>';
+                  listaClientes.forEach((c) => {
+                    novasOpts += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome_razao)}</option>`;
+                  });
+                  if (selectEl._emcCombobox) {
+                    selectEl._emcCombobox.updateOptions(novasOpts, novoCli.id);
+                  }
+                }
+              });
+            }
+          }
         });
       }
     }, 50);

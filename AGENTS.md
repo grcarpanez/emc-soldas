@@ -172,6 +172,11 @@ Este arquivo estabelece o contexto arquitetural, regras de segurança, padrões 
       - Tipos oficiais permitidos: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `security`.
       - Exemplo: `fix(compras): resolve syntax error in async render method and align combobox heights`
     - O versionamento completo com tabela de prefixos está registrado formalmente na **Seção 30 do `docs/FSD.md`**.
+14. **Padrão Mandatório de Combobox Pesquisável com Ação Embutida e Governança RBAC:**
+    - Em qualquer tela, modal ou fluxo onde seja necessária a seleção de entidades pré-cadastradas (Clientes, Fornecedores, Equipamentos, Insumos, Produtos BOM, Unidades de Medida UOM, Categorias Financeiras ou Contas Bancárias), deve-se empregar obrigatoriamente a Combobox Pesquisável (`initSearchableSelect`).
+    - A combobox deve embutir o botão de cadastro rápido (`opts.action`) **estritamente dentro do dropdown**, logo abaixo da barra de busca (`DIGITE PARA FILTRAR...`), no elemento `.emc-combobox-action`.
+    - **Proibição Estrita de Botões Avulsos em Rótulos:** É terminantemente proibido colocar botões soltos de cadastro rápido (como `+ NOVO CLIENTE`, `+ NOVO EQUIPAMENTO`) ao lado do `<label>` ou fora do componente de combobox, preservando a harmonia estética, o alinhamento de grid e a densidade técnica industrial.
+    - **Controle RBAC Inegociável:** A renderização do botão de ação embutido na combobox deve ser estritamente vinculada às permissões do usuário autenticado (`opts.action.permission`, `opts.action.adminOnly` ou `opts.action.condition`). Caso o usuário não possua autorização formal para cadastrar a entidade associada (ex: operador sem `acesso_comercial` para clientes/veículos, ou usuário não-administrador / sem `gestao_dicionario_uom` para unidades de medida), o botão de ação rápida dentro da combobox **não deve ser renderizado**, impedindo que operadores sem permissão tentem acionar modais de criação que resultariam em erro 403 Forbidden da API.
 
 ---
 

@@ -133,7 +133,7 @@ window.CatalogoView = {
     }
   },
 
-  async abrirModalItem(item = null) {
+  async abrirModalItem(item = null, opts = {}) {
     const isEdit = !!item;
 
     // Carrega UOMs para os selects
@@ -219,14 +219,18 @@ window.CatalogoView = {
             ultimo_custo_compra
           };
 
+          let resItem = null;
           if (isEdit) {
-            await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}${item.id}/`, payload);
+            resItem = await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}${item.id}/`, payload);
             window.EMCUtils.showToast('Insumo atualizado com sucesso!', 'success');
           } else {
-            await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.ITENS, payload);
+            resItem = await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.ITENS, payload);
             window.EMCUtils.showToast('Insumo cadastrado com sucesso!', 'success');
           }
           this.carregarListaItens();
+          if (typeof opts.onSuccess === 'function') {
+            await opts.onSuccess(resItem || payload);
+          }
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar insumo.', 'error');
@@ -234,6 +238,43 @@ window.CatalogoView = {
         }
       }
     });
+
+    // Inicializa comboboxes de UOM com ação rápida restrita a Administrador
+    setTimeout(() => {
+      const selCompra = document.getElementById('item-uom-compra');
+      const selConsumo = document.getElementById('item-uom-consumo');
+
+      const actionUom = {
+        label: '+ NOVA UNIDADE (UOM)',
+        adminOnly: true,
+        permission: 'gestao_dicionario_uom',
+        onClick: () => {
+          window.EMCUtils.abrirModalCadastroRapidoUom(async (novaUom) => {
+            const resUomAtualizada = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM).catch(() => []);
+            const uomsNovas = resUomAtualizada.results || resUomAtualizada || [];
+            let novasOpts = '';
+            uomsNovas.forEach((u) => {
+              novasOpts += `<option value="${u.id}">${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+            });
+            if (selCompra?._emcCombobox) selCompra._emcCombobox.updateOptions(novasOpts, novaUom.id);
+            if (selConsumo?._emcCombobox) selConsumo._emcCombobox.updateOptions(novasOpts, novaUom.id);
+          });
+        }
+      };
+
+      if (selCompra) {
+        window.EMCUtils.initSearchableSelect(selCompra, {
+          placeholder: 'SELECIONE A UNIDADE...',
+          action: actionUom
+        });
+      }
+      if (selConsumo) {
+        window.EMCUtils.initSearchableSelect(selConsumo, {
+          placeholder: 'SELECIONE A UNIDADE...',
+          action: actionUom
+        });
+      }
+    }, 50);
   },
 
   async editarItem(id) {
@@ -332,7 +373,7 @@ window.CatalogoView = {
     }
   },
 
-  async abrirModalProduto(prod = null) {
+  async abrirModalProduto(prod = null, opts = {}) {
     const isEdit = !!prod;
 
     // Carrega UOMs para o select de unidade_venda
@@ -397,17 +438,20 @@ window.CatalogoView = {
           const payload = { nome, unidade_venda, descricao, tempo_estimado_execucao };
 
           let novoId = prod?.id;
+          let resCriado = null;
           if (isEdit) {
-            await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${prod.id}/`, payload);
+            resCriado = await window.api.put(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${prod.id}/`, payload);
             window.EMCUtils.showToast('Produto atualizado com sucesso!', 'success');
           } else {
-            const resCriado = await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS, payload);
+            resCriado = await window.api.post(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS, payload);
             novoId = resCriado.id || resCriado.data?.id;
-            window.EMCUtils.showToast('Produto cadastrado! Abrindo Ficha Técnica (BOM)...', 'success');
+            window.EMCUtils.showToast('Produto cadastrado com sucesso!', 'success');
           }
           this.carregarListaProdutos();
 
-          if (!isEdit && novoId) {
+          if (typeof opts.onSuccess === 'function') {
+            await opts.onSuccess(resCriado || { id: novoId, ...payload });
+          } else if (!isEdit && novoId) {
             setTimeout(() => this.gerenciarFichaTecnica(novoId), 400);
           }
           return true;
@@ -417,6 +461,32 @@ window.CatalogoView = {
         }
       }
     });
+
+    // Inicializa combobox de UOM de Venda com ação restrita a Administrador
+    setTimeout(() => {
+      const selVenda = document.getElementById('prod-uom-venda');
+      if (selVenda) {
+        window.EMCUtils.initSearchableSelect(selVenda, {
+          placeholder: 'SELECIONE A UNIDADE...',
+          action: {
+            label: '+ NOVA UNIDADE (UOM)',
+            adminOnly: true,
+            permission: 'gestao_dicionario_uom',
+            onClick: () => {
+              window.EMCUtils.abrirModalCadastroRapidoUom(async (novaUom) => {
+                const resUomAtualizada = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM).catch(() => []);
+                const uomsNovas = resUomAtualizada.results || resUomAtualizada || [];
+                let novasOpts = '';
+                uomsNovas.forEach((u) => {
+                  novasOpts += `<option value="${u.id}">${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+                });
+                if (selVenda._emcCombobox) selVenda._emcCombobox.updateOptions(novasOpts, novaUom.id);
+              });
+            }
+          }
+        });
+      }
+    }, 50);
   },
 
   async editarProduto(id) {
@@ -551,7 +621,25 @@ window.CatalogoView = {
         const selItemFicha = document.getElementById('add-ficha-item-id');
         if (selItemFicha) {
           window.EMCUtils.initSearchableSelect(selItemFicha, {
-            placeholder: 'SELECIONE OU BUSQUE UM INSUMO...'
+            placeholder: 'SELECIONE OU BUSQUE UM INSUMO...',
+            action: {
+              label: '+ CADASTRAR NOVO INSUMO',
+              permission: 'gestao_catalogo',
+              onClick: () => {
+                this.abrirModalItem(null, {
+                  onSuccess: async (novoItem) => {
+                    const itensAtualizados = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS).catch(() => []);
+                    this.itens = itensAtualizados.results || itensAtualizados || [];
+                    const prodAtualizado = await window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS}${pId}/`);
+                    const fichaAtualizada = prodAtualizado.ficha_tecnica_itens || prodAtualizado.ficha_tecnica || [];
+                    const sel = document.getElementById('add-ficha-item-id');
+                    if (sel && sel._emcCombobox) {
+                      sel._emcCombobox.updateOptions(montarOptionsItens(fichaAtualizada), novoItem.id);
+                    }
+                  }
+                });
+              }
+            }
           });
         }
       }, 50);

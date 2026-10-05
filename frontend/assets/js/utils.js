@@ -740,20 +740,47 @@ function initSearchableSelect(selectEl, opts = {}) {
 
   dropdown.appendChild(searchWrapper);
 
-  // Ação integrada (ex: + NOVO CADASTRO)
-  if (opts.action && opts.action.label) {
-    const actionEl = document.createElement('div');
-    actionEl.className = 'emc-combobox-action';
-    actionEl.innerHTML = `<span>${escapeHtml(opts.action.label)}</span>`;
-    actionEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      fecharDropdown();
-      if (typeof opts.action.onClick === 'function') {
-        opts.action.onClick(searchInput.value.trim());
+  function isActionPermitida() {
+    if (!opts.action || !opts.action.label) return false;
+    let permitido = true;
+    if (opts.action.adminOnly) {
+      permitido = window.auth ? window.auth.isAdmin() : false;
+    } else if (opts.action.permission) {
+      permitido = window.auth ? window.auth.hasPermission(opts.action.permission) : false;
+    }
+    if (permitido && typeof opts.action.condition === 'function') {
+      try {
+        permitido = !!opts.action.condition();
+      } catch (e) {
+        console.warn('Erro ao avaliar condition da ação da combobox:', e);
+        permitido = false;
       }
-    });
-    dropdown.appendChild(actionEl);
+    }
+    return permitido;
   }
+
+  let actionEl = null;
+  function renderizarAcao() {
+    if (actionEl) {
+      actionEl.remove();
+      actionEl = null;
+    }
+    if (isActionPermitida()) {
+      actionEl = document.createElement('div');
+      actionEl.className = 'emc-combobox-action';
+      actionEl.innerHTML = `<span>${escapeHtml(opts.action.label)}</span>`;
+      actionEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fecharDropdown();
+        if (typeof opts.action.onClick === 'function') {
+          opts.action.onClick(searchInput.value.trim());
+        }
+      });
+      searchWrapper.insertAdjacentElement('afterend', actionEl);
+    }
+  }
+
+  renderizarAcao();
 
   const optionsList = document.createElement('ul');
   optionsList.className = 'emc-combobox-options';
@@ -827,7 +854,7 @@ function initSearchableSelect(selectEl, opts = {}) {
     if (encontrados === 0) {
       const noRes = document.createElement('li');
       noRes.className = 'emc-combobox-no-results';
-      if (opts.action && opts.action.label) {
+      if (isActionPermitida()) {
         noRes.innerHTML = `
           <div>NENHUM RESULTADO ENCONTRADO</div>
           <button type="button" class="btn btn-secondary btn-sm emc-combobox-no-res-btn" style="margin-top: 8px; font-size: 11px; padding: 4px 10px;">
@@ -944,10 +971,15 @@ function initSearchableSelect(selectEl, opts = {}) {
     refresh() {
       extrairOpcoes();
       atualizarTriggerText();
+      renderizarAcao();
       renderizarOpcoes(searchInput.value);
     },
     setValue(val) {
       selecionarItem(val);
+    },
+    setAction(newAction) {
+      opts.action = newAction;
+      renderizarAcao();
     },
     updateOptions(newHtml, selectedValue = null) {
       selectEl.innerHTML = newHtml;
@@ -956,6 +988,7 @@ function initSearchableSelect(selectEl, opts = {}) {
       }
       extrairOpcoes();
       atualizarTriggerText();
+      renderizarAcao();
       renderizarOpcoes();
     },
     destroy() {
@@ -1373,6 +1406,63 @@ function renderPagination({
   }
 }
 
+/**
+ * Abre modal sobreposto para cadastro rápido de Unidade de Medida (UOM).
+ * Restrito a usuários com permissão de gestão de UOM ou Administrador.
+ * @param {Function} [onSuccess] Callback assíncrono executado ao salvar com a nova UOM
+ */
+function abrirModalCadastroRapidoUom(onSuccess = null) {
+  if (window.auth && !window.auth.isAdmin() && !window.auth.hasPermission('gestao_dicionario_uom')) {
+    showToast('Apenas administradores podem cadastrar unidades de medida.', 'warning');
+    return;
+  }
+
+  openModal({
+    title: 'NOVA UNIDADE DE MEDIDA (UOM)',
+    size: 'sm',
+    confirmText: 'CADASTRAR UOM',
+    content: `
+      <form id="form-rapido-uom">
+        <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-bottom: 16px;">
+          Cadastre uma nova unidade para padronizar insumos e produtos.
+        </p>
+        <div class="form-group mb-12">
+          <label class="form-label" for="rapido-uom-sigla">Sigla da Unidade (Ex: UN, KG, M, CX, TB) *</label>
+          <input type="text" id="rapido-uom-sigla" class="form-control mono-text" style="text-transform: uppercase;" maxlength="10" placeholder="EX: CX" required autofocus>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rapido-uom-desc">Descrição / Nome Completo *</label>
+          <input type="text" id="rapido-uom-desc" class="form-control" placeholder="EX: CAIXA COM 10 UNIDADES" required>
+        </div>
+      </form>
+    `,
+    onConfirm: async () => {
+      const sigla = document.getElementById('rapido-uom-sigla')?.value.trim().toUpperCase();
+      const descricao = document.getElementById('rapido-uom-desc')?.value.trim();
+
+      if (!sigla || !descricao) {
+        showToast('Preencha a Sigla e a Descrição da Unidade.', 'warning');
+        return false;
+      }
+
+      try {
+        const uomEndpoint = (window.CONFIG?.ENDPOINTS?.CATALOGO?.UOM) ||
+                            (window.CONFIG?.ENDPOINTS?.CADASTROS?.DICIONARIO_UOM) ||
+                            '/dicionario-uom/';
+        const novaUom = await window.api.post(uomEndpoint, { sigla, descricao });
+        showToast(`Unidade "${sigla}" cadastrada com sucesso!`, 'success');
+        if (typeof onSuccess === 'function') {
+          await onSuccess(novaUom);
+        }
+        return true;
+      } catch (err) {
+        showToast(err.message || 'Erro ao cadastrar unidade de medida.', 'error');
+        return false;
+      }
+    }
+  });
+}
+
 // Disponibilização no escopo global para consumo da SPA
 window.EMCUtils = {
   sanitizarTextoEmTempoReal,
@@ -1402,5 +1492,6 @@ window.EMCUtils = {
   initSearchableSelect,
   initMultiSelectCombobox,
   aplicarMascarasEmContainer,
-  renderPagination
+  renderPagination,
+  abrirModalCadastroRapidoUom
 };

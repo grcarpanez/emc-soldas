@@ -317,10 +317,15 @@ class AuthManager {
     }
   }
 
-  hasPermission(toggleName) {
+  isAdmin() {
     if (!this.user) return false;
     const roleUpper = (this.user.role || '').toUpperCase();
-    if (roleUpper === 'ADMIN' || this.user.is_admin) return true;
+    return roleUpper === 'ADMIN' || !!this.user.is_admin;
+  }
+
+  hasPermission(toggleName) {
+    if (!this.user) return false;
+    if (this.isAdmin()) return true;
     if (!this.user.permissoes) return false;
     return !!this.user.permissoes[toggleName];
   }

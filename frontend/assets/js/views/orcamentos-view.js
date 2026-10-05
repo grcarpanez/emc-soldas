@@ -220,7 +220,6 @@ window.OrcamentosView = {
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="orc-equipamento" style="margin-bottom: 0;">Equipamento / Máquina</label>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-orc-novo-equip" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Equipamento">+ NOVO EQUIPAMENTO</button>
               </div>
               <select id="orc-equipamento" class="form-control">${montarOptionsEquip()}</select>
             </div>
@@ -444,23 +443,140 @@ window.OrcamentosView = {
         });
       };
 
-      if (selCli) window.EMCUtils.initSearchableSelect(selCli, { placeholder: 'SELECIONE OU BUSQUE O CLIENTE...' });
+      const dispararCadastroNovoCliente = () => {
+        window.CadastrosView.abrirModalCadastroRapido({
+          tipoPredefinido: 'CLIENTE',
+          onSuccess: async (novoCli) => {
+            try {
+              const resClientes = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?limit=1000`);
+              const listaClientesAtualizada = resClientes.results || resClientes || [];
+              listaClientesAtualizada.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+
+              let novasOptionsCli = '<option value="">SELECIONE UM CLIENTE...</option>';
+              listaClientesAtualizada.forEach((c) => {
+                novasOptionsCli += `<option value="${c.id}" ${c.id === novoCli.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome_razao)}</option>`;
+              });
+
+              if (selCli) {
+                if (selCli._emcCombobox) {
+                  selCli._emcCombobox.updateOptions(novasOptionsCli, novoCli.id);
+                } else {
+                  selCli.innerHTML = novasOptionsCli;
+                  selCli.value = novoCli.id;
+                }
+                selCli.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              window.EMCUtils.showToast(`Cliente "${novoCli.nome_razao}" cadastrado e selecionado!`, 'success');
+            } catch (errCli) {
+              console.error('Erro ao atualizar clientes no orçamento:', errCli);
+            }
+          }
+        });
+      };
+
+      const dispararCadastroNovoProduto = () => {
+        window.CatalogoView.abrirModalProduto(null, {
+          onSuccess: async (novoProd) => {
+            try {
+              const resProd = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS);
+              const listaProdAtualizada = resProd.results || resProd || [];
+              listaProdAtualizada.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+              let novasOptionsProd = '<option value="">SELECIONE UM PRODUTO BOM...</option>';
+              listaProdAtualizada.forEach((p) => {
+                novasOptionsProd += `<option value="${p.id}" data-preco="${p.preco_custo_apurado}" ${p.id === novoProd.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(p.nome)} (${window.EMCUtils.formatarMoeda(p.preco_custo_apurado)})</option>`;
+              });
+
+              if (selProd) {
+                if (selProd._emcCombobox) {
+                  selProd._emcCombobox.updateOptions(novasOptionsProd, novoProd.id);
+                } else {
+                  selProd.innerHTML = novasOptionsProd;
+                  selProd.value = novoProd.id;
+                }
+                selProd.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              window.EMCUtils.showToast(`Produto "${novoProd.nome}" cadastrado e selecionado!`, 'success');
+            } catch (errProd) {
+              console.error('Erro ao atualizar produtos no orçamento:', errProd);
+            }
+          }
+        });
+      };
+
+      const dispararCadastroNovoInsumo = () => {
+        window.CatalogoView.abrirModalItem(null, {
+          onSuccess: async (novoItem) => {
+            try {
+              const resItens = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS);
+              const listaItensAtualizada = resItens.results || resItens || [];
+              listaItensAtualizada.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+
+              let novasOptionsItens = '<option value="">SELECIONE UM INSUMO DIRETO...</option>';
+              listaItensAtualizada.forEach((it) => {
+                novasOptionsItens += `<option value="${it.id}" data-preco="${it.ultimo_custo_compra}" ${it.id === novoItem.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(it.nome)}</option>`;
+              });
+
+              if (selItem) {
+                if (selItem._emcCombobox) {
+                  selItem._emcCombobox.updateOptions(novasOptionsItens, novoItem.id);
+                } else {
+                  selItem.innerHTML = novasOptionsItens;
+                  selItem.value = novoItem.id;
+                }
+                selItem.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              window.EMCUtils.showToast(`Insumo "${novoItem.nome}" cadastrado e selecionado!`, 'success');
+            } catch (errIt) {
+              console.error('Erro ao atualizar insumos no orçamento:', errIt);
+            }
+          }
+        });
+      };
+
+      if (selCli) {
+        window.EMCUtils.initSearchableSelect(selCli, { 
+          placeholder: 'SELECIONE OU BUSQUE O CLIENTE...',
+          action: {
+            label: '+ CADASTRAR NOVO CLIENTE',
+            permission: 'acesso_comercial',
+            onClick: () => dispararCadastroNovoCliente()
+          }
+        });
+      }
+
       if (selEq) {
         window.EMCUtils.initSearchableSelect(selEq, { 
           placeholder: 'TODOS OU PESQUISE O VEÍCULO...',
           action: {
             label: '+ CADASTRAR NOVO EQUIPAMENTO',
+            permission: 'acesso_comercial',
             onClick: () => dispararCadastroNovoEquipamento()
           }
         });
       }
-      if (selProd) window.EMCUtils.initSearchableSelect(selProd, { placeholder: 'PESQUISE UM PRODUTO BOM...' });
-      if (selItem) window.EMCUtils.initSearchableSelect(selItem, { placeholder: 'PESQUISE UM INSUMO...' });
 
-      document.getElementById('btn-orc-novo-equip')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        dispararCadastroNovoEquipamento();
-      });
+      if (selProd) {
+        window.EMCUtils.initSearchableSelect(selProd, { 
+          placeholder: 'PESQUISE UM PRODUTO BOM...',
+          action: {
+            label: '+ CADASTRAR NOVO PRODUTO BOM',
+            permission: 'gestao_catalogo',
+            onClick: () => dispararCadastroNovoProduto()
+          }
+        });
+      }
+
+      if (selItem) {
+        window.EMCUtils.initSearchableSelect(selItem, { 
+          placeholder: 'PESQUISE UM INSUMO...',
+          action: {
+            label: '+ CADASTRAR NOVO INSUMO',
+            permission: 'gestao_catalogo',
+            onClick: () => dispararCadastroNovoInsumo()
+          }
+        });
+      }
 
       // Ao trocar de cliente, re-filtra dinamicamente a combobox de equipamentos
       selCli?.addEventListener('change', async (e) => {

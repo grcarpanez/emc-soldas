@@ -690,6 +690,32 @@ O FSD atingirá as premissas propostas quando:
 
 Não foram identificadas pendências para iniciar a codificação com base neste FSD. Todas as restrições arquitetônicas e comerciais já se encontram consolidadas nesta estrutura.
 
+## 29. Padrão de UX Não-Interruptiva: Comboboxes com Cadastro Rápido Embutido e Blindagem RBAC
+
+Para garantir máxima agilidade operacional na oficina industrial e impedir que o operador perca dados em andamento ao preencher propostas, orçamentos, faturas ou compras, o sistema adota a diretriz de **UX Não-Interruptiva (Continuous Workflow)**.
+
+### 29.1 Princípio de Funcionamento
+1. **Seleção Universal via Combobox Pesquisável:** Sempre que um formulário ou modal demandar a seleção de uma entidade pré-cadastrada, o componente obrigatório é a Combobox Pesquisável com Autocomplete (`initSearchableSelect`).
+2. **Ação Rápida Embutida no Dropdown:** A combobox deve integrar um botão de ação imediata (`.emc-combobox-action`), posicionado estritamente dentro do dropdown, logo abaixo do campo de busca textual.
+3. **Modais Filhos Sobrepostos com Z-Index Seguro:** Ao acionar a ação rápida, o sistema invoca o modal correspondente de cadastro rápido daquela entidade em camada sobreposta, preservando o estado do formulário de origem. Após a confirmação e gravação no banco via API, o modal filho fecha, a combobox pai é atualizada automaticamente e o novo registro é pré-selecionado sem recarregar a página.
+4. **Proibição de Botões Externos:** É terminantemente proibido inserir botões avulsos de atalho nos rótulos de campos (`<label>`) ou barras laterais, evitando distorções no Spatial Budget dos modais e desalinhamento dos grids.
+
+### 29.2 Matriz de Associação e Blindagem RBAC
+A renderização do botão de ação rápida dentro da combobox é estritamente condicionada às permissões do usuário autenticado no sistema (`window.auth`). Caso o operador não possua autorização para criar a respectiva entidade, a ação é ocultada:
+
+| Entidade Selecionada | Ação Rápida no Dropdown | Permissão RBAC Exigida / Perfil |
+| :--- | :--- | :--- |
+| **Cliente** | `+ CADASTRAR NOVO CLIENTE` | `acesso_comercial` |
+| **Equipamento / Veículo** | `+ CADASTRAR NOVO EQUIPAMENTO` | `acesso_comercial` |
+| **Fornecedor** | `+ CADASTRAR NOVO FORNECEDOR` | `acesso_compras` |
+| **Insumo / Matéria-Prima** | `+ CADASTRAR NOVO INSUMO` | `gestao_catalogo` |
+| **Produto Composto (BOM)** | `+ CADASTRAR NOVO PRODUTO BOM` | `gestao_catalogo` |
+| **Unidade de Medida (UOM)** | `+ NOVA UNIDADE (UOM)` | `gestao_dicionario_uom` / Administrador (`adminOnly`) |
+| **Categoria Financeira** | `+ NOVA CATEGORIA` | `cadastros_financeiros` |
+| **Conta Bancária** | `+ NOVA CONTA BANCÁRIA` | `cadastros_financeiros` |
+
+Se o usuário autenticado for um Administrador, o acesso é universal para todas as entidades. Para perfis com restrições dinâmicas, as ações são exibidas apenas caso o toggle específico esteja ativo.
+
 ## 30. Norma Operacional de Versionamento: Boas Práticas, Convenções e Prefixos no Git
 
 Este capítulo consolida a norma obrigatória de versionamento do código-fonte do sistema EMC Soldas, reunindo todos os prefixos semânticos, regras de commits atômicos, nomenclatura de branches e melhores práticas operacionais.

@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Cadastro Rápido de Equipamento em Modal Sobreposto no Orçamento - PWA v4.52)  
+**Última Atualização:** 2026-10-05 (Padrão Mandatório de Combobox com Ação Embutida e Governança RBAC - PWA v4.53)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -617,6 +617,33 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.50` em `frontend/sw.js` e query strings `?v=4.50` em `frontend/index.html`.
   - **Homologação:** 201 testes automatizados de backend executados e aprovados com 100% de sucesso.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-05_01_formatacao_exibicao_status_contas_pagar.md`.
+- [x] **Correção da Largura Máxima da Combobox de Cliente no Orçamento (PWA v4.51):**
+  - **Spatial Budget & Estabilidade da Grid:**
+    - Ajustado `grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 140px;` no cabeçalho do orçamento.
+    - Aplicado `min-width: 0; max-width: 100%;` e `overflow: hidden; text-overflow: ellipsis; white-space: nowrap;` em `.emc-combobox`, `.emc-combobox-trigger` e `.emc-combobox-trigger-text`.
+    - Adicionado atributo nativo `title` com o texto completo para tooltip em nomes longos de clientes.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.51` e `?v=4.51`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_02_correcao_largura_maxima_combobox_cliente_orcamentos.md`.
+- [x] **Cadastro Rápido de Equipamento em Modal Sobreposto no Orçamento (PWA v4.52):**
+  - **Fluxo Contínuo & Z-Index:**
+    - Parametrizado `abrirModalEquipamento` em `CadastrosView` com suporte a `opts.onSuccess`.
+    - Garantido z-index estratificado e inviolável com `#toast-container` em `999999` (teto absoluto do sistema).
+  - **Versionamento PWA:** Cache `emc-soldas-v4.52` e `?v=4.52`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_03_cadastro_rapido_equipamento_modal_orcamento.md`.
+- [x] **Padrão Mandatório de Combobox com Ação Embutida e Governança RBAC (PWA v4.53):**
+  - **Ação Embutida no Dropdown & Remoção de Botões em Rótulos:**
+    - Remoção definitiva de botões soltos em `<label>` (`btn-orc-novo-equip`, `btn-compras-novo-forn`, `btn-compras-novo-item`).
+    - Consolidação da ação rápida estritamente dentro da combobox pesquisável (`.emc-combobox-action`).
+  - **Blindagem RBAC Adaptativa (`frontend/assets/js/utils.js`):**
+    - `initSearchableSelect` avalia `adminOnly`, `permission` e `condition` via `isActionPermitida()`.
+    - Ações embutidas em Cliente (`acesso_comercial`), Equipamento (`acesso_comercial`), Fornecedor (`acesso_compras`), Insumos e Produtos BOM (`gestao_catalogo`), e UOM (`gestao_dicionario_uom` / Administrador).
+    - Criada função reutilizável `window.EMCUtils.abrirModalCadastroRapidoUom`.
+  - **Consagração Normativa em Documentos Vivos:**
+    - `AGENTS.md`: Inserida **Regra 14** na seção de segurança e governança técnica.
+    - `docs/DESIGN.md`: Documentada a seção 3.1 com especificações técnicas e de RBAC da combobox.
+    - `docs/FSD.md`: Inserida a **Seção 29** com os princípios de UX Não-Interruptiva e a Matriz Oficial de RBAC.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.53` e `?v=4.53`.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-05_04_padrao_mandatorio_combobox_cadastro_embutido_rbac.md`.
 
 
 

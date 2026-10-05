@@ -230,7 +230,6 @@ window.ComprasView = {
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
                 <label class="form-label" for="nota-fornecedor" style="margin-bottom: 0;">Fornecedor *</label>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-compras-novo-forn" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Fornecedor">+ NOVO FORNECEDOR</button>
               </div>
               <select id="nota-fornecedor" class="form-control" required>${optionsForn}</select>
             </div>
@@ -261,7 +260,6 @@ window.ComprasView = {
           <div class="card mb-16" style="background-color: var(--color-surface-container-high);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <h4 style="margin-bottom: 0;">ITENS COMPRADOS (RETROALIMENTAÇÃO DE CUSTOS)</h4>
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-compras-novo-item" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Insumo">+ NOVO INSUMO</button>
             </div>
             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
@@ -708,6 +706,7 @@ window.ComprasView = {
         placeholder: 'SELECIONE OU PESQUISE O FORNECEDOR...',
         action: {
           label: '+ CADASTRAR NOVO FORNECEDOR',
+          permission: 'acesso_compras',
           onClick: () => dispararCadastroNovoFornecedor()
         }
       });
@@ -843,6 +842,46 @@ window.ComprasView = {
             }
           }
         });
+
+        // Inicializa comboboxes de UOM no modal com ação restrita ao Administrador
+        setTimeout(() => {
+          const selUomCompra = document.getElementById('novo-item-uom-compra');
+          const selUomConsumo = document.getElementById('novo-item-uom-consumo');
+
+          const actionUom = {
+            label: '+ NOVA UNIDADE (UOM)',
+            adminOnly: true,
+            permission: 'gestao_dicionario_uom',
+            onClick: () => {
+              window.EMCUtils.abrirModalCadastroRapidoUom(async (novaUom) => {
+                const resUomAtualizada = await window.api.get(uomEndpoint).catch(() => []);
+                const uomsNovas = resUomAtualizada.results || resUomAtualizada || [];
+                uomsNovas.sort((a, b) => (a.sigla || '').localeCompare(b.sigla || ''));
+                let novasOpts = '';
+                uomsNovas.forEach((u) => {
+                  novasOpts += `<option value="${u.id}">${window.EMCUtils.escapeHtml(u.sigla)} - ${window.EMCUtils.escapeHtml(u.descricao)}</option>`;
+                });
+                if (selUomCompra?._emcCombobox) selUomCompra._emcCombobox.updateOptions(novasOpts, novaUom.id);
+                if (selUomConsumo?._emcCombobox) selUomConsumo._emcCombobox.updateOptions(novasOpts, novaUom.id);
+              });
+            }
+          };
+
+          if (selUomCompra) {
+            window.EMCUtils.initSearchableSelect(selUomCompra, {
+              placeholder: 'SELECIONE A UNIDADE...',
+              action: actionUom
+            });
+          }
+
+          if (selUomConsumo) {
+            window.EMCUtils.initSearchableSelect(selUomConsumo, {
+              placeholder: 'SELECIONE A UNIDADE...',
+              action: actionUom
+            });
+          }
+        }, 50);
+
       } catch (err) {
         console.error('Erro ao abrir modal de cadastro de insumo:', err);
         window.EMCUtils.showToast('Erro ao carregar unidades de medida.', 'error');
@@ -854,20 +893,11 @@ window.ComprasView = {
         placeholder: 'PESQUISE UM INSUMO...',
         action: {
           label: '+ CADASTRAR NOVO INSUMO',
+          permission: 'gestao_catalogo',
           onClick: () => dispararCadastroNovoInsumo()
         }
       });
     }
-
-    document.getElementById('btn-compras-novo-forn')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      dispararCadastroNovoFornecedor();
-    });
-
-    document.getElementById('btn-compras-novo-item')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      dispararCadastroNovoInsumo();
-    });
 
     // Atualiza a grid de itens com itens existentes (no caso de edição) ou vazia
     this.atualizarGridItensNota();
