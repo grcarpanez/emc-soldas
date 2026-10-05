@@ -210,7 +210,7 @@ window.OrcamentosView = {
       content: `
         <form id="form-novo-orcamento">
           <!-- Cabeçalho do Orçamento -->
-          <div style="display: grid; grid-template-columns: 2fr 1fr 140px; gap: 12px; margin-bottom: 16px;">
+          <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 140px; gap: 12px; margin-bottom: 16px;">
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" for="orc-cliente">Cliente *</label>
               <select id="orc-cliente" class="form-control" required>${optionsCli}</select>
@@ -245,7 +245,7 @@ window.OrcamentosView = {
             </div>
 
             <!-- Seletor dinâmico baseado no tipo -->
-            <div id="seletor-produto-container" style="display: grid; grid-template-columns: 2fr 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
+            <div id="seletor-produto-container" style="display: grid; grid-template-columns: minmax(0, 2fr) 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Produto Composto</label>
                 <select id="sel-produto-id" class="form-control">${optionsProd}</select>
@@ -265,7 +265,7 @@ window.OrcamentosView = {
               <button type="button" class="btn btn-secondary" id="btn-add-orc-item" style="height: 42px;">+ INSERIR</button>
             </div>
 
-            <div id="seletor-item-container" style="display: none; grid-template-columns: 2fr 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
+            <div id="seletor-item-container" style="display: none; grid-template-columns: minmax(0, 2fr) 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Insumo / Material</label>
                 <select id="sel-item-id" class="form-control">${optionsItens}</select>
@@ -285,7 +285,7 @@ window.OrcamentosView = {
               <button type="button" class="btn btn-secondary" id="btn-add-orc-insumo" style="height: 42px;">+ INSERIR</button>
             </div>
 
-            <div id="seletor-livre-container" style="display: none; grid-template-columns: 2fr 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
+            <div id="seletor-livre-container" style="display: none; grid-template-columns: minmax(0, 2fr) 100px 140px 140px auto; gap: 8px; align-items: flex-end;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Descrição do Serviço / Peça</label>
                 <input type="text" id="sel-livre-desc" class="form-control" placeholder="EX: SOLDA ESPECIAL TIG EM EIXO">

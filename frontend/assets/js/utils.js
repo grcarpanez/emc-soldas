@@ -785,10 +785,16 @@ function initSearchableSelect(selectEl, opts = {}) {
   function atualizarTriggerText() {
     const selOpt = selectEl.options[selectEl.selectedIndex];
     if (selOpt && selOpt.value !== '') {
-      triggerText.textContent = selOpt.textContent.trim();
+      const txt = selOpt.textContent.trim();
+      triggerText.textContent = txt;
+      triggerText.title = txt;
+      container.title = txt;
       triggerText.style.color = 'var(--color-on-surface)';
     } else {
-      triggerText.textContent = selOpt ? selOpt.textContent.trim() : placeholder;
+      const txt = selOpt ? selOpt.textContent.trim() : placeholder;
+      triggerText.textContent = txt;
+      triggerText.title = selOpt && selOpt.value !== '' ? txt : '';
+      container.title = selOpt && selOpt.value !== '' ? txt : '';
       triggerText.style.color = 'var(--color-on-surface-variant)';
     }
   }
