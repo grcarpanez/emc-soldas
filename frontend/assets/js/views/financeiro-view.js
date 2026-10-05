@@ -384,7 +384,7 @@ window.FinanceiroView = {
             <td class="mono-text" style="color: var(--color-error); font-weight: 700;">
               ${window.EMCUtils.formatarMoeda(l.valor)}
             </td>
-            <td><span class="status-chip ${badge}">${l.status_pagamento}</span></td>
+            <td><span class="status-chip ${badge}">${window.EMCUtils.formatarStatus(l.status_pagamento)}</span></td>
             <td style="text-align: right;">
               ${l.status_pagamento !== 'PAGO' ? `
                 <button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalLiquidarLancamento(${l.id})">PAGAR (BAIXA)</button>
@@ -527,7 +527,7 @@ window.FinanceiroView = {
             <td class="mono-text" style="color: var(--color-success); font-weight: 700;">
               ${window.EMCUtils.formatarMoeda(l.valor)}
             </td>
-            <td><span class="status-chip ${badge}">${l.status_pagamento}</span></td>
+            <td><span class="status-chip ${badge}">${window.EMCUtils.formatarStatus(l.status_pagamento)}</span></td>
             <td style="text-align: right;">
               ${l.status_pagamento !== 'PAGO' ? `
                 <button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalLiquidarLancamento(${l.id})">RECEBER (BAIXA)</button>
@@ -1125,7 +1125,7 @@ window.FinanceiroView = {
             <span class="status-chip ${tipoLanc === 'ENTRADA' ? 'success' : 'danger'}">${tipoLanc}</span>
             <span class="status-chip secondary mono-text">VALOR: ${window.EMCUtils.formatarMoeda(lancamento.valor)}</span>
             <span class="status-chip info mono-text">CONTA: ${window.EMCUtils.escapeHtml(lancamento.conta_nome || 'NÃO INFORMADA')}</span>
-            <span class="status-chip secondary mono-text">STATUS: ${lancamento.status_pagamento}</span>
+            <span class="status-chip secondary mono-text">STATUS: ${window.EMCUtils.formatarStatus(lancamento.status_pagamento)}</span>
           </div>
 
           <div class="form-group">

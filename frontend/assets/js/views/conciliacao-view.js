@@ -977,7 +977,7 @@ window.ConciliacaoView = {
           <td style="padding: 10px; vertical-align: top; background: rgba(255, 255, 255, 0.02); border-left: 1px solid var(--color-outline-variant); border-right: 1px solid var(--color-outline-variant); width: 35%;">
             <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); display: flex; justify-content: space-between;">
               <span>#${l.id} • ${window.EMCUtils.formatarDataPtBr(l.data_pagamento || p.data)}</span>
-              <span class="status-chip ${l.status_pagamento === 'PAGO' ? 'success' : 'warning'}" style="font-size: 9px; padding: 1px 4px;">${l.status_pagamento}</span>
+              <span class="status-chip ${l.status_pagamento === 'PAGO' ? 'success' : 'warning'}" style="font-size: 9px; padding: 1px 4px;">${window.EMCUtils.formatarStatus(l.status_pagamento)}</span>
             </div>
             <div style="font-weight: 600; margin: 4px 0; font-size: 12px; color: var(--color-on-surface);">
               ${window.EMCUtils.escapeHtml(l.descricao || 'Lançamento manual')}

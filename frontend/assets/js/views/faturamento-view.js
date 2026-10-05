@@ -328,7 +328,7 @@ window.FaturamentoView = {
             <td>${window.EMCUtils.escapeHtml(p.descricao || 'Parcela')}</td>
             <td class="mono-text">${window.EMCUtils.formatarDataPtBr(p.data_vencimento)}</td>
             <td class="mono-text"><strong>${window.EMCUtils.formatarMoeda(p.valor)}</strong></td>
-            <td><span class="status-chip ${badge}">${p.status_pagamento}</span></td>
+            <td><span class="status-chip ${badge}">${window.EMCUtils.formatarStatus(p.status_pagamento)}</span></td>
           </tr>
         `;
       });

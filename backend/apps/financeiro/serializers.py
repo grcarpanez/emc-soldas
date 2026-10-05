@@ -343,6 +343,7 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     comprovante = ComprovanteFileOrCharField(required=False, allow_null=True)
     nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     origem_display = serializers.CharField(source='get_origem_display', read_only=True)
+    status_pagamento_display = serializers.CharField(source='get_status_pagamento_display', read_only=True)
     eh_conta_agendada = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -374,6 +375,7 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'data_vencimento',
             'data_pagamento',
             'status_pagamento',
+            'status_pagamento_display',
             'motivo_cancelamento',
             'is_conciliado',
             'data_conciliacao',

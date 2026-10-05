@@ -2,9 +2,9 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Ãšltima AtualizaÃ§Ã£o:** 2026-10-03 (CorreÃ§Ã£o da Chamada de SanitizaÃ§Ã£o no Cadastro RÃ¡pido de Insumo - PWA v4.44)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras com EdiÃ§Ã£o, Cancelamento e Cadastro RÃ¡pido de Insumos, Dashboard, ConciliaÃ§Ã£o e Guias)  
-**PrÃ³xima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de ConclusÃ£o e Deploy (Pendente - com checklist de rollback do tÃºnel registrado)  
+**Última Atualização:** 2026-10-05 (Formatação Amigável de Status em Contas a Pagar e Receber - PWA v4.50)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
+**Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
 
@@ -606,7 +606,17 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
     - Suporte à tecla `Enter` no input de quantidade e debounce no botão `+ ADICIONAR`.
   - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.49` em `frontend/sw.js` e query strings `?v=4.49` em `frontend/index.html`.
   - **Homologação:** 200 testes automatizados de backend executados e aprovados com 100% de sucesso.
-  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-04_01_correcao_adicao_multiplos_insumos_ficha_tecnica_bom.md`.
+- [x] **Formatação Amigável de Status em Contas a Pagar e Receber (PWA v4.50):**
+  - **Higienização Visual de Status (`frontend/assets/js/utils.js`):**
+    - Implementação da função `formatarStatus(status)` e exportação em `window.EMCUtils`, substituindo underscores (`_`) por espaços para exibição amigável e legível.
+  - **Ajustes de Renderização no Frontend (`financeiro-view.js`, `faturamento-view.js`, `conciliacao-view.js`):**
+    - Exibição limpa de `A VENCER` (sem underscore) nas tabelas de Contas a Pagar, Contas a Receber, modal de edição/reclassificação contábil de lançamentos, listagem de parcelas de faturamento e conciliação de extrato.
+  - **Enriquecimento no Backend (`backend/apps/financeiro/serializers.py` & `tests.py`):**
+    - Exposição do campo nativo `status_pagamento_display` no `LancamentoFinanceiroSerializer`.
+    - Adicionado teste automatizado `test_status_pagamento_display_serializer` na suíte de testes.
+  - **Versionamento PWA:** Sincronização do cache para `emc-soldas-v4.50` em `frontend/sw.js` e query strings `?v=4.50` em `frontend/index.html`.
+  - **Homologação:** 201 testes automatizados de backend executados e aprovados com 100% de sucesso.
+  - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-05_01_formatacao_exibicao_status_contas_pagar.md`.
 
 
 

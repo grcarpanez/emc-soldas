@@ -383,6 +383,17 @@ function formatarPorcentagem(valor) {
 }
 
 /**
+ * Formata identificador de status para exibição amigável,
+ * substituindo underscores (_) por espaços em branco.
+ * @param {string} status 
+ * @returns {string}
+ */
+function formatarStatus(status) {
+  if (status === null || status === undefined) return '';
+  return String(status).replace(/_/g, ' ').trim();
+}
+
+/**
  * Escapa strings contra XSS ao interpolar em HTML.
  * @param {string} str 
  * @returns {string}
@@ -1377,6 +1388,7 @@ window.EMCUtils = {
   formatarDataHoraPtBr,
   formatarHoras,
   formatarPorcentagem,
+  formatarStatus,
   escapeHtml,
   showToast,
   openModal,

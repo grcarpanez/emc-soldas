@@ -1066,4 +1066,21 @@ class CategoriasGovernancaETesourariaTestCase(TestCase):
         self.assertIsNotNone(response2.data['next'])
         self.assertIsNotNone(response2.data['previous'])
 
+    def test_status_pagamento_display_serializer(self):
+        """Valida que o campo status_pagamento_display é retornado formatado com espaço (A VENCER)."""
+        self.client.force_authenticate(user=self.operador_tesouraria)
+        lanc = LancamentoFinanceiro.objects.create(
+            tipo_lancamento="SAIDA",
+            descricao="CONTA DE LUZ",
+            valor=Decimal("250.00"),
+            categoria=self.cat_despesa,
+            conta=self.conta,
+            data_vencimento=timezone.localdate() + timedelta(days=5),
+            status_pagamento="A_VENCER"
+        )
+        response = self.client.get(f'/api/lancamentos-financeiros/{lanc.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status_pagamento'], 'A_VENCER')
+        self.assertEqual(response.data['status_pagamento_display'], 'A VENCER')
+
 
