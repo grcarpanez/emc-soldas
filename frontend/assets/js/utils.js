@@ -182,7 +182,10 @@ function validarPlacaVeiculo(valor) {
  */
 function formatarPlacaVeiculo(valor) {
   if (!valor) return '';
-  const bruto = sanitizarTextoEmTempoReal(valor).replace(/[^A-Z0-9]/g, '');
+  const strValor = String(valor).trim();
+  if (!strValor || strValor.toLowerCase() === 'null' || strValor.toLowerCase() === 'none' || strValor === '-') return '';
+  const bruto = sanitizarTextoEmTempoReal(strValor).replace(/[^A-Z0-9]/g, '');
+  if (bruto === 'NULL' || bruto === 'NONE') return '';
   let resultado = '';
 
   for (let i = 0; i < bruto.length && resultado.length < 7; i++) {

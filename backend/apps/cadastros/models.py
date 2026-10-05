@@ -198,6 +198,7 @@ class Equipamento(BaseModel):
         max_length=10,
         null=True,
         blank=True,
+        unique=True,
         db_index=True,
         verbose_name="Placa do Veículo / Equipamento (Antiga ou Mercosul)"
     )

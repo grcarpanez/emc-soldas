@@ -430,6 +430,102 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
             detalhes = res_inv.data.get('details', res_inv.data)
             self.assertIn('placa', detalhes)
 
+    def test_unicidade_placa_equipamento_e_endpoint_verificacao(self):
+        """
+        Valida que o sistema impede duplicidade de placas ativas ou na lixeira,
+        permite múltiplos equipamentos industriais sem placa (NULL),
+        não devolve a string literal 'null' no GET,
+        e fornece resposta em tempo real no endpoint /api/equipamentos/verificar-placa/.
+        """
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        # 1. Cria primeiro equipamento com placa
+        payload_1 = {
+            "placa": "XYZ-5678",
+            "identificacao": "Caminhão 01",
+            "descricao": "Caminhão Basculante Volvo"
+        }
+        res_1 = self.client.post('/api/equipamentos/', payload_1, format='json')
+        self.assertEqual(res_1.status_code, status.HTTP_201_CREATED)
+        equip_id_1 = res_1.data['id']
+        self.assertEqual(res_1.data['placa'], 'XYZ-5678')
+
+        # 2. Testa endpoint verificar-placa com a placa já cadastrada
+        res_check_dup = self.client.get('/api/equipamentos/verificar-placa/?placa=XYZ-5678')
+        self.assertEqual(res_check_dup.status_code, status.HTTP_200_OK)
+        self.assertFalse(res_check_dup.data['disponivel'])
+        self.assertFalse(res_check_dup.data['em_lixeira'])
+        self.assertIn("já está cadastrada", res_check_dup.data['mensagem'])
+
+        # 3. Testa endpoint verificar-placa excluindo o próprio ID (caso de edição)
+        res_check_self = self.client.get(f'/api/equipamentos/verificar-placa/?placa=XYZ-5678&equipamento_id={equip_id_1}')
+        self.assertEqual(res_check_self.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_check_self.data['disponivel'])
+
+        # 4. Testa endpoint verificar-placa com placa disponível
+        res_check_ok = self.client.get('/api/equipamentos/verificar-placa/?placa=NEW-1A23')
+        self.assertEqual(res_check_ok.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_check_ok.data['disponivel'])
+        self.assertEqual(res_check_ok.data['placa_formatada'], 'NEW-1A23')
+
+        # 5. Tentativa de cadastrar segundo equipamento com a mesma placa deve falhar com 400
+        payload_dup = {
+            "placa": "XYZ5678",
+            "identificacao": "Caminhão 02",
+            "descricao": "Caminhão Betoneira"
+        }
+        res_dup = self.client.post('/api/equipamentos/', payload_dup, format='json')
+        self.assertEqual(res_dup.status_code, status.HTTP_400_BAD_REQUEST)
+        detalhes_dup = res_dup.data.get('details', res_dup.data)
+        self.assertIn('placa', detalhes_dup)
+        self.assertIn("já está cadastrada", str(detalhes_dup['placa']))
+
+        # 6. Atualizar o próprio equipamento mantendo a mesma placa deve funcionar (200 OK)
+        res_edit = self.client.put(f'/api/equipamentos/{equip_id_1}/', {
+            "placa": "XYZ-5678",
+            "identificacao": "Caminhão 01 Atualizado",
+            "descricao": "Caminhão Basculante Volvo FMX"
+        }, format='json')
+        self.assertEqual(res_edit.status_code, status.HTTP_200_OK)
+
+        # 7. Criar dois equipamentos industriais sem placa (apenas identificação) -> ambos devem ser aceitos (NULL)
+        res_estac_1 = self.client.post('/api/equipamentos/', {
+            "placa": "",
+            "identificacao": "GERADOR-01",
+            "descricao": "Gerador de Energia Cummins 50kVA"
+        }, format='json')
+        self.assertEqual(res_estac_1.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res_estac_1.data['placa'])
+
+        res_estac_2 = self.client.post('/api/equipamentos/', {
+            "placa": None,
+            "identificacao": "SOLDA-MIG-02",
+            "descricao": "Máquina de Solda MIG/MAG Bambozzi"
+        }, format='json')
+        self.assertEqual(res_estac_2.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(res_estac_2.data['placa'])
+
+        # 8. Consulta GET individual e em lista não deve conter a string 'null'
+        res_get_1 = self.client.get(f'/api/equipamentos/{res_estac_1.data["id"]}/')
+        self.assertEqual(res_get_1.status_code, status.HTTP_200_OK)
+        self.assertIsNone(res_get_1.data['placa'])
+        self.assertNotEqual(res_get_1.data['placa'], 'null')
+
+        # 9. Soft-delete do equipamento 1 e tentativa de recadastrar mesma placa -> aviso de Lixeira
+        equip_1 = Equipamento.objects.get(id=equip_id_1)
+        equip_1.soft_delete(user=self.operador_comercial)
+
+        res_check_trash = self.client.get('/api/equipamentos/verificar-placa/?placa=XYZ-5678')
+        self.assertEqual(res_check_trash.status_code, status.HTTP_200_OK)
+        self.assertFalse(res_check_trash.data['disponivel'])
+        self.assertTrue(res_check_trash.data['em_lixeira'])
+        self.assertIn("Lixeira", res_check_trash.data['mensagem'])
+
+        res_post_trash = self.client.post('/api/equipamentos/', payload_1, format='json')
+        self.assertEqual(res_post_trash.status_code, status.HTTP_400_BAD_REQUEST)
+        detalhes_trash = res_post_trash.data.get('details', res_post_trash.data)
+        self.assertIn("Lixeira", str(detalhes_trash['placa']))
+
     def test_transferencia_historica_de_equipamento(self):
         """
         Valida que a transferência de um equipamento para um novo cliente desativa o vínculo

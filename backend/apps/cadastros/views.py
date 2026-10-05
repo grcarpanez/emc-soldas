@@ -22,7 +22,8 @@ from core.utils import (
     sanitizar_texto_maiusculo,
     limpar_apenas_digitos,
     validar_cpf,
-    validar_cnpj
+    validar_cnpj,
+    validar_placa
 )
 from apps.cadastros.models import (
     ClienteFornecedor,
@@ -377,6 +378,75 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
             for v in vinculos
         ]
         return Response(dados, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='verificar-placa')
+    def verificar_placa(self, request):
+        """
+        Verifica disponibilidade e duplicidade da placa no exit (blur/change) da textbox.
+        Retorna se é válida, se está disponível e detalhes caso já esteja cadastrada.
+        """
+        placa_raw = request.query_params.get('placa', '')
+        equipamento_id = request.query_params.get('equipamento_id')
+
+        if not placa_raw or not str(placa_raw).strip() or str(placa_raw).strip().lower() in ('null', 'none'):
+            return Response({"valida": True, "disponivel": True, "mensagem": ""}, status=status.HTTP_200_OK)
+
+        placa_limpa = sanitizar_texto_maiusculo(placa_raw).replace("-", "").replace(" ", "")
+        if not validar_placa(placa_limpa):
+            return Response({
+                "valida": False,
+                "disponivel": False,
+                "mensagem": "Formato de placa inválido. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23)."
+            }, status=status.HTTP_200_OK)
+
+        placa_formatada = f"{placa_limpa[:3]}-{placa_limpa[3:]}"
+
+        # 1. Verifica registros ativos
+        qs_ativo = Equipamento.objects.filter(placa=placa_formatada)
+        if equipamento_id:
+            try:
+                qs_ativo = qs_ativo.exclude(pk=int(equipamento_id))
+            except (ValueError, TypeError):
+                pass
+
+        if qs_ativo.exists():
+            duplicado = qs_ativo.first()
+            vinculo = duplicado.historico_clientes.filter(is_ativo=True).select_related('cliente').first()
+            dono_info = f" (Proprietário: {vinculo.cliente.nome_razao})" if vinculo and vinculo.cliente else ""
+            return Response({
+                "valida": True,
+                "disponivel": False,
+                "em_lixeira": False,
+                "equipamento_id": duplicado.id,
+                "placa_formatada": placa_formatada,
+                "mensagem": f"A placa '{placa_formatada}' já está cadastrada no sistema para o equipamento '{duplicado.descricao}' (ID #{duplicado.id}){dono_info}."
+            }, status=status.HTTP_200_OK)
+
+        # 2. Verifica registros na Lixeira (inativados)
+        qs_lixeira = Equipamento.all_objects.filter(placa=placa_formatada, deleted_at__isnull=False)
+        if equipamento_id:
+            try:
+                qs_lixeira = qs_lixeira.exclude(pk=int(equipamento_id))
+            except (ValueError, TypeError):
+                pass
+
+        if qs_lixeira.exists():
+            duplicado = qs_lixeira.first()
+            return Response({
+                "valida": True,
+                "disponivel": False,
+                "em_lixeira": True,
+                "equipamento_id": duplicado.id,
+                "placa_formatada": placa_formatada,
+                "mensagem": f"A placa '{placa_formatada}' pertence ao equipamento '{duplicado.descricao}' (ID #{duplicado.id}) que está na Lixeira. Restaure-o na Lixeira para utilizá-lo."
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            "valida": True,
+            "disponivel": True,
+            "placa_formatada": placa_formatada,
+            "mensagem": "Placa disponível para cadastro."
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def transferir(self, request, pk=None):

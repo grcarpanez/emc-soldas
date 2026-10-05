@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Padrão Mandatório de Combobox com Ação Embutida e Governança RBAC - PWA v4.53)  
+**Última Atualização:** 2026-10-05 (Unicidade Mandatória de Placa de Equipamento, Validação Exit Textbox e Blindagem GET - PWA v4.54)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -103,8 +103,8 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
 - [x] Implementar CRUD de `Equipamento` com suporte a placas antigas/Mercosul, identificaÃ§Ã£o tÃ©cnica e soft delete.
 - [x] Implementar CRUD de `ClienteEquipamento` com transferÃªncia segura (desativaÃ§Ã£o do vÃ­nculo anterior e ativaÃ§Ã£o do novo) preservando o histÃ³rico para nÃ£o quebrar orÃ§amentos passados.
 - [x] Implementar gestÃ£o e download seguro de anexos de clientes (`AnexoGeralCliente`) com validaÃ§Ã£o de extensÃµes permitidas e cabeÃ§alhos forÃ§ados.
-- [x] Implementar gestÃ£o de contatos flexÃ­veis (estilo agenda de smartphone) com suporte a mÃºltiplos telefones e e-mails separados por ponto-e-vÃ­rgula (;) e validaÃ§Ã£o individual RFC.
-- [x] Criar e executar suÃ­te completa de testes automatizados da Fase 5 com 100% de sucesso (26 testes dedicados em cadastros, 184 testes no acumulado do sistema).
+- [x] Criar e executar suíte completa de testes automatizados da Fase 5 com 100% de sucesso (27 testes dedicados em cadastros, 202 testes no acumulado do sistema).
+- [x] Implementar unicidade estrita de placa no modelo `Equipamento` (`unique=True`), blindagem anti-duplicação no serializer (ativos e lixeira), validação em tempo real no exit (`blur`/`change`) da textbox com endpoint `/api/equipamentos/verificar-placa/`, tolerância a múltiplos equipamentos sem placa (`NULL`), e blindagem para que o valor `null` nunca seja exibido como texto em telas ou consultas GET.
 
 ### Fase 6 - CatÃ¡logo Base, Materiais, Insumos e Produtos (Motor BOM)
 - [x] Implementar cadastro de Itens com atributos tÃ©cnicos dinÃ¢micos (`ItemAtributoValor`), fator de conversÃ£o de unidades e cÃ¡lculo de custo fracionado de consumo (`/api/itens/`).

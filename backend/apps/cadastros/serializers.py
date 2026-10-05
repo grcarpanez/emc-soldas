@@ -360,16 +360,64 @@ class EquipamentoSerializer(serializers.ModelSerializer):
             }
         return None
 
+    def to_internal_value(self, data):
+        if hasattr(data, '_mutable'):
+            data = data.copy()
+        elif isinstance(data, dict):
+            data = dict(data)
+        # Normaliza strings vazias ou "null"/"None" para None
+        if 'placa' in data:
+            val_p = str(data['placa']).strip() if data['placa'] is not None else ''
+            data['placa'] = None if not val_p or val_p.lower() in ('null', 'none') else val_p
+        if 'identificacao' in data:
+            val_i = str(data['identificacao']).strip() if data['identificacao'] is not None else ''
+            data['identificacao'] = None if not val_i or val_i.lower() in ('null', 'none') else val_i
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Garante que campos opcionais nunca vazem a string "null" ou "None" em respostas GET
+        if data.get('placa') in (None, 'null', 'None', ''):
+            data['placa'] = None
+        if data.get('identificacao') in (None, 'null', 'None', ''):
+            data['identificacao'] = None
+        return data
+
     def validate_placa(self, value):
-        if value:
-            placa_limpa = sanitizar_texto_maiusculo(value).replace("-", "").replace(" ", "")
-            if not validar_placa(placa_limpa):
-                raise serializers.ValidationError(
-                    "Placa inválida. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23): "
-                    "3 letras iniciais, 4º dígito numérico, 5º dígito letra ou número e 2 dígitos finais numéricos."
-                )
-            return f"{placa_limpa[:3]}-{placa_limpa[3:]}"
-        return value
+        if not value or not str(value).strip() or str(value).strip().lower() in ('null', 'none'):
+            return None
+        placa_limpa = sanitizar_texto_maiusculo(value).replace("-", "").replace(" ", "")
+        if not validar_placa(placa_limpa):
+            raise serializers.ValidationError(
+                "Placa inválida. Deve seguir o padrão antigo (ex: ABC-1234) ou Mercosul (ex: ABC-1D23): "
+                "3 letras iniciais, 4º dígito numérico, 5º dígito letra ou número e 2 dígitos finais numéricos."
+            )
+        placa_formatada = f"{placa_limpa[:3]}-{placa_limpa[3:]}"
+
+        # 1. Blindagem Anti-Duplicação em Registros Ativos
+        qs_ativo = Equipamento.objects.filter(placa=placa_formatada)
+        if self.instance:
+            qs_ativo = qs_ativo.exclude(pk=self.instance.pk)
+        if qs_ativo.exists():
+            duplicado = qs_ativo.first()
+            vinculo = duplicado.historico_clientes.filter(is_ativo=True).select_related('cliente').first()
+            dono_info = f" (Proprietário: {vinculo.cliente.nome_razao})" if vinculo and vinculo.cliente else ""
+            raise serializers.ValidationError(
+                f"A placa '{placa_formatada}' já está cadastrada no sistema para o equipamento '{duplicado.descricao}' (ID #{duplicado.id}){dono_info}."
+            )
+
+        # 2. Verificação em Registros Inativados (Lixeira)
+        qs_lixeira = Equipamento.all_objects.filter(placa=placa_formatada, deleted_at__isnull=False)
+        if self.instance:
+            qs_lixeira = qs_lixeira.exclude(pk=self.instance.pk)
+        if qs_lixeira.exists():
+            duplicado = qs_lixeira.first()
+            raise serializers.ValidationError(
+                f"A placa '{placa_formatada}' pertence ao equipamento '{duplicado.descricao}' (ID #{duplicado.id}) que está na Lixeira. "
+                "Para utilizá-la novamente, restaure o equipamento através da Lixeira no módulo de Administração."
+            )
+
+        return placa_formatada
 
     def validate_identificacao(self, value):
         if value:

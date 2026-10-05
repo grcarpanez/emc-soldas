@@ -8,6 +8,7 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.test import TestCase
 from django.utils import timezone
+from django.core.cache import cache
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -28,6 +29,7 @@ class CadastrosEstruturaisFinanceiroTestCase(TestCase):
     """Bateria de testes para CategoriaFinanceira, ContaBancaria, MeioPagamento e RegraPagamento (Fase 4)."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
 
         self.admin = Usuario.objects.create_user(
@@ -117,6 +119,7 @@ class TesourariaLancamentosTestCase(TestCase):
     """Bateria de testes para Lançamentos Financeiros, Liquidações, Estornos e Cheque Especial (Fase 10)."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
 
         self.admin = Usuario.objects.create_user(
@@ -612,6 +615,7 @@ class CartoesCorporativosTestCase(TestCase):
     """Bateria de testes para Cartões de Crédito Corporativos, Faturas e Rollover (Fase 10)."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
 
         self.operador = Usuario.objects.create_user(
@@ -812,6 +816,7 @@ class CategoriasGovernancaETesourariaTestCase(TestCase):
     """Bateria de testes para a Matriz de Governança de Categorias, indicação AMBOS e Lançamento no Extrato."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.admin = Usuario.objects.create_user(
             email="admin.cat@emcsoldas.com.br",

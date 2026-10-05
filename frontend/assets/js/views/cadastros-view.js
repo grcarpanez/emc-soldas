@@ -169,7 +169,7 @@ window.CadastrosView = {
           const eq = v.equipamento_detalhes || {};
           linhasHtml += `
             <tr>
-              <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(eq.placa ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : '-')}</strong></td>
+              <td class="mono-text"><strong>${window.EMCUtils.escapeHtml((eq.placa && eq.placa !== 'null' && eq.placa !== 'None') ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : '-')}</strong></td>
               <td class="mono-text">${window.EMCUtils.escapeHtml(eq.identificacao || '-')}</td>
               <td>${window.EMCUtils.escapeHtml(eq.descricao || '-')}</td>
               <td style="text-align: right; white-space: nowrap;">
@@ -230,8 +230,8 @@ window.CadastrosView = {
 
       let optionsEquip = '<option value="__NOVO__">+ CADASTRAR NOVO EQUIPAMENTO PARA ESTE CLIENTE</option>';
       todosEquips.forEach((e) => {
-        const placa = e.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
-        const ident = e.identificacao ? ` - ${e.identificacao}` : '';
+        const placa = (e.placa && e.placa !== 'null' && e.placa !== 'None') ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
+        const ident = (e.identificacao && e.identificacao !== 'null' && e.identificacao !== 'None') ? ` - ${e.identificacao}` : '';
         const dono = e.cliente_atual_nome ? ` (Vinculado a: ${e.cliente_atual_nome})` : ' (Sem dono / Disponível)';
         optionsEquip += `<option value="${e.id}">${window.EMCUtils.escapeHtml(e.descricao)}${placa}${ident}${dono}</option>`;
       });
@@ -374,9 +374,9 @@ window.CadastrosView = {
             } else {
               const eq = todosEquips.find(x => x.id === parseInt(val, 10));
               if (eq) {
-                if (inputPlaca) { inputPlaca.value = eq.placa ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : ''; inputPlaca.readOnly = true; }
-                if (inputIdent) { inputIdent.value = eq.identificacao || ''; inputIdent.readOnly = true; }
-                if (inputDesc) { inputDesc.value = eq.descricao || ''; inputDesc.readOnly = true; }
+                if (inputPlaca) { inputPlaca.value = (eq.placa && eq.placa !== 'null' && eq.placa !== 'None') ? window.EMCUtils.formatarPlacaVeiculo(eq.placa) : ''; inputPlaca.readOnly = true; }
+                if (inputIdent) { inputIdent.value = (eq.identificacao && eq.identificacao !== 'null' && eq.identificacao !== 'None') ? eq.identificacao : ''; inputIdent.readOnly = true; }
+                if (inputDesc) { inputDesc.value = (eq.descricao && eq.descricao !== 'null' && eq.descricao !== 'None') ? eq.descricao : ''; inputDesc.readOnly = true; }
 
                 if (eq.cliente_atual && eq.cliente_atual.id !== clienteId && avisoTransf) {
                   avisoTransf.style.display = 'block';
@@ -425,7 +425,7 @@ window.CadastrosView = {
         });
       }
 
-      const placaTexto = equip.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(equip.placa)}]` : '';
+      const placaTexto = (equip.placa && equip.placa !== 'null' && equip.placa !== 'None') ? ` [${window.EMCUtils.formatarPlacaVeiculo(equip.placa)}]` : '';
 
       window.EMCUtils.openModal({
         title: `HISTÓRICO DE TITULARIDADE E VÍNCULOS - #${equip.id} ${equip.descricao}${placaTexto}`,
@@ -1107,8 +1107,8 @@ window.CadastrosView = {
         html += `
           <tr>
             <td class="mono-text">#${item.id}</td>
-            <td class="mono-text"><strong>${window.EMCUtils.escapeHtml(item.placa ? window.EMCUtils.formatarPlacaVeiculo(item.placa) : '-')}</strong></td>
-            <td class="mono-text">${window.EMCUtils.escapeHtml(item.identificacao || '-')}</td>
+            <td class="mono-text"><strong>${window.EMCUtils.escapeHtml((item.placa && item.placa !== 'null' && item.placa !== 'None') ? window.EMCUtils.formatarPlacaVeiculo(item.placa) : '-')}</strong></td>
+            <td class="mono-text">${window.EMCUtils.escapeHtml((item.identificacao && item.identificacao !== 'null' && item.identificacao !== 'None') ? item.identificacao : '-')}</td>
             <td>${window.EMCUtils.escapeHtml(item.descricao)}</td>
             <td>
               <span class="status-chip ${item.cliente_atual_nome ? 'info' : 'warning'}">${window.EMCUtils.escapeHtml(dono)}</span>
@@ -1117,7 +1117,7 @@ window.CadastrosView = {
             <td style="text-align: right; white-space: nowrap;">
               <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">HISTÓRICO</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarEquipamento(${item.id})">EDITAR</button>
-              <button class="btn btn-ghost btn-sm" style="color: var(--color-error);" onclick="window.CadastrosView.excluirEquipamento(${item.id}, '${window.EMCUtils.escapeHtml(item.placa || item.identificacao || item.descricao)}')">EXCLUIR</button>
+              <button class="btn btn-ghost btn-sm" style="color: var(--color-error);" onclick="window.CadastrosView.excluirEquipamento(${item.id}, '${window.EMCUtils.escapeHtml((item.placa && item.placa !== 'null' && item.placa !== 'None') || item.identificacao || item.descricao)}')">EXCLUIR</button>
             </td>
           </tr>
         `;
@@ -1153,6 +1153,8 @@ window.CadastrosView = {
       clientesOptions += `<option value="${c.id}" ${isSel}>${window.EMCUtils.escapeHtml(c.nome_razao)}${doc}</option>`;
     });
 
+    let placaBloqueada = false;
+
     window.EMCUtils.openModal({
       title: isEdit ? `EDITAR EQUIPAMENTO #${equip.id}` : 'NOVO EQUIPAMENTO / VEÍCULO',
       size: 'md',
@@ -1162,17 +1164,18 @@ window.CadastrosView = {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group">
               <label class="form-label" for="equip-placa">Placa (Antiga / Mercosul)</label>
-              <input type="text" id="equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC-1D23" value="${equip?.placa || ''}">
+              <input type="text" id="equip-placa" class="form-control mono-text" data-mask="placa" placeholder="ABC-1234 ou ABC-1D23" value="${(equip?.placa && equip.placa !== 'null' && equip.placa !== 'None') ? equip.placa : ''}">
+              <div id="equip-placa-feedback" class="mono-text" style="font-size: 11px; margin-top: 4px; display: none;"></div>
             </div>
             <div class="form-group">
               <label class="form-label" for="equip-identificacao">Identificação / Chassi / Frota</label>
-              <input type="text" id="equip-identificacao" class="form-control mono-text" placeholder="EX: TRATOR 04 / CHASSI 9BW..." value="${equip?.identificacao || ''}">
+              <input type="text" id="equip-identificacao" class="form-control mono-text" placeholder="EX: TRATOR 04 / CHASSI 9BW..." value="${(equip?.identificacao && equip.identificacao !== 'null' && equip.identificacao !== 'None') ? equip.identificacao : ''}">
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="equip-descricao">Descrição Completa *</label>
-            <input type="text" id="equip-descricao" class="form-control" placeholder="EX: ESCAVADEIRA HIDRÁULICA CAT 320D" value="${equip?.descricao || ''}" required>
+            <input type="text" id="equip-descricao" class="form-control" placeholder="EX: ESCAVADEIRA HIDRÁULICA CAT 320D" value="${(equip?.descricao && equip.descricao !== 'null' && equip.descricao !== 'None') ? equip.descricao : ''}" required>
           </div>
 
           <div class="form-group mt-12">
@@ -1187,6 +1190,11 @@ window.CadastrosView = {
         </form>
       `,
       onConfirm: async () => {
+        if (placaBloqueada) {
+          window.EMCUtils.showToast('Esta placa já está cadastrada no sistema. Corrija o campo da placa antes de salvar.', 'error');
+          return false;
+        }
+
         const descricao = document.getElementById('equip-descricao').value.trim();
         const placa = document.getElementById('equip-placa').value.trim();
         const identificacao = document.getElementById('equip-identificacao').value.trim();
@@ -1204,10 +1212,13 @@ window.CadastrosView = {
         }
 
         try {
+          const placaLimpa = window.EMCUtils.sanitizarTextoEmTempoReal(placa);
+          const identLimpa = window.EMCUtils.sanitizarTextoEmTempoReal(identificacao);
+
           const payload = {
             descricao,
-            placa: window.EMCUtils.sanitizarTextoEmTempoReal(placa),
-            identificacao: window.EMCUtils.sanitizarTextoEmTempoReal(identificacao),
+            placa: (placaLimpa && placaLimpa !== 'null' && placaLimpa !== 'None') ? placaLimpa : null,
+            identificacao: (identLimpa && identLimpa !== 'null' && identLimpa !== 'None') ? identLimpa : null,
             cliente_id
           };
 
@@ -1232,8 +1243,66 @@ window.CadastrosView = {
       }
     });
 
-    // Inicializa a Combobox Pesquisável com Autocomplete
+    // Inicializa a Combobox Pesquisável com Autocomplete e a Verificação no Exit da Placa
     setTimeout(() => {
+      const inputPlaca = document.getElementById('equip-placa');
+      const feedbackPlaca = document.getElementById('equip-placa-feedback');
+
+      const verificarDuplicidadePlaca = async () => {
+        if (!inputPlaca) return;
+        const valor = inputPlaca.value.trim();
+        if (!valor || valor.toLowerCase() === 'null' || valor.toLowerCase() === 'none') {
+          inputPlaca.style.borderColor = '';
+          placaBloqueada = false;
+          if (feedbackPlaca) {
+            feedbackPlaca.style.display = 'none';
+            feedbackPlaca.textContent = '';
+          }
+          return;
+        }
+
+        try {
+          const equipIdParam = isEdit ? `&equipamento_id=${equip.id}` : '';
+          const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}verificar-placa/?placa=${encodeURIComponent(valor)}${equipIdParam}`);
+          
+          if (res.placa_formatada) {
+            inputPlaca.value = res.placa_formatada;
+          }
+
+          if (!res.disponivel) {
+            placaBloqueada = true;
+            inputPlaca.style.borderColor = 'var(--color-error, #b7410e)';
+            if (feedbackPlaca) {
+              feedbackPlaca.style.display = 'block';
+              feedbackPlaca.style.color = 'var(--color-error, #b7410e)';
+              feedbackPlaca.textContent = `[BLOQUEIO] ${res.mensagem}`;
+            }
+            window.EMCUtils.showToast(res.mensagem, 'error');
+          } else if (!res.valida) {
+            placaBloqueada = false;
+            inputPlaca.style.borderColor = 'var(--color-warning, #d97706)';
+            if (feedbackPlaca) {
+              feedbackPlaca.style.display = 'block';
+              feedbackPlaca.style.color = 'var(--color-warning, #d97706)';
+              feedbackPlaca.textContent = `[ATENÇÃO] ${res.mensagem}`;
+            }
+          } else {
+            placaBloqueada = false;
+            inputPlaca.style.borderColor = 'var(--color-success, #2e7d32)';
+            if (feedbackPlaca) {
+              feedbackPlaca.style.display = 'block';
+              feedbackPlaca.style.color = 'var(--color-success, #2e7d32)';
+              feedbackPlaca.textContent = `✓ ${res.mensagem || 'Placa disponível para cadastro.'}`;
+            }
+          }
+        } catch (e) {
+          console.warn('Erro ao verificar placa:', e);
+        }
+      };
+
+      inputPlaca?.addEventListener('blur', verificarDuplicidadePlaca);
+      inputPlaca?.addEventListener('change', verificarDuplicidadePlaca);
+
       const selectEl = document.getElementById('equip-cliente');
       if (selectEl) {
         window.EMCUtils.initSearchableSelect(selectEl, {

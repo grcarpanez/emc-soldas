@@ -182,8 +182,8 @@ window.OrcamentosView = {
         opts += '<option value="" disabled>-- NENHUM VEÍCULO VINCULADO A ESTE CLIENTE --</option>';
       } else {
         equipsFiltrados.forEach((e) => {
-          const placa = e.placa ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
-          const ident = e.identificacao ? ` - ${e.identificacao}` : '';
+          const placa = (e.placa && e.placa !== 'null' && e.placa !== 'None') ? ` [${window.EMCUtils.formatarPlacaVeiculo(e.placa)}]` : '';
+          const ident = (e.identificacao && e.identificacao !== 'null' && e.identificacao !== 'None') ? ` - ${e.identificacao}` : '';
           const dono = (!clienteIdFiltro && e.cliente_atual?.nome_razao) ? ` (Proprietário: ${e.cliente_atual.nome_razao})` : '';
           opts += `<option value="${e.id}">${window.EMCUtils.escapeHtml(e.descricao)}${placa}${ident}${dono}</option>`;
         });
