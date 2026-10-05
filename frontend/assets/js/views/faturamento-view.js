@@ -169,10 +169,10 @@ window.FaturamentoView = {
     container.innerHTML = `
       <div class="card mb-16">
         <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant); margin-bottom: 12px;">
-          SELECIONE O CLIENTE PARA AGRUPAR ORÇAMENTOS CONCLUÍDOS E GERAR PRÉ-FATURA:
+          SELECIONE O CLIENTE PARA AGRUPAR ORÇAMENTOS APROVADOS OU CONCLUÍDOS E GERAR PRÉ-FATURA:
         </p>
         <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
-          <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 280px;">
+          <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 320px;">
             <label class="form-label" for="cc-filtro-cliente">Cliente</label>
             <select id="cc-filtro-cliente" class="form-control">
               <option value="">CARREGANDO CLIENTES...</option>
@@ -201,22 +201,42 @@ window.FaturamentoView = {
       </div>
     `;
 
-    // Carrega clientes com orçamentos a faturar
+    // Carrega clientes e dados da conta corrente para mapear pendências
     try {
-      const res = await window.api.get(window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES);
-      const clientes = res.results || res || [];
+      const [resClientes, resCC] = await Promise.all([
+        window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?page_size=1000`),
+        window.api.get(window.CONFIG.ENDPOINTS.FATURAMENTO.CONTA_CORRENTE)
+      ]);
+      const todosClientes = resClientes.results || resClientes || [];
+      const clientes = todosClientes.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
+      const orcsCC = resCC.results || resCC || [];
+
+      // Mapeia contagem de orçamentos faturáveis por cliente
+      const contagemPorCliente = {};
+      orcsCC.forEach(o => {
+        const cId = o.cliente_id || (o.cliente && o.cliente.id);
+        if (cId) {
+          contagemPorCliente[cId] = (contagemPorCliente[cId] || 0) + 1;
+        }
+      });
 
       let options = '<option value="">SELECIONE UM CLIENTE...</option>';
       clientes.forEach((c) => {
-        options += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome_razao)}</option>`;
+        const qtd = contagemPorCliente[c.id] || 0;
+        const sufixo = qtd > 0 ? ` [${qtd} ${qtd === 1 ? 'orçamento a faturar' : 'orçamentos a faturar'}]` : '';
+        options += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome_razao)}${sufixo}</option>`;
       });
 
       const selectCli = document.getElementById('cc-filtro-cliente');
-      if (selectCli) selectCli.innerHTML = options;
-
-      selectCli?.addEventListener('change', () => this.carregarOrcamentosCliente(selectCli.value));
+      if (selectCli) {
+        selectCli.innerHTML = options;
+        window.EMCUtils.initSearchableSelect(selectCli, {
+          placeholder: 'SELECIONE UM CLIENTE...',
+          onChange: (val) => this.carregarOrcamentosCliente(val)
+        });
+      }
     } catch (e) {
-      window.EMCUtils.showToast('Erro ao carregar clientes.', 'error');
+      window.EMCUtils.showToast('Erro ao carregar clientes da conta corrente.', 'error');
     }
 
     document.getElementById('btn-gerar-pre-fatura')?.addEventListener('click', () => this.gerarPreFatura());
@@ -235,22 +255,31 @@ window.FaturamentoView = {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center"><div class="loader-spinner"></div></td></tr>';
       const endpoint = `${window.CONFIG.ENDPOINTS.FATURAMENTO.CONTA_CORRENTE}?cliente_id=${clienteId}`;
       const res = await window.api.get(endpoint);
-      const orcamentos = res.orcamentos || res || [];
+      const orcamentos = res.orcamentos || res.results || res || [];
 
       if (!orcamentos.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum orçamento concluído pendente de faturamento para este cliente.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhum orçamento aprovado ou concluído pendente de faturamento para este cliente.</td></tr>';
         return;
       }
 
       let html = '';
       orcamentos.forEach((orc) => {
+        const badgeOp = {
+          APROVADO: 'success',
+          EM_EXECUCAO: 'warning',
+          CONCLUIDO: 'success',
+          GERADO: 'info',
+          ENVIADO: 'info',
+          CANCELADO: 'danger'
+        }[orc.status_operacional] || 'info';
+
         html += `
           <tr>
             <td><input type="checkbox" class="check-orc-item" value="${orc.id}" data-valor="${orc.valor_bruto || orc.valor_total}"></td>
             <td class="mono-text"><strong>#${orc.id}</strong></td>
             <td>${window.EMCUtils.escapeHtml(orc.equipamento_descricao || 'Oficina Geral')}</td>
             <td class="mono-text">${window.EMCUtils.formatarDataPtBr(orc.data_geracao)}</td>
-            <td><span class="status-chip success">${window.EMCUtils.formatarStatus(orc.status_operacional)}</span></td>
+            <td><span class="status-chip ${badgeOp}">${window.EMCUtils.formatarStatus(orc.status_operacional)}</span></td>
             <td class="mono-text" style="font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(orc.valor_bruto || orc.valor_total)}</td>
           </tr>
         `;
@@ -278,7 +307,9 @@ window.FaturamentoView = {
 
     try {
       const payload = {
-        cliente_id: clienteId,
+        cliente: parseInt(clienteId, 10),
+        cliente_id: parseInt(clienteId, 10),
+        orcamento_ids: selecionados,
         orcamentos_ids: selecionados
       };
 

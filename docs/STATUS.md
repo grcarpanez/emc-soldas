@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Formatação de Status em Orçamentos, Eliminação de Underscore e Calibração de Filtros - PWA v4.56)  
+**Última Atualização:** 2026-10-05 (Workflow de Status Operacional em Orçamentos, Combobox Pesquisável e Faturamento na Conta Corrente - PWA v4.57)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -680,6 +680,18 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Testes Automatizados:** Asserções adicionadas em `apps/orcamentos/tests.py` validando os campos display.
   - **Versionamento PWA:** Cache `emc-soldas-v4.56` e `?v=4.56`.
   - **Registro de Planejamento:** `Planejamento/2026-10-05_07_formatacao_status_orcamentos_e_remocao_underscore.md`.
+- [x] **Workflow de Status Operacional em Orçamentos, Combobox Pesquisável e Faturamento na Conta Corrente (PWA v4.57):**
+  - **Botões de Transição Operacional em Orçamentos (`orcamentos-view.js`):**
+    - Painel dinâmico no modal de detalhes com botões contextuais de avanço de workflow: `[MARCAR COMO ENVIADO]`, `[✓ APROVAR ORÇAMENTO]`, `[▶ INICIAR EXECUÇÃO]`, `[✓ CONCLUIR SERVIÇO]` e badge de serviço concluído.
+    - Atalho rápido na tabela de orçamentos: botão `APROVAR` diretamente na coluna de ações para orçamentos em estado inicial (`GERADO` ou `ENVIADO`).
+    - Implementação de `transitarStatus(orcId, acao, nomeLegivel)` consumindo os endpoints `/enviar/`, `/aprovar/`, `/iniciar-execucao/` e `/concluir/` mapeados em `config.js`, com atualização em tempo real e toasts informativos.
+  - **Faturamento e Conta Corrente de Clientes (`faturamento-view.js` e `serializers.py`):**
+    - Preservada a regra de elegibilidade mandatória da Conta Corrente (exclusivamente orçamentos no mínimo `APROVADO`, `EM_EXECUCAO` ou `CONCLUIDO`).
+    - Implementada a Combobox Pesquisável (`initSearchableSelect`) no seletor de clientes da Conta Corrente (Regra 14 do AGENTS.md), exibindo a contagem de orçamentos faturáveis por cliente (ex: `DAVID [2 orçamentos a faturar]`).
+    - Badges de status operacional dinâmicos na tabela da Conta Corrente e adequação textual dos alertas.
+    - Correção do payload em `gerarPreFatura` (`cliente` e `orcamento_ids`) e adição de suporte a aliases (`cliente_id`, `orcamentos_ids`) no `FaturaSerializer`.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.57` em `sw.js` e `?v=4.57` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_08_ajuste_conta_corrente_orcamentos_gerados_e_faturamento.md`.
 
 
 

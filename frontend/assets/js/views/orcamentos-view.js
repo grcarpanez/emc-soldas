@@ -140,6 +140,9 @@ window.OrcamentosView = {
               ${window.EMCUtils.formatarMoeda(orc.valor_total || orc.valor_bruto)}
             </td>
             <td style="text-align: right; white-space: nowrap;">
+              ${(orc.status_operacional === 'GERADO' || orc.status_operacional === 'ENVIADO') ? `
+                <button class="btn btn-sm" style="background-color: #2e7d32; color: #fff; margin-right: 4px;" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'aprovar', 'Aprovado')" title="Aprovar Orçamento">APROVAR</button>
+              ` : ''}
               <button class="btn btn-primary btn-sm" onclick="window.OrcamentosView.baixarPdf(${orc.id})">PDF</button>
               <button class="btn btn-secondary btn-sm" onclick="window.OrcamentosView.verDetalhes(${orc.id})">DETALHES</button>
             </td>
@@ -837,6 +840,36 @@ window.OrcamentosView = {
       const statusOpTextoModal = orc.status_operacional_display || window.EMCUtils.formatarStatus(orc.status_operacional);
       const statusFinTextoModal = orc.status_financeiro_display || window.EMCUtils.formatarStatus(orc.status_financeiro);
 
+      let botoesWorkflow = '';
+      if (orc.status_operacional === 'GERADO') {
+        botoesWorkflow = `
+          <button class="btn btn-secondary btn-sm" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'enviar', 'Enviado')">MARCAR COMO ENVIADO</button>
+          <button class="btn btn-sm" style="background-color: #2e7d32; color: #fff;" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'aprovar', 'Aprovado')">✓ APROVAR ORÇAMENTO</button>
+        `;
+      } else if (orc.status_operacional === 'ENVIADO') {
+        botoesWorkflow = `
+          <button class="btn btn-sm" style="background-color: #2e7d32; color: #fff;" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'aprovar', 'Aprovado')">✓ APROVAR ORÇAMENTO</button>
+        `;
+      } else if (orc.status_operacional === 'APROVADO') {
+        botoesWorkflow = `
+          <span class="status-chip success mono-text" style="font-size: 11px; margin-right: 4px;">ELEGÍVEL PARA FATURAMENTO</span>
+          <button class="btn btn-sm" style="background-color: var(--color-rust-orange); color: #fff;" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'iniciar-execucao', 'Em Execução')">▶ INICIAR EXECUÇÃO</button>
+        `;
+      } else if (orc.status_operacional === 'EM_EXECUCAO') {
+        botoesWorkflow = `
+          <span class="status-chip warning mono-text" style="font-size: 11px; margin-right: 4px;">EM EXECUÇÃO</span>
+          <button class="btn btn-sm" style="background-color: #2e7d32; color: #fff;" onclick="window.OrcamentosView.transitarStatus(${orc.id}, 'concluir', 'Concluído')">✓ CONCLUIR SERVIÇO</button>
+        `;
+      } else if (orc.status_operacional === 'CONCLUIDO') {
+        botoesWorkflow = `
+          <span class="status-chip success mono-text" style="padding: 6px 12px; font-weight: 700;">✓ SERVIÇO CONCLUÍDO (PRONTO PARA FATURAR)</span>
+        `;
+      } else if (orc.status_operacional === 'CANCELADO') {
+        botoesWorkflow = `
+          <span class="status-chip danger mono-text">ORÇAMENTO CANCELADO</span>
+        `;
+      }
+
       window.EMCUtils.openModal({
         title: `ORÇAMENTO #${orc.id} - ${orc.cliente_nome}`,
         size: 'lg',
@@ -872,6 +905,21 @@ window.OrcamentosView = {
             </table>
           </div>
 
+          <!-- Painel de Transição Operacional -->
+          <div class="card mb-16" style="background-color: var(--color-surface-container); padding: 12px 16px; border-left: 3px solid var(--color-rust-orange);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">Ações do Fluxo Operacional:</span>
+                <div style="font-size: 13px; font-weight: 700; margin-top: 2px;">
+                  Status Atual: <span class="status-chip ${badgeOpModal}">${window.EMCUtils.escapeHtml(statusOpTextoModal)}</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                ${botoesWorkflow}
+              </div>
+            </div>
+          </div>
+
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
             <div style="display: flex; gap: 8px;">
               <button class="btn btn-primary" onclick="window.OrcamentosView.baixarPdf(${orc.id})">BAIXAR PDF</button>
@@ -888,6 +936,30 @@ window.OrcamentosView = {
       });
     } catch (e) {
       window.EMCUtils.showToast('Erro ao carregar detalhes do orçamento.', 'error');
+    }
+  },
+
+  async transitarStatus(orcId, acao, nomeLegivel) {
+    try {
+      let endpoint = '';
+      if (acao === 'enviar') endpoint = window.CONFIG.ENDPOINTS.ORCAMENTOS.ENVIAR.replace('{id}', orcId);
+      else if (acao === 'aprovar') endpoint = window.CONFIG.ENDPOINTS.ORCAMENTOS.APROVAR.replace('{id}', orcId);
+      else if (acao === 'iniciar-execucao') endpoint = window.CONFIG.ENDPOINTS.ORCAMENTOS.INICIAR_EXECUCAO.replace('{id}', orcId);
+      else if (acao === 'concluir') endpoint = window.CONFIG.ENDPOINTS.ORCAMENTOS.CONCLUIR.replace('{id}', orcId);
+
+      window.EMCUtils.showToast(`Atualizando orçamento #${orcId}...`, 'info');
+      await window.api.post(endpoint, {});
+      window.EMCUtils.showToast(`Orçamento #${orcId} transitado para ${nomeLegivel} com sucesso!`, 'success');
+
+      this.carregarListaOrcamentos();
+
+      // Se o modal de detalhes do orçamento estiver aberto, recarrega com dados atualizados
+      const modalAberto = document.querySelector('#modal-root .modal-backdrop');
+      if (modalAberto) {
+        this.verDetalhes(orcId);
+      }
+    } catch (err) {
+      window.EMCUtils.showToast(err.message || `Erro ao atualizar orçamento para ${nomeLegivel}.`, 'error');
     }
   },
 

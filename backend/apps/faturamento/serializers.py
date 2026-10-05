@@ -203,6 +203,16 @@ class FaturaSerializer(serializers.ModelSerializer):
         vf = float(obj.valor_total_faturado or 0.0)
         return max(0.0, round(vf - total_rec, 2))
 
+    def to_internal_value(self, data):
+        # Suporte defensivo a aliases no payload
+        if isinstance(data, dict):
+            data = data.copy()
+            if 'cliente_id' in data and 'cliente' not in data:
+                data['cliente'] = data['cliente_id']
+            if 'orcamentos_ids' in data and 'orcamento_ids' not in data:
+                data['orcamento_ids'] = data['orcamentos_ids']
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         request = self.context.get('request')
         user = getattr(request, 'user', None)

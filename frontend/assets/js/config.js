@@ -73,7 +73,11 @@ const CONFIG = {
       RENOVAR: '/orcamentos/{id}/renovar/',
       CANCELAR: '/orcamentos/{id}/cancelar/',
       GERAR_PDF: '/orcamentos/{id}/gerar-pdf/',
-      VERIFICAR_INADIMPLENCIA: '/orcamentos/verificar-inadimplencia/'
+      VERIFICAR_INADIMPLENCIA: '/orcamentos/verificar-inadimplencia/',
+      ENVIAR: '/orcamentos/{id}/enviar/',
+      APROVAR: '/orcamentos/{id}/aprovar/',
+      INICIAR_EXECUCAO: '/orcamentos/{id}/iniciar-execucao/',
+      CONCLUIR: '/orcamentos/{id}/concluir/'
     },
     FATURAMENTO: {
       FATURAS: '/faturas/',
