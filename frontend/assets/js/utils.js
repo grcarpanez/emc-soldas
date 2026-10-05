@@ -878,6 +878,8 @@ function initSearchableSelect(selectEl, opts = {}) {
     }
   }
 
+  const onChangeCallback = typeof opts.onChange === 'function' ? opts.onChange : null;
+
   function selecionarItem(val) {
     selectEl.value = val;
     extrairOpcoes();
@@ -885,6 +887,10 @@ function initSearchableSelect(selectEl, opts = {}) {
     fecharDropdown();
     // Dispara evento change no select nativo
     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    if (onChangeCallback) {
+      const selOpt = selectEl.options[selectEl.selectedIndex];
+      onChangeCallback(val, selOpt);
+    }
   }
 
   function abrirDropdown() {

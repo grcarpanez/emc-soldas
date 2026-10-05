@@ -147,7 +147,7 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
             return CancelarOrcamentoSerializer
         elif self.action == 'renovar':
             return RenovarOrcamentoSerializer
-        elif self.action in ['enviar', 'aprovar', 'iniciar_execucao', 'concluir']:
+        elif self.action in ['enviar', 'aprovar', 'iniciar_execucao', 'concluir', 'alterar_status_operacional']:
             return AlterarStatusOperacionalSerializer
         return OrcamentoSerializer
 
@@ -257,6 +257,16 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
         """Transita status operacional para CONCLUIDO."""
         orcamento = self.get_object()
         orcamento = alterar_status_operacional(orcamento, 'CONCLUIDO', user=request.user)
+        return Response(OrcamentoDetailSerializer(orcamento).data)
+
+    @action(detail=True, methods=['post'], url_path='alterar-status-operacional')
+    def alterar_status_operacional(self, request, pk=None):
+        """Altera diretamente o status operacional para qualquer status válido informado no payload."""
+        orcamento = self.get_object()
+        serializer = AlterarStatusOperacionalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        novo_status = serializer.validated_data['novo_status']
+        orcamento = alterar_status_operacional(orcamento, novo_status, user=request.user)
         return Response(OrcamentoDetailSerializer(orcamento).data)
 
     @action(detail=False, methods=['get'], url_path='verificar-inadimplencia')

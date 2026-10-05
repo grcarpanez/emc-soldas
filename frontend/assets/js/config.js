@@ -77,7 +77,8 @@ const CONFIG = {
       ENVIAR: '/orcamentos/{id}/enviar/',
       APROVAR: '/orcamentos/{id}/aprovar/',
       INICIAR_EXECUCAO: '/orcamentos/{id}/iniciar-execucao/',
-      CONCLUIR: '/orcamentos/{id}/concluir/'
+      CONCLUIR: '/orcamentos/{id}/concluir/',
+      ALTERAR_STATUS_OPERACIONAL: '/orcamentos/{id}/alterar-status-operacional/'
     },
     FATURAMENTO: {
       FATURAS: '/faturas/',

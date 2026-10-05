@@ -2,8 +2,8 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Workflow de Status Operacional em Orçamentos, Combobox Pesquisável e Faturamento na Conta Corrente - PWA v4.57)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
+**Última Atualização:** 2026-10-05 (Stepper de Status Operacional em Orçamentos, Faturamento em Dois Momentos e Correção da Combobox na Conta Corrente - PWA v4.58)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---

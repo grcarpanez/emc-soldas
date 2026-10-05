@@ -315,10 +315,13 @@ def alterar_status_operacional(orcamento, novo_status, user=None):
                 )
             })
 
-    # Não permitir regredir de CONCLUIDO arbitrariamente
-    if orcamento.status_operacional == 'CONCLUIDO' and novo_status != 'CONCLUIDO':
+    # Se o orçamento já foi faturado ou pago, o status operacional fica bloqueado
+    if orcamento.status_financeiro in ['FATURADO', 'PAGO'] and novo_status != orcamento.status_operacional:
         raise ValidationError({
-            'status_operacional': "Orçamento já concluído não pode retornar a etapas anteriores."
+            'status_operacional': (
+                f"Orçamento com status financeiro '{orcamento.get_status_financeiro_display()}' "
+                "não pode ter seu status operacional alterado."
+            )
         })
 
     orcamento.status_operacional = novo_status
