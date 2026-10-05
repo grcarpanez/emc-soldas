@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Unicidade Mandatória de Placa de Equipamento, Validação Exit Textbox e Blindagem GET - PWA v4.54)  
+**Última Atualização:** 2026-10-05 (Atualização Reativa de Equipamentos no Orçamento e Resolução de Payload cliente_id - PWA v4.55)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -644,6 +644,30 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
     - `docs/FSD.md`: Inserida a **Seção 29** com os princípios de UX Não-Interruptiva e a Matriz Oficial de RBAC.
   - **Versionamento PWA:** Cache `emc-soldas-v4.53` e `?v=4.53`.
   - **Registro de Planejamento:** Arquivado formalmente em `Planejamento/2026-10-05_04_padrao_mandatorio_combobox_cadastro_embutido_rbac.md`.
+- [x] **Unicidade Mandatória de Placa de Equipamento, Validação Exit e Blindagem GET (PWA v4.54):**
+  - **Regra de Unicidade e Integridade no Banco:**
+    - Campo `placa` definido com `unique=True` no modelo `Equipamento` (`backend/apps/cadastros/models.py`).
+    - Migração `0007_alter_equipamento_placa.py` gerada e aplicada com sucesso.
+  - **Validação Antecipada no Exit da Textbox (UX Preventiva):**
+    - Endpoint `/api/cadastros/equipamentos/verificar-placa/?placa=...` criado para checagem em tempo real ao perder o foco (`blur`).
+    - Validação de formato (antigo e Mercosul) e verificação contra ativos e lixeira com bloqueio visual imediato.
+  - **Blindagem Anti-Null no GET:**
+    - Tratamento em `to_representation` garantindo que campos opcionais nunca retornem as strings literais `'null'` ou `'None'`.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.54` e `?v=4.54`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_05_unicidade_placa_equipamento.md`.
+- [x] **Atualização Reativa da Combobox de Equipamentos e Resolução de Payload no Orçamento (PWA v4.55):**
+  - **Correção de Escopo e Atualização Dinâmica:**
+    - Correção de declarações `const` para `let` (`listaEquip`, `listaClientes`, etc.) em `orcamentos-view.js`.
+    - No callback `onSuccess` de novo equipamento, recarregamento da lista via API e chamada de `selEq._emcCombobox.updateOptions(novasOptions, novoEquip.id)`, garantindo exibição e seleção instantânea.
+  - **Resolução de Incompatibilidade de Payload (`cliente_id` vs `cliente`):**
+    - Implementação de `to_internal_value` em `OrcamentoSerializer`, `OrcamentoItemSerializer` e `OrcamentoPropostaPagamentoSerializer`, aceitando indistintamente chaves canônicas ou com sufixo `_id` e calculando `data_validade` a partir de `validade_dias`.
+    - Envio redundante no frontend (`orcamentos-view.js`) de campos canônicos e com `_id` para robustez absoluta.
+  - **Reforço no Utilitário de Combobox (`frontend/assets/js/utils.js`):**
+    - Método `updateOptions` aprimorado para seleção via `String(selectedValue)`, marcação de `selected = true` e emissão de evento `change`.
+  - **Suíte de Testes Automatizados:**
+    - Teste `test_14_criacao_orcamento_com_payload_sufixo_id_e_validade_dias` adicionado em `apps/orcamentos/tests.py`.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.55` e `?v=4.55`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_06_correcao_combobox_equipamento_e_payload_orcamentos.md`.
 
 
 

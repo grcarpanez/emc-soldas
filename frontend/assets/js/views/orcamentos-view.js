@@ -157,12 +157,12 @@ window.OrcamentosView = {
       window.api.get(`${window.CONFIG.ENDPOINTS.CATALOGO.ITENS}?page_size=1000`)
     ]);
 
-    const todosClientes = clientes.results || clientes || [];
+    let todosClientes = clientes.results || clientes || [];
     // Filtra apenas clientes (exclui fornecedores puros)
-    const listaClientes = todosClientes.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
-    const listaEquip = equipamentos.results || equipamentos || [];
-    const listaProd = produtos.results || produtos || [];
-    const listaItens = itens.results || itens || [];
+    let listaClientes = todosClientes.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
+    let listaEquip = equipamentos.results || equipamentos || [];
+    let listaProd = produtos.results || produtos || [];
+    let listaItens = itens.results || itens || [];
 
     let optionsCli = '<option value="">SELECIONE O CLIENTE...</option>';
     listaClientes.forEach((c) => {
@@ -353,10 +353,12 @@ window.OrcamentosView = {
         </form>
       `,
       onConfirm: async () => {
-        const cliente_id = document.getElementById('orc-cliente').value;
-        const equipamento_id = document.getElementById('orc-equipamento').value || null;
-        const validade_dias = parseInt(document.getElementById('orc-validade-dias').value, 10) || 15;
-        const valor_desconto_aplicado = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('orc-desconto-input').value);
+        const clienteVal = document.getElementById('orc-cliente')?.value;
+        const cliente_id = clienteVal ? parseInt(clienteVal, 10) : null;
+        const equipVal = document.getElementById('orc-equipamento')?.value;
+        const equipamento_id = equipVal ? parseInt(equipVal, 10) : null;
+        const validade_dias = parseInt(document.getElementById('orc-validade-dias')?.value, 10) || 15;
+        const valor_desconto_aplicado = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('orc-desconto-input')?.value);
 
         if (!cliente_id) {
           window.EMCUtils.showToast('Selecione um cliente para o orçamento.', 'error');
@@ -368,20 +370,34 @@ window.OrcamentosView = {
           return false;
         }
 
+        // Calcula a data de validade (hoje + validade_dias) no formato YYYY-MM-DD
+        const dataValidadeObj = new Date();
+        dataValidadeObj.setDate(dataValidadeObj.getDate() + validade_dias);
+        const data_validade = dataValidadeObj.toISOString().split('T')[0];
+
         try {
           const payload = {
-            cliente_id,
-            equipamento_id,
-            validade_dias,
-            valor_desconto_aplicado,
-            itens: this.orcItensTemp.map(it => ({
-              produto_id: it.produto_id || null,
-              item_id: it.item_id || null,
-              descricao_livre: it.descricao_livre || null,
-              quantidade: it.quantidade,
-              custo_snapshot: it.custo_snapshot,
-              valor_venda_snapshot: it.valor_venda_snapshot
-            }))
+            cliente: cliente_id,
+            cliente_id: cliente_id,
+            equipamento: equipamento_id,
+            equipamento_id: equipamento_id,
+            validade_dias: validade_dias,
+            data_validade: data_validade,
+            valor_desconto_aplicado: valor_desconto_aplicado,
+            itens: this.orcItensTemp.map(it => {
+              const pId = it.produto_id ? parseInt(it.produto_id, 10) : null;
+              const iId = it.item_id ? parseInt(it.item_id, 10) : null;
+              return {
+                produto: pId,
+                produto_id: pId,
+                item: iId,
+                item_id: iId,
+                descricao_livre: it.descricao_livre || null,
+                quantidade: parseFloat(it.quantidade),
+                custo_snapshot: parseFloat(it.custo_snapshot || 0),
+                valor_venda_snapshot: parseFloat(it.valor_venda_snapshot || 0)
+              };
+            })
           };
 
           const res = await window.api.post(window.CONFIG.ENDPOINTS.ORCAMENTOS.LISTA, payload);
@@ -413,12 +429,13 @@ window.OrcamentosView = {
               listaEquip = resEq.results || resEq || [];
 
               // Se o orçamento estava sem cliente selecionado e o equipamento foi vinculado a um cliente, seleciona o cliente também
-              const clienteVinculadoId = novoEquip.cliente_atual?.id || (typeof novoEquip.cliente_atual === 'number' ? novoEquip.cliente_atual : null);
+              const clienteVinculadoId = novoEquip.cliente_atual?.id || (typeof novoEquip.cliente_atual === 'number' ? novoEquip.cliente_atual : null) || novoEquip.cliente_id;
               if (selCli && !selCli.value && clienteVinculadoId) {
                 if (selCli._emcCombobox) {
                   selCli._emcCombobox.setValue(clienteVinculadoId);
                 } else {
                   selCli.value = clienteVinculadoId;
+                  selCli.dispatchEvent(new Event('change', { bubbles: true }));
                 }
               }
 
@@ -431,7 +448,7 @@ window.OrcamentosView = {
                   selEq._emcCombobox.updateOptions(novasOptions, novoEquip.id);
                 } else {
                   selEq.innerHTML = novasOptions;
-                  selEq.value = novoEquip.id;
+                  selEq.value = String(novoEquip.id);
                 }
               }
 
@@ -450,11 +467,14 @@ window.OrcamentosView = {
             try {
               const resClientes = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTES}?limit=1000`);
               const listaClientesAtualizada = resClientes.results || resClientes || [];
-              listaClientesAtualizada.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
+              todosClientes = listaClientesAtualizada;
+              listaClientes = todosClientes.filter(c => (c.tipo || '').toUpperCase() !== 'FORNECEDOR');
+              listaClientes.sort((a, b) => (a.nome_razao || '').localeCompare(b.nome_razao || ''));
 
               let novasOptionsCli = '<option value="">SELECIONE UM CLIENTE...</option>';
-              listaClientesAtualizada.forEach((c) => {
-                novasOptionsCli += `<option value="${c.id}" ${c.id === novoCli.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome_razao)}</option>`;
+              listaClientes.forEach((c) => {
+                const doc = c.cnpj_cpf ? ` (${window.EMCUtils.formatarCpfCnpjDinamico(c.cnpj_cpf)})` : '';
+                novasOptionsCli += `<option value="${c.id}" ${c.id === novoCli.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome_razao)}${doc}</option>`;
               });
 
               if (selCli) {
@@ -463,8 +483,8 @@ window.OrcamentosView = {
                 } else {
                   selCli.innerHTML = novasOptionsCli;
                   selCli.value = novoCli.id;
+                  selCli.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                selCli.dispatchEvent(new Event('change', { bubbles: true }));
               }
               window.EMCUtils.showToast(`Cliente "${novoCli.nome_razao}" cadastrado e selecionado!`, 'success');
             } catch (errCli) {
@@ -480,10 +500,11 @@ window.OrcamentosView = {
             try {
               const resProd = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.PRODUTOS);
               const listaProdAtualizada = resProd.results || resProd || [];
-              listaProdAtualizada.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+              listaProd = listaProdAtualizada;
+              listaProd.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
               let novasOptionsProd = '<option value="">SELECIONE UM PRODUTO BOM...</option>';
-              listaProdAtualizada.forEach((p) => {
+              listaProd.forEach((p) => {
                 novasOptionsProd += `<option value="${p.id}" data-preco="${p.preco_custo_apurado}" ${p.id === novoProd.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(p.nome)} (${window.EMCUtils.formatarMoeda(p.preco_custo_apurado)})</option>`;
               });
 
@@ -493,8 +514,8 @@ window.OrcamentosView = {
                 } else {
                   selProd.innerHTML = novasOptionsProd;
                   selProd.value = novoProd.id;
+                  selProd.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                selProd.dispatchEvent(new Event('change', { bubbles: true }));
               }
               window.EMCUtils.showToast(`Produto "${novoProd.nome}" cadastrado e selecionado!`, 'success');
             } catch (errProd) {
@@ -510,10 +531,11 @@ window.OrcamentosView = {
             try {
               const resItens = await window.api.get(window.CONFIG.ENDPOINTS.CATALOGO.ITENS);
               const listaItensAtualizada = resItens.results || resItens || [];
-              listaItensAtualizada.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+              listaItens = listaItensAtualizada;
+              listaItens.sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
 
               let novasOptionsItens = '<option value="">SELECIONE UM INSUMO DIRETO...</option>';
-              listaItensAtualizada.forEach((it) => {
+              listaItens.forEach((it) => {
                 novasOptionsItens += `<option value="${it.id}" data-preco="${it.ultimo_custo_compra}" ${it.id === novoItem.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(it.nome)}</option>`;
               });
 
@@ -523,8 +545,8 @@ window.OrcamentosView = {
                 } else {
                   selItem.innerHTML = novasOptionsItens;
                   selItem.value = novoItem.id;
+                  selItem.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                selItem.dispatchEvent(new Event('change', { bubbles: true }));
               }
               window.EMCUtils.showToast(`Insumo "${novoItem.nome}" cadastrado e selecionado!`, 'success');
             } catch (errIt) {
@@ -582,9 +604,12 @@ window.OrcamentosView = {
       selCli?.addEventListener('change', async (e) => {
         const clienteId = e.target.value;
         if (selEq) {
-          selEq.innerHTML = montarOptionsEquip(clienteId || null);
+          const novasOpts = montarOptionsEquip(clienteId || null);
           if (selEq._emcCombobox) {
-            selEq._emcCombobox.refresh();
+            selEq._emcCombobox.updateOptions(novasOpts);
+          } else {
+            selEq.innerHTML = novasOpts;
+            selEq.value = '';
           }
         }
 

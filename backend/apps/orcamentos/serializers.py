@@ -102,6 +102,28 @@ class OrcamentoItemSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'orcamento']
         validators = []
 
+    def to_internal_value(self, data):
+        if hasattr(data, '_mutable'):
+            data = data.copy()
+        elif isinstance(data, dict):
+            data = dict(data)
+
+        # Mapeia chaves com sufixo _id para as ForeignKeys
+        if 'produto_id' in data and not data.get('produto'):
+            data['produto'] = data['produto_id']
+        if 'item_id' in data and not data.get('item'):
+            data['item'] = data['item_id']
+
+        # Normaliza strings vazias ou "null"/"None" para None
+        if data.get('produto') in ('', 'null', 'None'):
+            data['produto'] = None
+        if data.get('item') in ('', 'null', 'None'):
+            data['item'] = None
+        if data.get('descricao_livre') in ('', 'null', 'None'):
+            data['descricao_livre'] = None
+
+        return super().to_internal_value(data)
+
     def get_tipo_item(self, obj):
         if obj.produto_id:
             return 'PRODUTO'
@@ -234,6 +256,15 @@ class OrcamentoPropostaPagamentoSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'orcamento']
         validators = []
 
+    def to_internal_value(self, data):
+        if hasattr(data, '_mutable'):
+            data = data.copy()
+        elif isinstance(data, dict):
+            data = dict(data)
+        if 'regra_pagamento_id' in data and not data.get('regra_pagamento'):
+            data['regra_pagamento'] = data['regra_pagamento_id']
+        return super().to_internal_value(data)
+
     def get_desconto_efetivo_percentual(self, obj):
         if obj.desconto_personalizado is not None:
             return float(obj.desconto_personalizado)
@@ -318,6 +349,33 @@ class OrcamentoSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at'
         ]
+
+    def to_internal_value(self, data):
+        if hasattr(data, '_mutable'):
+            data = data.copy()
+        elif isinstance(data, dict):
+            data = dict(data)
+
+        # Mapeia chaves com sufixo _id enviadas pelo frontend
+        if 'cliente_id' in data and not data.get('cliente'):
+            data['cliente'] = data['cliente_id']
+        if 'equipamento_id' in data and not data.get('equipamento'):
+            data['equipamento'] = data['equipamento_id']
+
+        # Normaliza strings vazias ou "null"/"None" para None
+        if data.get('equipamento') in ('', 'null', 'None'):
+            data['equipamento'] = None
+
+        # Suporte a validade_dias para calcular data_validade se não enviada explicitamente
+        if 'validade_dias' in data and not data.get('data_validade'):
+            try:
+                dias = int(data['validade_dias'])
+                dt_base = timezone.localdate()
+                data['data_validade'] = str(dt_base + timedelta(days=dias))
+            except (ValueError, TypeError):
+                pass
+
+        return super().to_internal_value(data)
 
     def get_valor_liquido(self, obj):
         return float(obj.valor_liquido)

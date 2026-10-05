@@ -987,12 +987,17 @@ function initSearchableSelect(selectEl, opts = {}) {
     updateOptions(newHtml, selectedValue = null) {
       selectEl.innerHTML = newHtml;
       if (selectedValue !== null && selectedValue !== undefined) {
-        selectEl.value = selectedValue;
+        selectEl.value = String(selectedValue);
+        const opt = selectEl.querySelector(`option[value="${selectedValue}"]`);
+        if (opt) opt.selected = true;
       }
       extrairOpcoes();
       atualizarTriggerText();
       renderizarAcao();
       renderizarOpcoes();
+      if (selectedValue !== null && selectedValue !== undefined) {
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     },
     destroy() {
       container.remove();

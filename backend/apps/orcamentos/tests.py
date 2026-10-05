@@ -636,3 +636,45 @@ class OrcamentosModuleTestCase(TestCase):
 
         # Não aparece na listagem ativa
         self.assertFalse(Orcamento.objects.filter(id=orcamento.id, deleted_at__isnull=True).exists())
+
+    def test_14_criacao_orcamento_com_payload_sufixo_id_e_validade_dias(self):
+        """
+        Valida que o backend aceita payload contendo cliente_id, equipamento_id,
+        validade_dias, produto_id e item_id mapeando corretamente para as ForeignKeys
+        e calculando a data_validade dinamicamente.
+        """
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        payload = {
+            "cliente_id": self.cliente.id,
+            "equipamento_id": self.equipamento.id,
+            "validade_dias": 20,
+            "valor_desconto_aplicado": "50.00",
+            "itens": [
+                {
+                    "produto_id": self.produto_reforco.id,
+                    "quantidade": 1,
+                    "custo_snapshot": "440.00",
+                    "valor_venda_snapshot": "616.00"
+                },
+                {
+                    "item_id": self.item_chapa.id,
+                    "quantidade": 2,
+                    "custo_snapshot": "15.00",
+                    "valor_venda_snapshot": "25.00"
+                }
+            ]
+        }
+
+        res = self.client.post('/api/orcamentos/', data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+
+        orc_id = res.data['id']
+        orc = Orcamento.objects.get(id=orc_id)
+        self.assertEqual(orc.cliente.id, self.cliente.id)
+        self.assertEqual(orc.equipamento.id, self.equipamento.id)
+        self.assertEqual(orc.data_validade, timezone.localdate() + timedelta(days=20))
+        self.assertEqual(orc.itens_orcamento.count(), 2)
+        self.assertTrue(orc.itens_orcamento.filter(produto=self.produto_reforco).exists())
+        self.assertTrue(orc.itens_orcamento.filter(item=self.item_chapa).exists())
+
