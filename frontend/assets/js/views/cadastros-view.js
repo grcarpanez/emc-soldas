@@ -1128,7 +1128,11 @@ window.CadastrosView = {
     }
   },
 
-  async abrirModalEquipamento(equip = null, preSelectClienteId = null) {
+  async abrirModalEquipamento(equip = null, preSelectClienteId = null, opts = {}) {
+    if (preSelectClienteId && typeof preSelectClienteId === 'object' && !('id' in preSelectClienteId)) {
+      opts = preSelectClienteId;
+      preSelectClienteId = opts.preSelectClienteId || null;
+    }
     const isEdit = !!equip;
 
     let clientes = [];
@@ -1207,15 +1211,19 @@ window.CadastrosView = {
             cliente_id
           };
 
+          let resEquip = null;
           if (isEdit) {
-            await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equip.id}/`, payload);
+            resEquip = await window.api.put(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equip.id}/`, payload);
             window.EMCUtils.showToast('Equipamento atualizado com sucesso!', 'success');
           } else {
-            await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS, payload);
+            resEquip = await window.api.post(window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS, payload);
             window.EMCUtils.showToast('Equipamento criado com sucesso!', 'success');
           }
-          this.carregarListaEquipamentos();
-          this.carregarListaClientes();
+          if (typeof this.carregarListaEquipamentos === 'function') this.carregarListaEquipamentos();
+          if (typeof this.carregarListaClientes === 'function') this.carregarListaClientes();
+          if (typeof opts?.onSuccess === 'function') {
+            await opts.onSuccess(resEquip);
+          }
           return true;
         } catch (err) {
           window.EMCUtils.showToast(err.message || 'Erro ao salvar equipamento.', 'error');

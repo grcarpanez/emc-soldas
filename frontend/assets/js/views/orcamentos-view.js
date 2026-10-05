@@ -212,15 +212,22 @@ window.OrcamentosView = {
           <!-- Cabeçalho do Orçamento -->
           <div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 140px; gap: 12px; margin-bottom: 16px;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="orc-cliente">Cliente *</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="orc-cliente" style="margin-bottom: 0;">Cliente *</label>
+              </div>
               <select id="orc-cliente" class="form-control" required>${optionsCli}</select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="orc-equipamento">Equipamento / Máquina</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="orc-equipamento" style="margin-bottom: 0;">Equipamento / Máquina</label>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-orc-novo-equip" style="padding: 0 6px; font-size: 11px; height: 22px; color: var(--color-rust-orange);" title="Cadastrar Novo Equipamento">+ NOVO EQUIPAMENTO</button>
+              </div>
               <select id="orc-equipamento" class="form-control">${montarOptionsEquip()}</select>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="orc-validade-dias">Validade (Dias)</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
+                <label class="form-label" for="orc-validade-dias" style="margin-bottom: 0;">Validade (Dias)</label>
+              </div>
               <input type="number" id="orc-validade-dias" class="form-control mono-text" value="15" required>
             </div>
           </div>
@@ -396,10 +403,64 @@ window.OrcamentosView = {
       const selProd = document.getElementById('sel-produto-id');
       const selItem = document.getElementById('sel-item-id');
 
+      const dispararCadastroNovoEquipamento = () => {
+        const clienteAtualId = selCli?.value ? parseInt(selCli.value, 10) : null;
+        window.CadastrosView.abrirModalEquipamento(null, clienteAtualId, {
+          onSuccess: async (novoEquip) => {
+            if (!novoEquip || !novoEquip.id) return;
+            try {
+              // Recarrega a lista de equipamentos do servidor
+              const resEq = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}?page_size=1000`);
+              listaEquip = resEq.results || resEq || [];
+
+              // Se o orçamento estava sem cliente selecionado e o equipamento foi vinculado a um cliente, seleciona o cliente também
+              const clienteVinculadoId = novoEquip.cliente_atual?.id || (typeof novoEquip.cliente_atual === 'number' ? novoEquip.cliente_atual : null);
+              if (selCli && !selCli.value && clienteVinculadoId) {
+                if (selCli._emcCombobox) {
+                  selCli._emcCombobox.setValue(clienteVinculadoId);
+                } else {
+                  selCli.value = clienteVinculadoId;
+                }
+              }
+
+              // Re-monta as options de equipamentos para o cliente ativo
+              const clienteIdAtual = selCli?.value || null;
+              const novasOptions = montarOptionsEquip(clienteIdAtual);
+
+              if (selEq) {
+                if (selEq._emcCombobox) {
+                  selEq._emcCombobox.updateOptions(novasOptions, novoEquip.id);
+                } else {
+                  selEq.innerHTML = novasOptions;
+                  selEq.value = novoEquip.id;
+                }
+              }
+
+              window.EMCUtils.showToast(`Equipamento "${novoEquip.descricao}" cadastrado e selecionado com sucesso!`, 'success');
+            } catch (err) {
+              console.error('Erro ao atualizar equipamentos no orçamento:', err);
+            }
+          }
+        });
+      };
+
       if (selCli) window.EMCUtils.initSearchableSelect(selCli, { placeholder: 'SELECIONE OU BUSQUE O CLIENTE...' });
-      if (selEq) window.EMCUtils.initSearchableSelect(selEq, { placeholder: 'TODOS OU PESQUISE O VEÍCULO...' });
+      if (selEq) {
+        window.EMCUtils.initSearchableSelect(selEq, { 
+          placeholder: 'TODOS OU PESQUISE O VEÍCULO...',
+          action: {
+            label: '+ CADASTRAR NOVO EQUIPAMENTO',
+            onClick: () => dispararCadastroNovoEquipamento()
+          }
+        });
+      }
       if (selProd) window.EMCUtils.initSearchableSelect(selProd, { placeholder: 'PESQUISE UM PRODUTO BOM...' });
       if (selItem) window.EMCUtils.initSearchableSelect(selItem, { placeholder: 'PESQUISE UM INSUMO...' });
+
+      document.getElementById('btn-orc-novo-equip')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        dispararCadastroNovoEquipamento();
+      });
 
       // Ao trocar de cliente, re-filtra dinamicamente a combobox de equipamentos
       selCli?.addEventListener('change', async (e) => {
