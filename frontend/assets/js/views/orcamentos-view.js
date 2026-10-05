@@ -18,6 +18,7 @@ window.OrcamentosView = {
           <input type="text" id="filtro-orc-busca" class="form-control" placeholder="BUSCAR POR CLIENTE, EQUIPAMENTO OU ID..." style="flex: 1; min-width: 220px;">
           <div style="width: 230px; min-width: 190px; flex-shrink: 0;" id="wrapper-orc-status">
             <select id="filtro-orc-status" class="form-control">
+              <option value="">TODOS OS STATUS OPERACIONAIS</option>
               <option value="GERADO">GERADO</option>
               <option value="ENVIADO">ENVIADO</option>
               <option value="APROVADO">APROVADO</option>
@@ -26,7 +27,7 @@ window.OrcamentosView = {
               <option value="CANCELADO">CANCELADO</option>
             </select>
           </div>
-          <select id="filtro-orc-status-fin" class="form-control" style="width: 175px; min-width: 165px; flex-shrink: 0;">
+          <select id="filtro-orc-status-fin" class="form-control" style="width: 215px; min-width: 195px; flex-shrink: 0;">
             <option value="">FINANCEIRO: TODOS</option>
             <option value="A_FATURAR">A FATURAR</option>
             <option value="FATURADO">FATURADO</option>
@@ -62,7 +63,7 @@ window.OrcamentosView = {
     const selStatusOp = document.getElementById('filtro-orc-status');
     if (selStatusOp) {
       window.EMCUtils.initMultiSelectCombobox(selStatusOp, {
-        placeholder: 'TODOS OS STATUS',
+        placeholder: 'OPERACIONAL: TODOS',
         prefix: 'OPERACIONAL',
         onChange: () => this.carregarListaOrcamentos()
       });
@@ -122,6 +123,9 @@ window.OrcamentosView = {
           CANCELADO: 'danger'
         }[orc.status_financeiro] || 'info';
 
+        const statusOpTexto = orc.status_operacional_display || window.EMCUtils.formatarStatus(orc.status_operacional);
+        const statusFinTexto = orc.status_financeiro_display || window.EMCUtils.formatarStatus(orc.status_financeiro);
+
         html += `
           <tr>
             <td class="mono-text"><strong>#${orc.id}</strong></td>
@@ -130,8 +134,8 @@ window.OrcamentosView = {
             <td class="mono-text" style="font-size: 12px;">
               ${window.EMCUtils.formatarDataPtBr(orc.data_geracao)} ➔ ${window.EMCUtils.formatarDataPtBr(orc.data_validade)}
             </td>
-            <td><span class="status-chip ${badgeOp}">${orc.status_operacional}</span></td>
-            <td><span class="status-chip ${badgeFin}">${orc.status_financeiro}</span></td>
+            <td><span class="status-chip ${badgeOp}">${window.EMCUtils.escapeHtml(statusOpTexto)}</span></td>
+            <td><span class="status-chip ${badgeFin}">${window.EMCUtils.escapeHtml(statusFinTexto)}</span></td>
             <td class="mono-text" style="font-weight: 700; color: var(--color-rust-orange); font-size: 15px;">
               ${window.EMCUtils.formatarMoeda(orc.valor_total || orc.valor_bruto)}
             </td>
@@ -814,6 +818,25 @@ window.OrcamentosView = {
         `;
       });
 
+      const badgeOpModal = {
+        GERADO: 'info',
+        ENVIADO: 'info',
+        APROVADO: 'success',
+        EM_EXECUCAO: 'warning',
+        CONCLUIDO: 'success',
+        CANCELADO: 'danger'
+      }[orc.status_operacional] || 'info';
+
+      const badgeFinModal = {
+        A_FATURAR: 'warning',
+        FATURADO: 'info',
+        PAGO: 'success',
+        CANCELADO: 'danger'
+      }[orc.status_financeiro] || 'info';
+
+      const statusOpTextoModal = orc.status_operacional_display || window.EMCUtils.formatarStatus(orc.status_operacional);
+      const statusFinTextoModal = orc.status_financeiro_display || window.EMCUtils.formatarStatus(orc.status_financeiro);
+
       window.EMCUtils.openModal({
         title: `ORÇAMENTO #${orc.id} - ${orc.cliente_nome}`,
         size: 'lg',
@@ -827,8 +850,8 @@ window.OrcamentosView = {
               • <strong>Validade:</strong> ${window.EMCUtils.formatarDataPtBr(orc.data_validade)}
             </div>
             <div>
-              • <strong>Status Operacional:</strong> <span class="status-chip info">${orc.status_operacional}</span><br>
-              • <strong>Status Financeiro:</strong> <span class="status-chip warning">${orc.status_financeiro}</span><br>
+              • <strong>Status Operacional:</strong> <span class="status-chip ${badgeOpModal}">${window.EMCUtils.escapeHtml(statusOpTextoModal)}</span><br>
+              • <strong>Status Financeiro:</strong> <span class="status-chip ${badgeFinModal}">${window.EMCUtils.escapeHtml(statusFinTextoModal)}</span><br>
               • <strong>Desconto Comercial:</strong> ${window.EMCUtils.formatarMoeda(orc.valor_desconto_aplicado || 0)}<br>
               • <strong>Total do Orçamento:</strong> <span class="mono-text" style="font-weight: 700; color: var(--color-rust-orange); font-size: 16px;">${window.EMCUtils.formatarMoeda(orc.valor_total || orc.valor_bruto)}</span>
             </div>

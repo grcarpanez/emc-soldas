@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Atualização Reativa de Equipamentos no Orçamento e Resolução de Payload cliente_id - PWA v4.55)  
+**Última Atualização:** 2026-10-05 (Formatação de Status em Orçamentos, Eliminação de Underscore e Calibração de Filtros - PWA v4.56)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação e Dashboard)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -668,6 +668,18 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
     - Teste `test_14_criacao_orcamento_com_payload_sufixo_id_e_validade_dias` adicionado em `apps/orcamentos/tests.py`.
   - **Versionamento PWA:** Cache `emc-soldas-v4.55` e `?v=4.55`.
   - **Registro de Planejamento:** `Planejamento/2026-10-05_06_correcao_combobox_equipamento_e_payload_orcamentos.md`.
+- [x] **Formatação de Status em Orçamentos, Eliminação de Underscore e Calibração de Filtros (PWA v4.56):**
+  - **Exposição Canônica de Labels no Backend:**
+    - Inclusão dos campos `status_operacional_display` e `status_financeiro_display` em `OrcamentoSerializer` (`apps/orcamentos/serializers.py`), herdados por `OrcamentoDetailSerializer`.
+  - **Eliminação Mandatória de Underscore (`_`) no Frontend:**
+    - Tabela de orçamentos e modal de detalhes (`orcamentos-view.js`): status exibidos com rótulo amigável (`A FATURAR` em vez de `A_FATURAR`, `EM EXECUÇÃO` em vez de `EM_EXECUCAO`) e fallback universal via `EMCUtils.formatarStatus()`.
+    - Conta corrente de faturamento (`faturamento-view.js`): status operacional formatado via `EMCUtils.formatarStatus()`.
+  - **Calibração da Barra de Filtros:**
+    - Opção neutra vazia `<option value="">TODOS OS STATUS OPERACIONAIS</option>` adicionada no select de status operacional com placeholder `'OPERACIONAL: TODOS'`, garantindo que a tela inicial carregue todos os orçamentos sem pré-filtrar por `GERADO`.
+    - Largura do filtro financeiro expandida para `width: 215px; min-width: 195px;`, eliminando o corte de texto (`FINANCEIRO: TODOS`).
+  - **Testes Automatizados:** Asserções adicionadas em `apps/orcamentos/tests.py` validando os campos display.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.56` e `?v=4.56`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-05_07_formatacao_status_orcamentos_e_remocao_underscore.md`.
 
 
 

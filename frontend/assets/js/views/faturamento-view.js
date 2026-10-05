@@ -250,7 +250,7 @@ window.FaturamentoView = {
             <td class="mono-text"><strong>#${orc.id}</strong></td>
             <td>${window.EMCUtils.escapeHtml(orc.equipamento_descricao || 'Oficina Geral')}</td>
             <td class="mono-text">${window.EMCUtils.formatarDataPtBr(orc.data_geracao)}</td>
-            <td><span class="status-chip success">${orc.status_operacional}</span></td>
+            <td><span class="status-chip success">${window.EMCUtils.formatarStatus(orc.status_operacional)}</span></td>
             <td class="mono-text" style="font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(orc.valor_bruto || orc.valor_total)}</td>
           </tr>
         `;
@@ -312,7 +312,7 @@ window.FaturamentoView = {
           <tr>
             <td class="mono-text"><strong>#${o.id}</strong></td>
             <td>${window.EMCUtils.escapeHtml(o.equipamento_descricao || '-')}</td>
-            <td><span class="status-chip success">${o.status_operacional}</span></td>
+            <td><span class="status-chip success">${window.EMCUtils.formatarStatus(o.status_operacional)}</span></td>
             <td class="mono-text" style="color: var(--color-rust-orange); font-weight: 700;">${window.EMCUtils.formatarMoeda(o.valor_total || o.valor_bruto)}</td>
           </tr>
         `;

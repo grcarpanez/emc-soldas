@@ -677,4 +677,6 @@ class OrcamentosModuleTestCase(TestCase):
         self.assertEqual(orc.itens_orcamento.count(), 2)
         self.assertTrue(orc.itens_orcamento.filter(produto=self.produto_reforco).exists())
         self.assertTrue(orc.itens_orcamento.filter(item=self.item_chapa).exists())
+        self.assertEqual(res.data.get('status_operacional_display'), 'GERADO')
+        self.assertEqual(res.data.get('status_financeiro_display'), 'A FATURAR')
 

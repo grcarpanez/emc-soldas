@@ -308,6 +308,9 @@ class OrcamentoSerializer(serializers.ModelSerializer):
     data_geracao = serializers.DateField(required=False)
     data_validade = serializers.DateField(required=False)
 
+    status_operacional_display = serializers.CharField(source='get_status_operacional_display', read_only=True)
+    status_financeiro_display = serializers.CharField(source='get_status_financeiro_display', read_only=True)
+
     valor_liquido = serializers.SerializerMethodField()
     is_expirado = serializers.SerializerMethodField()
     total_itens = serializers.SerializerMethodField()
@@ -328,7 +331,9 @@ class OrcamentoSerializer(serializers.ModelSerializer):
             'data_geracao',
             'data_validade',
             'status_operacional',
+            'status_operacional_display',
             'status_financeiro',
+            'status_financeiro_display',
             'valor_bruto',
             'valor_desconto_aplicado',
             'valor_liquido',
