@@ -343,9 +343,15 @@ class EquipamentoSerializer(serializers.ModelSerializer):
         return vinculo_ativo.cliente.nome_razao if vinculo_ativo else None
 
     def get_em_patio(self, obj):
-        return obj.orcamentos.filter(
+        via_orc = obj.orcamentos.filter(
             status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
             deleted_at__isnull=True
+        ).exists()
+        if via_orc:
+            return True
+        return obj.itens_orcamento.filter(
+            orcamento__status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+            orcamento__deleted_at__isnull=True
         ).exists()
 
     def get_orcamento_em_execucao(self, obj):
@@ -353,6 +359,13 @@ class EquipamentoSerializer(serializers.ModelSerializer):
             status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
             deleted_at__isnull=True
         ).order_by('-id').first()
+        if not orc:
+            item_orc = obj.itens_orcamento.filter(
+                orcamento__status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+                orcamento__deleted_at__isnull=True
+            ).select_related('orcamento').order_by('-orcamento_id').first()
+            if item_orc:
+                orc = item_orc.orcamento
         if orc:
             return {
                 "id": orc.id,

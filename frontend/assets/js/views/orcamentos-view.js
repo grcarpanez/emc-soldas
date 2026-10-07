@@ -130,7 +130,13 @@ window.OrcamentosView = {
           <tr>
             <td class="mono-text"><strong>#${orc.id}</strong></td>
             <td><strong>${window.EMCUtils.escapeHtml(orc.cliente_nome || 'Cliente')}</strong></td>
-            <td>${window.EMCUtils.escapeHtml(orc.equipamento_descricao || 'Geral / Oficina')}</td>
+            <td class="mono-text" style="font-size: 12px;">
+              ${window.EMCUtils.escapeHtml(
+                (orc.equipamentos_envolvidos && orc.equipamentos_envolvidos.length > 1)
+                  ? `MÚLTIPLOS VEÍCULOS (${orc.equipamentos_envolvidos.length})`
+                  : (orc.equipamentos_envolvidos?.[0]?.display || orc.equipamento_descricao || 'Geral / Oficina')
+              )}
+            </td>
             <td class="mono-text" style="font-size: 12px;">
               ${window.EMCUtils.formatarDataPtBr(orc.data_geracao)} ➔ ${window.EMCUtils.formatarDataPtBr(orc.data_validade)}
             </td>
@@ -226,7 +232,7 @@ window.OrcamentosView = {
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; min-height: 22px; margin-bottom: 4px;">
-                <label class="form-label" for="orc-equipamento" style="margin-bottom: 0;">Equipamento / Máquina</label>
+                <label class="form-label" for="orc-equipamento" style="margin-bottom: 0;">Equipamento Padrão / Sugerido (Opcional)</label>
               </div>
               <select id="orc-equipamento" class="form-control">${montarOptionsEquip()}</select>
             </div>
@@ -254,6 +260,19 @@ window.OrcamentosView = {
                 <label style="font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
                   <input type="radio" name="tipo_item_radio" value="LIVRE"> Lançamento Livre
                 </label>
+              </div>
+            </div>
+
+            <!-- Seletor do Equipamento do Item -->
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: flex-end; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--color-outline-variant);">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="sel-item-equip-id" style="margin-bottom: 4px; font-weight: 600;">
+                  Equipamento / Veículo deste Item (Opcional):
+                </label>
+                <select id="sel-item-equip-id" class="form-control">${montarOptionsEquip()}</select>
+              </div>
+              <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); padding-bottom: 6px;">
+                * Permite vincular veículos diferentes para cada serviço/peça deste orçamento.
               </div>
             </div>
 
@@ -325,6 +344,7 @@ window.OrcamentosView = {
               <thead>
                 <tr>
                   <th>TIPO</th>
+                  <th>VEÍCULO / EQUIPAMENTO</th>
                   <th>DESCRIÇÃO / ESPECIFICAÇÃO</th>
                   <th>QUANTIDADE</th>
                   <th>CUSTO BASE (SNAP)</th>
@@ -334,7 +354,7 @@ window.OrcamentosView = {
                 </tr>
               </thead>
               <tbody id="orc-itens-grid-tbody">
-                <tr><td colspan="7" class="text-center mono-text" style="padding: 16px;">Nenhum item inserido no orçamento.</td></tr>
+                <tr><td colspan="8" class="text-center mono-text" style="padding: 16px;">Nenhum item inserido no orçamento.</td></tr>
               </tbody>
             </table>
           </div>
@@ -394,7 +414,10 @@ window.OrcamentosView = {
             itens: this.orcItensTemp.map(it => {
               const pId = it.produto_id ? parseInt(it.produto_id, 10) : null;
               const iId = it.item_id ? parseInt(it.item_id, 10) : null;
+              const eqId = it.equipamento_id ? parseInt(it.equipamento_id, 10) : null;
               return {
+                equipamento: eqId,
+                equipamento_id: eqId,
                 produto: pId,
                 produto_id: pId,
                 item: iId,
@@ -422,6 +445,7 @@ window.OrcamentosView = {
     setTimeout(() => {
       const selCli = document.getElementById('orc-cliente');
       const selEq = document.getElementById('orc-equipamento');
+      const selEqItem = document.getElementById('sel-item-equip-id');
       const selProd = document.getElementById('sel-produto-id');
       const selItem = document.getElementById('sel-item-id');
 
@@ -456,6 +480,15 @@ window.OrcamentosView = {
                 } else {
                   selEq.innerHTML = novasOptions;
                   selEq.value = String(novoEquip.id);
+                }
+              }
+
+              if (selEqItem) {
+                if (selEqItem._emcCombobox) {
+                  selEqItem._emcCombobox.updateOptions(novasOptions, novoEquip.id);
+                } else {
+                  selEqItem.innerHTML = novasOptions;
+                  selEqItem.value = String(novoEquip.id);
                 }
               }
 
@@ -585,6 +618,17 @@ window.OrcamentosView = {
         });
       }
 
+      if (selEqItem) {
+        window.EMCUtils.initSearchableSelect(selEqItem, { 
+          placeholder: 'HERDAR DO ORÇAMENTO OU SELECIONAR VEÍCULO...',
+          action: {
+            label: '+ CADASTRAR NOVO EQUIPAMENTO',
+            permission: 'acesso_comercial',
+            onClick: () => dispararCadastroNovoEquipamento()
+          }
+        });
+      }
+
       if (selProd) {
         window.EMCUtils.initSearchableSelect(selProd, { 
           placeholder: 'PESQUISE UM PRODUTO BOM...',
@@ -610,13 +654,21 @@ window.OrcamentosView = {
       // Ao trocar de cliente, re-filtra dinamicamente a combobox de equipamentos
       selCli?.addEventListener('change', async (e) => {
         const clienteId = e.target.value;
+        const novasOpts = montarOptionsEquip(clienteId || null);
         if (selEq) {
-          const novasOpts = montarOptionsEquip(clienteId || null);
           if (selEq._emcCombobox) {
             selEq._emcCombobox.updateOptions(novasOpts);
           } else {
             selEq.innerHTML = novasOpts;
             selEq.value = '';
+          }
+        }
+        if (selEqItem) {
+          if (selEqItem._emcCombobox) {
+            selEqItem._emcCombobox.updateOptions(novasOpts);
+          } else {
+            selEqItem.innerHTML = novasOpts;
+            selEqItem.value = '';
           }
         }
 
@@ -633,6 +685,18 @@ window.OrcamentosView = {
             }
           } catch (err) {
             // Silencioso
+          }
+        }
+      });
+
+      // Sincroniza equipamento do cabeçalho com o do item (se item ainda estiver vazio ou seguir o padrão)
+      selEq?.addEventListener('change', (e) => {
+        const eqId = e.target.value;
+        if (selEqItem) {
+          if (selEqItem._emcCombobox) {
+            selEqItem._emcCombobox.setValue(eqId);
+          } else {
+            selEqItem.value = eqId;
           }
         }
       });
@@ -663,6 +727,31 @@ window.OrcamentosView = {
       document.getElementById('sel-item-venda').value = window.EMCUtils.formatarMoeda(preco * 1.5);
     });
 
+    // Helper para capturar o equipamento selecionado para a linha
+    const obterEquipItemAtual = () => {
+      const selEqItem = document.getElementById('sel-item-equip-id');
+      const selEqCabecalho = document.getElementById('orc-equipamento');
+      let equipId = selEqItem?.value ? parseInt(selEqItem.value, 10) : null;
+      let equipDisplay = '';
+
+      if (!equipId && selEqCabecalho?.value) {
+        equipId = parseInt(selEqCabecalho.value, 10);
+      }
+
+      if (equipId) {
+        const found = (listaEquip || []).find(e => e.id === equipId);
+        if (found) {
+          equipDisplay = `${found.placa ? `[${found.placa}] ` : ''}${found.descricao}`;
+        } else {
+          equipDisplay = `Equipamento #${equipId}`;
+        }
+      } else {
+        equipDisplay = '-';
+      }
+
+      return { equipId, equipDisplay };
+    };
+
     // Botões de inserção
     document.getElementById('btn-add-orc-item')?.addEventListener('click', () => {
       const sel = document.getElementById('sel-produto-id');
@@ -677,8 +766,12 @@ window.OrcamentosView = {
         return;
       }
 
+      const { equipId, equipDisplay } = obterEquipItemAtual();
+
       this.orcItensTemp.push({
         tipo: 'PRODUTO',
+        equipamento_id: equipId,
+        equipamento_display: equipDisplay,
         produto_id,
         descricao: nome,
         quantidade,
@@ -702,8 +795,12 @@ window.OrcamentosView = {
         return;
       }
 
+      const { equipId, equipDisplay } = obterEquipItemAtual();
+
       this.orcItensTemp.push({
         tipo: 'ITEM',
+        equipamento_id: equipId,
+        equipamento_display: equipDisplay,
         item_id,
         descricao: nome,
         quantidade,
@@ -725,8 +822,12 @@ window.OrcamentosView = {
         return;
       }
 
+      const { equipId, equipDisplay } = obterEquipItemAtual();
+
       this.orcItensTemp.push({
         tipo: 'LIVRE',
+        equipamento_id: equipId,
+        equipamento_display: equipDisplay,
         descricao_livre,
         descricao: descricao_livre,
         quantidade,
@@ -748,7 +849,7 @@ window.OrcamentosView = {
     if (!tbody) return;
 
     if (!this.orcItensTemp.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center mono-text" style="padding: 16px;">Nenhum item inserido no orçamento.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center mono-text" style="padding: 16px;">Nenhum item inserido no orçamento.</td></tr>';
       if (totalFinalEl) totalFinalEl.textContent = 'R$ 0,00';
       if (margemEl) margemEl.textContent = '0.00 %';
       return;
@@ -765,10 +866,14 @@ window.OrcamentosView = {
       totalCusto += subCusto;
 
       const badgeTipo = it.tipo === 'PRODUTO' ? 'info' : (it.tipo === 'ITEM' ? 'warning' : 'success');
+      const eqTexto = it.equipamento_display && it.equipamento_display !== '-'
+        ? `<span class="mono-text" style="font-weight: 600; font-size: 11px; color: var(--color-on-surface);"><i class="ph-bold ph-truck" style="color: var(--color-rust-orange);"></i> ${window.EMCUtils.escapeHtml(it.equipamento_display)}</span>`
+        : `<span class="mono-text" style="color: var(--color-on-surface-variant); font-size: 11px;">[PADRÃO]</span>`;
 
       html += `
         <tr>
           <td><span class="status-chip ${badgeTipo}">${it.tipo}</span></td>
+          <td>${eqTexto}</td>
           <td><strong>${window.EMCUtils.escapeHtml(it.descricao)}</strong></td>
           <td class="mono-text">${it.quantidade.toFixed(2)}</td>
           <td class="mono-text">${window.EMCUtils.formatarMoeda(it.custo_snapshot)}</td>
@@ -810,8 +915,15 @@ window.OrcamentosView = {
       let rows = '';
       itens.forEach((it) => {
         const sub = (parseFloat(it.quantidade) || 0) * (parseFloat(it.valor_venda_snapshot) || 0);
+        const tipoBadge = it.tipo_item === 'PRODUTO' ? 'info' : (it.tipo_item === 'ITEM' ? 'warning' : 'success');
+        const eqBadge = it.equipamento_display
+          ? `<span class="mono-text" style="font-weight: 600; font-size: 11px;"><i class="ph-bold ph-truck" style="color: var(--color-rust-orange);"></i> ${window.EMCUtils.escapeHtml(it.equipamento_display)}</span>`
+          : `<span class="mono-text" style="color: var(--color-on-surface-variant); font-size: 11px;">${window.EMCUtils.escapeHtml(orc.equipamento_descricao || '-')}</span>`;
+
         rows += `
           <tr>
+            <td><span class="status-chip ${tipoBadge}">${it.tipo_item || 'ITEM'}</span></td>
+            <td>${eqBadge}</td>
             <td><strong>${window.EMCUtils.escapeHtml(it.produto_nome || it.item_nome || it.descricao_livre || 'Item')}</strong></td>
             <td class="mono-text">${parseFloat(it.quantidade).toFixed(2)}</td>
             <td class="mono-text">${window.EMCUtils.formatarMoeda(it.custo_snapshot)}</td>
@@ -898,7 +1010,10 @@ window.OrcamentosView = {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px;">
             <div>
               • <strong>Cliente:</strong> ${window.EMCUtils.escapeHtml(orc.cliente_nome)}<br>
-              • <strong>Equipamento:</strong> ${window.EMCUtils.escapeHtml(orc.equipamento_descricao || '-')}<br>
+              ${(orc.equipamentos_envolvidos && orc.equipamentos_envolvidos.length > 1)
+                ? `• <strong>Veículos / Equipamentos (${orc.equipamentos_envolvidos.length}):</strong> <span class="status-chip info mono-text" style="font-size: 11px;">${orc.equipamentos_envolvidos.map(e => window.EMCUtils.escapeHtml(e.display || (e.placa ? `[${e.placa}] ${e.descricao}` : e.descricao))).join(', ')}</span><br>`
+                : `• <strong>Equipamento:</strong> ${window.EMCUtils.escapeHtml(orc.equipamento_descricao || '-')}<br>`
+              }
               • <strong>Data Geração:</strong> ${window.EMCUtils.formatarDataPtBr(orc.data_geracao)}<br>
               • <strong>Validade:</strong> ${window.EMCUtils.formatarDataPtBr(orc.data_validade)}
             </div>
@@ -914,6 +1029,8 @@ window.OrcamentosView = {
             <table class="table">
               <thead>
                 <tr>
+                  <th>TIPO</th>
+                  <th>VEÍCULO / EQUIPAMENTO</th>
                   <th>ITEM / DESCRIÇÃO</th>
                   <th>QTD</th>
                   <th>CUSTO (SNAP)</th>

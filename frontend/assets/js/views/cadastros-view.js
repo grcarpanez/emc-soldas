@@ -173,7 +173,8 @@ window.CadastrosView = {
               <td class="mono-text">${window.EMCUtils.escapeHtml(eq.identificacao || '-')}</td>
               <td>${window.EMCUtils.escapeHtml(eq.descricao || '-')}</td>
               <td style="text-align: right; white-space: nowrap;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${eq.id})">HISTÓRICO</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoManutencao(${eq.id})">MANUTENÇÃO</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${eq.id})">TITULARIDADE</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="window.CadastrosView.desvincularEquipamento(${v.id}, ${clienteId})">DESVINCULAR</button>
               </td>
             </tr>
@@ -460,6 +461,172 @@ window.CadastrosView = {
     } catch (err) {
       console.error('Erro ao carregar histórico de proprietários:', err);
       window.EMCUtils.showToast(err.message || 'Erro ao carregar histórico de proprietários.', 'error');
+    }
+  },
+
+  async abrirModalHistoricoManutencao(equipId) {
+    try {
+      window.EMCUtils.showToast('Carregando prontuário de manutenção...', 'info', 1500);
+      const res = await window.api.get(`${window.CONFIG.ENDPOINTS.CADASTROS.EQUIPAMENTOS}${equipId}/historico-manutencao/`);
+      const eq = res.equipamento || {};
+      const metricas = res.metricas || {};
+      const manutencoes = res.manutencoes || [];
+
+      const placaTexto = (eq.placa && eq.placa !== 'null' && eq.placa !== 'None') ? ` [${window.EMCUtils.formatarPlacaVeiculo(eq.placa)}]` : '';
+      const identTexto = (eq.identificacao && eq.identificacao !== 'null' && eq.identificacao !== 'None') ? ` - ${eq.identificacao}` : '';
+
+      const renderizarLinhas = (lista) => {
+        if (!lista.length) {
+          return '<tr><td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">Nenhuma manutenção ou serviço localizado para este equipamento.</td></tr>';
+        }
+        return lista.map((m) => {
+          const badgeOp = {
+            GERADO: 'info',
+            ENVIADO: 'info',
+            APROVADO: 'success',
+            EM_EXECUCAO: 'warning',
+            CONCLUIDO: 'success',
+            CANCELADO: 'danger'
+          }[m.status_operacional] || 'info';
+
+          const badgeTipo = m.tipo_item === 'PRODUTO' ? 'info' : (m.tipo_item === 'ITEM' ? 'warning' : 'neutral');
+          const dataFormatada = m.data_servico ? window.EMCUtils.formatarDataPtBr(m.data_servico) : '-';
+
+          return `
+            <tr class="linha-manutencao" data-status="${m.status_operacional}">
+              <td class="mono-text" style="font-size: 12px; font-weight: 700; color: var(--color-on-surface);">${dataFormatada}</td>
+              <td class="mono-text">
+                <strong>#${m.orcamento_id}</strong>
+                <span class="status-chip ${badgeOp}" style="font-size: 10px; padding: 2px 5px; margin-left: 4px;">${m.status_operacional_display}</span>
+              </td>
+              <td>${window.EMCUtils.escapeHtml(m.cliente_nome || '-')}</td>
+              <td>
+                <span class="status-chip ${badgeTipo}" style="font-size: 10px; padding: 2px 5px; margin-right: 4px;">${m.tipo_item}</span>
+                <strong>${window.EMCUtils.escapeHtml(m.nome_item)}</strong>
+              </td>
+              <td class="mono-text">${m.quantidade.toFixed(2)} ${m.unidade_medida}</td>
+              <td class="mono-text">${window.EMCUtils.formatarMoeda(m.valor_unitario)}</td>
+              <td class="mono-text" style="color: var(--color-rust-orange); font-weight: 700;">${window.EMCUtils.formatarMoeda(m.subtotal)}</td>
+              <td style="text-align: right; white-space: nowrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.OrcamentosView.verDetalhes(${m.orcamento_id})" title="Abrir Orçamento #${m.orcamento_id}">VER ORÇAMENTO</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      };
+
+      const ultimaData = metricas.data_ultima_intervencao ? window.EMCUtils.formatarDataPtBr(metricas.data_ultima_intervencao) : 'NENHUMA';
+
+      window.EMCUtils.openModal({
+        title: `PRONTUÁRIO DE MANUTENÇÃO - #${eq.id} ${eq.descricao}${placaTexto}${identTexto}`,
+        size: 'xl',
+        showCancel: false,
+        confirmText: 'FECHAR',
+        content: `
+          <!-- Cards de Métricas Industriais -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px;">
+            <div class="card" style="padding: 12px 14px; background-color: var(--color-surface-container); border-left: 3px solid var(--color-steel-gray);">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">Intervenções Realizadas</span>
+              <div class="mono-text" style="font-size: 22px; font-weight: 700; color: var(--color-on-surface); margin-top: 4px;">
+                ${metricas.total_intervencoes || 0} <span style="font-size: 12px; font-weight: 400; color: var(--color-on-surface-variant);">OS / ORÇAMENTOS</span>
+              </div>
+            </div>
+
+            <div class="card" style="padding: 12px 14px; background-color: var(--color-surface-container); border-left: 3px solid var(--color-rust-orange);">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">Peças e Serviços Aplicados</span>
+              <div class="mono-text" style="font-size: 22px; font-weight: 700; color: var(--color-rust-orange); margin-top: 4px;">
+                ${metricas.total_itens_aplicados || 0} <span style="font-size: 12px; font-weight: 400; color: var(--color-on-surface-variant);">ITENS</span>
+              </div>
+            </div>
+
+            <div class="card" style="padding: 12px 14px; background-color: var(--color-surface-container); border-left: 3px solid var(--color-success);">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">Investimento Acumulado</span>
+              <div class="mono-text" style="font-size: 22px; font-weight: 700; color: var(--color-success); margin-top: 4px;">
+                ${window.EMCUtils.formatarMoeda(metricas.valor_total_acumulado || 0)}
+              </div>
+            </div>
+
+            <div class="card" style="padding: 12px 14px; background-color: var(--color-surface-container); border-left: 3px solid var(--color-outline);">
+              <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); text-transform: uppercase;">Última Intervenção</span>
+              <div class="mono-text" style="font-size: 16px; font-weight: 700; color: var(--color-on-surface); margin-top: 6px;">
+                ${ultimaData}
+              </div>
+              <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 2px;">
+                Proprietário Atual: <strong>${window.EMCUtils.escapeHtml(eq.proprietario_atual || 'OFICINA')}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Filtros Internos -->
+          <div style="display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; background-color: var(--color-surface-container-low); padding: 10px 12px; border: 1px solid var(--color-steel-gray);">
+            <div style="flex: 1; min-width: 250px;">
+              <input type="text" id="filtro-busca-prontuario" class="form-control" placeholder="DIGITE PARA FILTRAR PEÇAS, SERVIÇOS OU Nº ORÇAMENTO...">
+            </div>
+            <div style="width: 220px;">
+              <select id="filtro-status-prontuario" class="form-control">
+                <option value="">TODOS OS STATUS</option>
+                <option value="CONCLUIDO">APENAS CONCLUÍDOS</option>
+                <option value="EM_EXECUCAO,APROVADO">EM EXECUÇÃO / APROVADOS</option>
+                <option value="GERADO,ENVIADO">EM NEGOCIAÇÃO (GERADO/ENVIADO)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tabela de Histórico Técnico -->
+          <div class="table-container" style="margin-bottom: 0; max-height: 480px; overflow-y: auto;">
+            <table class="table" style="font-size: 13px;">
+              <thead>
+                <tr>
+                  <th>DATA</th>
+                  <th>ORÇAMENTO</th>
+                  <th>CLIENTE / PROPRIETÁRIO</th>
+                  <th>ITEM / PEÇA / SERVIÇO</th>
+                  <th>QTD / UN</th>
+                  <th>VALOR UNIT.</th>
+                  <th>SUBTOTAL</th>
+                  <th style="text-align: right;">AÇÃO</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-prontuario-manutencao">
+                ${renderizarLinhas(manutencoes)}
+              </tbody>
+            </table>
+          </div>
+        `
+      });
+
+      // Eventos de filtro instantâneo
+      setTimeout(() => {
+        const inputBusca = document.getElementById('filtro-busca-prontuario');
+        const selStatus = document.getElementById('filtro-status-prontuario');
+        const tbodyEl = document.getElementById('tbody-prontuario-manutencao');
+
+        const filtrarAoVivo = () => {
+          const termo = (inputBusca?.value || '').trim().toLowerCase();
+          const statusFiltro = (selStatus?.value || '').trim().toUpperCase();
+          const statusArr = statusFiltro ? statusFiltro.split(',') : [];
+
+          const filtradas = manutencoes.filter((m) => {
+            const matchStatus = !statusArr.length || statusArr.includes(m.status_operacional);
+            const matchTexto = !termo ||
+              (m.nome_item || '').toLowerCase().includes(termo) ||
+              (m.cliente_nome || '').toLowerCase().includes(termo) ||
+              String(m.orcamento_id).includes(termo);
+            return matchStatus && matchTexto;
+          });
+
+          if (tbodyEl) {
+            tbodyEl.innerHTML = renderizarLinhas(filtradas);
+          }
+        };
+
+        inputBusca?.addEventListener('input', filtrarAoVivo);
+        selStatus?.addEventListener('change', filtrarAoVivo);
+      }, 50);
+
+    } catch (err) {
+      console.error('Erro ao carregar prontuário de manutenção:', err);
+      window.EMCUtils.showToast(err.message || 'Erro ao carregar prontuário de manutenção.', 'error');
     }
   },
 
@@ -1115,7 +1282,8 @@ window.CadastrosView = {
               ${chipPatio}
             </td>
             <td style="text-align: right; white-space: nowrap;">
-              <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">HISTÓRICO</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.CadastrosView.abrirModalHistoricoManutencao(${item.id})">MANUTENÇÃO</button>
+              <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.abrirModalHistoricoEquipamento(${item.id})">TITULARIDADE</button>
               <button class="btn btn-ghost btn-sm" onclick="window.CadastrosView.editarEquipamento(${item.id})">EDITAR</button>
               <button class="btn btn-ghost btn-sm" style="color: var(--color-error);" onclick="window.CadastrosView.excluirEquipamento(${item.id}, '${window.EMCUtils.escapeHtml((item.placa && item.placa !== 'null' && item.placa !== 'None') || item.identificacao || item.descricao)}')">EXCLUIR</button>
             </td>

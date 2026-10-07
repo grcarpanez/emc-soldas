@@ -394,16 +394,41 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
     <b>Endereço:</b> {end_cliente}
     """
 
+    # Coleta equipamentos envolvidos nos itens do orçamento
+    itens_orcamento = orcamento.itens_orcamento.select_related(
+        'equipamento', 'produto', 'item', 'produto__unidade_venda', 'item__unidade_compra'
+    ).all()
+
+    equips_unicos = []
+    equips_ids_vistos = set()
+    for it in itens_orcamento:
+        if it.equipamento and it.equipamento.id not in equips_ids_vistos:
+            equips_ids_vistos.add(it.equipamento.id)
+            equips_unicos.append(it.equipamento)
+
+    if not equips_unicos and equipamento:
+        equips_unicos.append(equipamento)
+
     equip_info_html = ""
-    if equipamento:
-        placa_str = f"<b>Placa:</b> {equipamento.placa} &nbsp;|&nbsp; " if equipamento.placa else ""
-        ident_str = f"<b>Identificação:</b> {equipamento.identificacao} &nbsp;|&nbsp; " if equipamento.identificacao else ""
+    if len(equips_unicos) == 1:
+        eq = equips_unicos[0]
+        placa_str = f"<b>Placa:</b> {eq.placa} &nbsp;|&nbsp; " if eq.placa else ""
+        ident_str = f"<b>Identificação:</b> {eq.identificacao} &nbsp;|&nbsp; " if eq.identificacao else ""
         equip_info_html = f"""
         <b>Equipamento / Veículo:</b><br/>
-        {placa_str}{ident_str}<b>Descrição:</b> {equipamento.descricao.upper()}
+        {placa_str}{ident_str}<b>Descrição:</b> {eq.descricao.upper()}
+        """
+    elif len(equips_unicos) > 1:
+        linhas_eq = "<br/>".join([
+            f"• <b>{eq.placa or eq.identificacao or 'ID #' + str(eq.id)}:</b> {eq.descricao.upper()}"
+            for eq in equips_unicos
+        ])
+        equip_info_html = f"""
+        <b>Equipamentos / Veículos Atendidos ({len(equips_unicos)}):</b><br/>
+        {linhas_eq}
         """
     else:
-        equip_info_html = "<b>Equipamento / Veículo:</b><br/>NÃO VINCULADO"
+        equip_info_html = "<b>Equipamento / Veículo:</b><br/>OFICINA GERAL / NÃO VINCULADO"
 
     info_box_data = [
         [
@@ -447,10 +472,6 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
     col_w_unit = 27 * mm
     col_w_sub = 27 * mm
 
-    itens_orcamento = orcamento.itens_orcamento.select_related(
-        'produto', 'item', 'produto__unidade_venda', 'item__unidade_compra'
-    ).all()
-
     for idx, item_orc in enumerate(itens_orcamento, start=1):
         # Determina nome e unidade
         if item_orc.produto:
@@ -462,6 +483,11 @@ def gerar_pdf_orcamento(orcamento, buffer=None, config_override=None):
         else:
             nome_item = item_orc.descricao_livre or "ITEM AVULSO"
             unidade = "UN"
+
+        # Se houver múltiplos equipamentos no orçamento e o item tiver equipamento vinculado, anexa linha de veículo
+        if len(equips_unicos) > 1 and item_orc.equipamento:
+            eq_rotulo = item_orc.equipamento.placa or item_orc.equipamento.identificacao or f"ID #{item_orc.equipamento.id}"
+            nome_item += f"<br/><font size=6.5 color='#B7410E'><b>[VEÍCULO: {eq_rotulo} - {item_orc.equipamento.descricao.upper()}]</b></font>"
 
         qtd_str = formatar_quantidade(item_orc.quantidade)
         unit_str = formatar_moeda(item_orc.valor_venda_snapshot)

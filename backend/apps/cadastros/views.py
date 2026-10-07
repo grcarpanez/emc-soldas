@@ -4,6 +4,7 @@ Em conformidade com docs/FSD.md, docs/PLANO.md e regras de segurança.
 """
 import os
 import mimetypes
+from decimal import Decimal
 from django.conf import settings
 from django.http import FileResponse, Http404
 from django.utils import timezone
@@ -342,13 +343,18 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
 
         no_patio = self.request.query_params.get('no_patio')
         if no_patio in ('true', '1', 'True', True):
-            from apps.orcamentos.models import Orcamento
-            ids_no_patio = Orcamento.objects.filter(
+            from apps.orcamentos.models import Orcamento, OrcamentoItem
+            ids_orc = set(Orcamento.objects.filter(
                 equipamento__isnull=False,
                 status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
                 deleted_at__isnull=True
-            ).values_list('equipamento_id', flat=True)
-            queryset = queryset.filter(id__in=ids_no_patio)
+            ).values_list('equipamento_id', flat=True))
+            ids_itens = set(OrcamentoItem.objects.filter(
+                equipamento__isnull=False,
+                orcamento__status_operacional__in=['APROVADO', 'EM_EXECUCAO'],
+                orcamento__deleted_at__isnull=True
+            ).values_list('equipamento_id', flat=True))
+            queryset = queryset.filter(id__in=ids_orc | ids_itens)
 
         return queryset.order_by('placa', 'identificacao')
 
@@ -378,6 +384,135 @@ class EquipamentoViewSet(viewsets.ModelViewSet):
             for v in vinculos
         ]
         return Response(dados, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='historico-manutencao')
+    def historico_manutencao(self, request, pk=None):
+        """
+        Retorna o Prontuário / Histórico de Manutenção completo do equipamento ou veículo.
+        Traz todas as intervenções, serviços e peças aplicadas via linhas de orçamentos (OrcamentoItem),
+        com suporte a filtros por período, status operacional e busca textual.
+        """
+        equipamento = self.get_object()
+        from apps.orcamentos.models import OrcamentoItem
+
+        # Busca todos os itens de orçamentos ativos vinculados a este equipamento
+        # (seja diretamente via item.equipamento_id ou legado via item.orcamento.equipamento_id quando item.equipamento for nulo)
+        qs_itens = OrcamentoItem.objects.filter(
+            Q(equipamento=equipamento) | Q(equipamento__isnull=True, orcamento__equipamento=equipamento),
+            orcamento__deleted_at__isnull=True
+        ).select_related(
+            'orcamento',
+            'orcamento__cliente',
+            'produto',
+            'produto__unidade_venda',
+            'item',
+            'item__unidade_compra'
+        ).order_by('-orcamento__data_geracao', '-id')
+
+        # Filtro por Status Operacional
+        status_op = request.query_params.get('status_operacional')
+        if status_op:
+            status_list = [s.strip().upper() for s in status_op.split(',') if s.strip()]
+            if status_list:
+                qs_itens = qs_itens.filter(orcamento__status_operacional__in=status_list)
+
+        # Filtro por Período
+        data_inicio = request.query_params.get('data_inicio')
+        if data_inicio:
+            qs_itens = qs_itens.filter(orcamento__data_geracao__gte=data_inicio)
+
+        data_fim = request.query_params.get('data_fim')
+        if data_fim:
+            qs_itens = qs_itens.filter(orcamento__data_geracao__lte=data_fim)
+
+        # Busca Textual
+        search = request.query_params.get('search')
+        if search:
+            search_sanitizado = sanitizar_texto_maiusculo(search)
+            search_digitos = limpar_apenas_digitos(search)
+            filtro_busca = (
+                Q(descricao_livre__icontains=search_sanitizado) |
+                Q(produto__nome__icontains=search_sanitizado) |
+                Q(item__nome__icontains=search_sanitizado) |
+                Q(orcamento__cliente__nome_razao__icontains=search_sanitizado)
+            )
+            if search_digitos and search_digitos.isdigit():
+                filtro_busca |= Q(orcamento_id=int(search_digitos))
+            qs_itens = qs_itens.filter(filtro_busca)
+
+        # Proprietário atual
+        vinculo_ativo = equipamento.historico_clientes.filter(is_ativo=True).select_related('cliente').first()
+        proprietario_atual = vinculo_ativo.cliente.nome_razao if vinculo_ativo else 'NÃO VINCULADO'
+
+        manutencoes = []
+        orcamentos_ids_vistos = set()
+        valor_total_acumulado = Decimal('0.00')
+        datas_servico = []
+
+        for it in qs_itens:
+            orc = it.orcamento
+            orcamentos_ids_vistos.add(orc.id)
+            if orc.data_geracao:
+                datas_servico.append(orc.data_geracao)
+
+            qtd = it.quantidade or Decimal('1.0000')
+            valor_venda = it.valor_venda_snapshot or Decimal('0.00')
+            subtotal = (qtd * valor_venda).quantize(Decimal('0.01'))
+            valor_total_acumulado += subtotal
+
+            # Nome e tipo do item
+            if it.produto:
+                tipo = 'PRODUTO'
+                nome = it.produto.nome
+                un = it.produto.unidade_venda.sigla if it.produto.unidade_venda else 'UN'
+            elif it.item:
+                tipo = 'ITEM'
+                nome = it.item.nome
+                un = it.item.unidade_compra.sigla if it.item.unidade_compra else 'UN'
+            else:
+                tipo = 'LIVRE'
+                nome = it.descricao_livre or 'ITEM AVULSO'
+                un = 'UN'
+
+            manutencoes.append({
+                "item_id": it.id,
+                "orcamento_id": orc.id,
+                "data_servico": str(orc.data_geracao) if orc.data_geracao else None,
+                "status_operacional": orc.status_operacional,
+                "status_operacional_display": orc.get_status_operacional_display(),
+                "status_financeiro": orc.status_financeiro,
+                "status_financeiro_display": orc.get_status_financeiro_display(),
+                "cliente_id": orc.cliente_id,
+                "cliente_nome": orc.cliente.nome_razao if orc.cliente else None,
+                "tipo_item": tipo,
+                "nome_item": nome,
+                "quantidade": float(qtd),
+                "unidade_medida": un,
+                "valor_unitario": float(valor_venda),
+                "subtotal": float(subtotal)
+            })
+
+        datas_servico.sort()
+        data_primeira = str(datas_servico[0]) if datas_servico else None
+        data_ultima = str(datas_servico[-1]) if datas_servico else None
+
+        return Response({
+            "equipamento": {
+                "id": equipamento.id,
+                "placa": equipamento.placa,
+                "identificacao": equipamento.identificacao,
+                "descricao": equipamento.descricao,
+                "proprietario_atual": proprietario_atual
+            },
+            "metricas": {
+                "total_intervencoes": len(orcamentos_ids_vistos),
+                "total_itens_aplicados": len(manutencoes),
+                "valor_total_acumulado": float(valor_total_acumulado.quantize(Decimal('0.01'))),
+                "data_primeira_intervencao": data_primeira,
+                "data_ultima_intervencao": data_ultima
+            },
+            "manutencoes": manutencoes
+        }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='verificar-placa')
     def verificar_placa(self, request):

@@ -39,6 +39,17 @@ class OrcamentoItemSerializer(serializers.ModelSerializer):
     nome_exibicao = serializers.SerializerMethodField()
     unidade_medida = serializers.SerializerMethodField()
     tipo_item = serializers.SerializerMethodField()
+    equipamento_display = serializers.SerializerMethodField()
+
+    equipamento = serializers.PrimaryKeyRelatedField(
+        queryset=Equipamento.objects.filter(deleted_at__isnull=True),
+        required=False,
+        allow_null=True
+    )
+    equipamento_id = serializers.IntegerField(source='equipamento.id', read_only=True)
+    equipamento_placa = serializers.CharField(source='equipamento.placa', read_only=True)
+    equipamento_identificacao = serializers.CharField(source='equipamento.identificacao', read_only=True)
+    equipamento_descricao = serializers.CharField(source='equipamento.descricao', read_only=True)
 
     produto = serializers.PrimaryKeyRelatedField(
         queryset=Produto.objects.filter(deleted_at__isnull=True),
@@ -83,6 +94,12 @@ class OrcamentoItemSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'orcamento',
+            'equipamento',
+            'equipamento_id',
+            'equipamento_placa',
+            'equipamento_identificacao',
+            'equipamento_descricao',
+            'equipamento_display',
             'produto',
             'produto_nome',
             'item',
@@ -109,12 +126,16 @@ class OrcamentoItemSerializer(serializers.ModelSerializer):
             data = dict(data)
 
         # Mapeia chaves com sufixo _id para as ForeignKeys
+        if 'equipamento_id' in data and not data.get('equipamento'):
+            data['equipamento'] = data['equipamento_id']
         if 'produto_id' in data and not data.get('produto'):
             data['produto'] = data['produto_id']
         if 'item_id' in data and not data.get('item'):
             data['item'] = data['item_id']
 
         # Normaliza strings vazias ou "null"/"None" para None
+        if data.get('equipamento') in ('', 'null', 'None'):
+            data['equipamento'] = None
         if data.get('produto') in ('', 'null', 'None'):
             data['produto'] = None
         if data.get('item') in ('', 'null', 'None'):
@@ -123,6 +144,13 @@ class OrcamentoItemSerializer(serializers.ModelSerializer):
             data['descricao_livre'] = None
 
         return super().to_internal_value(data)
+
+    def get_equipamento_display(self, obj):
+        if not obj.equipamento:
+            return None
+        placa = f"[{obj.equipamento.placa}] " if obj.equipamento.placa else ""
+        ident = f" - {obj.equipamento.identificacao}" if obj.equipamento.identificacao else ""
+        return f"{placa}{obj.equipamento.descricao}{ident}"
 
     def get_tipo_item(self, obj):
         if obj.produto_id:
@@ -315,6 +343,7 @@ class OrcamentoSerializer(serializers.ModelSerializer):
     is_expirado = serializers.SerializerMethodField()
     total_itens = serializers.SerializerMethodField()
     cliente_inadimplente = serializers.SerializerMethodField()
+    equipamentos_envolvidos = serializers.SerializerMethodField()
 
     class Meta:
         model = Orcamento
@@ -327,6 +356,7 @@ class OrcamentoSerializer(serializers.ModelSerializer):
             'equipamento',
             'equipamento_descricao',
             'equipamento_placa',
+            'equipamentos_envolvidos',
             'fatura',
             'data_geracao',
             'data_validade',
@@ -381,6 +411,35 @@ class OrcamentoSerializer(serializers.ModelSerializer):
                 pass
 
         return super().to_internal_value(data)
+
+    def get_equipamentos_envolvidos(self, obj):
+        equips = []
+        vistos = set()
+        for item in obj.itens_orcamento.select_related('equipamento').all():
+            eq = item.equipamento
+            if eq and eq.id not in vistos:
+                vistos.add(eq.id)
+                placa = f"[{eq.placa}] " if eq.placa else ""
+                ident = f" - {eq.identificacao}" if eq.identificacao else ""
+                equips.append({
+                    "id": eq.id,
+                    "placa": eq.placa,
+                    "identificacao": eq.identificacao,
+                    "descricao": eq.descricao,
+                    "display": f"{placa}{eq.descricao}{ident}"
+                })
+        if not equips and obj.equipamento:
+            eq = obj.equipamento
+            placa = f"[{eq.placa}] " if eq.placa else ""
+            ident = f" - {eq.identificacao}" if eq.identificacao else ""
+            equips.append({
+                "id": eq.id,
+                "placa": eq.placa,
+                "identificacao": eq.identificacao,
+                "descricao": eq.descricao,
+                "display": f"{placa}{eq.descricao}{ident}"
+            })
+        return equips
 
     def get_valor_liquido(self, obj):
         return float(obj.valor_liquido)
@@ -450,6 +509,10 @@ class OrcamentoSerializer(serializers.ModelSerializer):
                     else:
                         item_dict['custo_snapshot'] = Decimal('0.00')
 
+                # Herda equipamento do orçamento caso o item não tenha definido especificamente
+                if not item_dict.get('equipamento') and orcamento.equipamento:
+                    item_dict['equipamento'] = orcamento.equipamento
+
                 item_obj = OrcamentoItem.objects.create(orcamento=orcamento, **item_dict)
                 valor_bruto_acumulado += item_obj.quantidade * item_obj.valor_venda_snapshot
 
@@ -495,6 +558,10 @@ class OrcamentoSerializer(serializers.ModelSerializer):
                             item_dict['custo_snapshot'] = item_dict['item'].ultimo_custo_compra or Decimal('0.00')
                         else:
                             item_dict['custo_snapshot'] = Decimal('0.00')
+
+                    # Herda equipamento do orçamento caso o item não tenha definido especificamente
+                    if not item_dict.get('equipamento') and instance.equipamento:
+                        item_dict['equipamento'] = instance.equipamento
 
                     item_obj = OrcamentoItem.objects.create(orcamento=instance, **item_dict)
                     valor_bruto_acumulado += item_obj.quantidade * item_obj.valor_venda_snapshot

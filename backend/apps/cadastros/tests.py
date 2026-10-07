@@ -709,6 +709,111 @@ class EquipamentoEVinculosAPITestCase(CadastrosBaseTestCase):
         self.assertIsNotNone(item_patio['orcamento_em_execucao'])
         self.assertEqual(item_patio['orcamento_em_execucao']['id'], orc_ativo.id)
 
+    def test_historico_manutencao_equipamento(self):
+        """
+        Valida o prontuário completo de manutenção de um equipamento,
+        incluindo métricas acumuladas, agregação de itens de orçamentos e controle RBAC.
+        """
+        from apps.orcamentos.models import Orcamento, OrcamentoItem
+        from datetime import timedelta
+        from django.utils import timezone
+
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        cliente = ClienteFornecedor.objects.create(
+            nome_razao="MINERACAO BRASIL S.A.",
+            telefone="31999998888"
+        )
+        eq_foco = Equipamento.objects.create(
+            placa="MAN-1001",
+            identificacao="CARREGADEIRA 01",
+            descricao="Carregadeira Caterpillar 966"
+        )
+        eq_outro = Equipamento.objects.create(
+            placa="OUT-2002",
+            identificacao="CAMINHAO 02",
+            descricao="Caminhão Basculante Scania"
+        )
+        ClienteEquipamento.objects.create(cliente=cliente, equipamento=eq_foco, is_ativo=True)
+        ClienteEquipamento.objects.create(cliente=cliente, equipamento=eq_outro, is_ativo=True)
+
+        # Orçamento 1 (Concluído): Contém 2 itens para eq_foco e 1 item para eq_outro
+        orc_1 = Orcamento.objects.create(
+            cliente=cliente,
+            equipamento=eq_foco,
+            data_validade=timezone.localdate() + timedelta(days=15),
+            status_operacional='CONCLUIDO',
+            status_financeiro='FATURADO',
+            created_by_id=self.operador_comercial.id
+        )
+        OrcamentoItem.objects.create(
+            orcamento=orc_1,
+            equipamento=eq_foco,
+            descricao_livre="SOLDA ESPECIAL BRAÇO DA CONCHA",
+            quantidade=Decimal('1.00'),
+            custo_snapshot=Decimal('200.00'),
+            valor_venda_snapshot=Decimal('450.00')
+        )
+        OrcamentoItem.objects.create(
+            orcamento=orc_1,
+            equipamento=eq_foco,
+            descricao_livre="TROCA DE BUCHAS ARTICULADAS",
+            quantidade=Decimal('2.00'),
+            custo_snapshot=Decimal('100.00'),
+            valor_venda_snapshot=Decimal('250.00')
+        )
+        OrcamentoItem.objects.create(
+            orcamento=orc_1,
+            equipamento=eq_outro,
+            descricao_livre="REVISAO FREIO TRASEIRO",
+            quantidade=Decimal('1.00'),
+            custo_snapshot=Decimal('80.00'),
+            valor_venda_snapshot=Decimal('150.00')
+        )
+
+        # Orçamento 2 (Em Execução): Contém 1 item para eq_foco
+        orc_2 = Orcamento.objects.create(
+            cliente=cliente,
+            data_validade=timezone.localdate() + timedelta(days=15),
+            status_operacional='EM_EXECUCAO',
+            status_financeiro='A_FATURAR',
+            created_by_id=self.operador_comercial.id
+        )
+        OrcamentoItem.objects.create(
+            orcamento=orc_2,
+            equipamento=eq_foco,
+            descricao_livre="ALINHAMENTO E BALANCEAMENTO",
+            quantidade=Decimal('1.00'),
+            custo_snapshot=Decimal('50.00'),
+            valor_venda_snapshot=Decimal('120.00')
+        )
+
+        # Consulta endpoint de histórico de manutenção do eq_foco
+        res = self.client.get(f'/api/equipamentos/{eq_foco.id}/historico-manutencao/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        data = res.data
+        self.assertEqual(data['equipamento']['id'], eq_foco.id)
+        self.assertEqual(data['metricas']['total_intervencoes'], 2)  # 2 orçamentos distintos
+        self.assertEqual(data['metricas']['total_itens_aplicados'], 3)
+        # Valor acumulado: 450 + (2 * 250) + 120 = 450 + 500 + 120 = 1070.00
+        self.assertEqual(data['metricas']['valor_total_acumulado'], 1070.00)
+
+        manutencoes = data['manutencoes']
+        self.assertEqual(len(manutencoes), 3)
+        # Todos os itens de histórico devem pertencer a eq_foco
+        descricoes = [m['nome_item'] for m in manutencoes]
+        self.assertIn("SOLDA ESPECIAL BRAÇO DA CONCHA", descricoes)
+        self.assertIn("TROCA DE BUCHAS ARTICULADAS", descricoes)
+        self.assertIn("ALINHAMENTO E BALANCEAMENTO", descricoes)
+        self.assertNotIn("REVISAO FREIO TRASEIRO", descricoes)
+
+        # Teste de bloqueio RBAC: Operador sem permissão comercial não pode acessar
+        self.client.force_authenticate(user=self.operador_sem_permissao)
+        res_bloqueado = self.client.get(f'/api/equipamentos/{eq_foco.id}/historico-manutencao/')
+        self.assertEqual(res_bloqueado.status_code, status.HTTP_403_FORBIDDEN)
+
+
 
 class AnexoGeralClienteAPITestCase(CadastrosBaseTestCase):
     """Testes de Upload e Download Seguro de Anexos de Clientes."""

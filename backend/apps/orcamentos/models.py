@@ -38,7 +38,7 @@ class Orcamento(BaseModel):
     )
     equipamento = models.ForeignKey(
         'cadastros.Equipamento',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='orcamentos',
@@ -118,6 +118,7 @@ class Orcamento(BaseModel):
 class OrcamentoItem(models.Model):
     """
     Linhas do Orçamento: suporta Produtos Compostos, Itens Simples ou Lançamentos Manuais Livres.
+    Vinculado diretamente ao Equipamento/Veículo, permitindo múltiplos equipamentos por orçamento.
     Armazena snapshot imutável do custo e do valor de venda no momento da inserção.
     """
     id = models.BigAutoField(primary_key=True)
@@ -127,6 +128,15 @@ class OrcamentoItem(models.Model):
         related_name='itens_orcamento',
         db_column='orcamento_id',
         verbose_name="Orçamento Pai"
+    )
+    equipamento = models.ForeignKey(
+        'cadastros.Equipamento',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='itens_orcamento',
+        db_column='equipamento_id',
+        verbose_name="Equipamento / Veículo"
     )
     produto = models.ForeignKey(
         'catalogo.Produto',
@@ -175,6 +185,10 @@ class OrcamentoItem(models.Model):
         db_table = 'orcamento_itens'
         verbose_name = 'Item do Orçamento'
         verbose_name_plural = 'Itens do Orçamento'
+        indexes = [
+            models.Index(fields=['orcamento'], name='idx_orc_item_orcamento'),
+            models.Index(fields=['equipamento'], name='idx_orc_item_equipamento'),
+        ]
 
     @property
     def nome_exibicao(self):

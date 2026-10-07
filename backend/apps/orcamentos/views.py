@@ -50,6 +50,9 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
         'cliente__cnpj_cpf',
         'equipamento__placa',
         'equipamento__descricao',
+        'itens_orcamento__equipamento__placa',
+        'itens_orcamento__equipamento__descricao',
+        'itens_orcamento__equipamento__identificacao',
         'itens_orcamento__descricao_livre',
         'itens_orcamento__produto__nome',
         'itens_orcamento__item__nome'
@@ -65,6 +68,7 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
             'equipamento',
             'fatura'
         ).prefetch_related(
+            'itens_orcamento__equipamento',
             'itens_orcamento__produto__unidade_venda',
             'itens_orcamento__item__unidade_compra',
             'propostas_pagamento__regra_pagamento__meio_pagamento'
@@ -75,10 +79,13 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
 
-        # Filtro por Equipamento
+        # Filtro por Equipamento (tanto no cabeçalho quanto nas linhas de itens)
         equipamento_id = self.request.query_params.get('equipamento_id')
         if equipamento_id:
-            queryset = queryset.filter(equipamento_id=equipamento_id)
+            queryset = queryset.filter(
+                Q(equipamento_id=equipamento_id) |
+                Q(itens_orcamento__equipamento_id=equipamento_id)
+            ).distinct()
 
         # Filtro por Status Operacional (suporta múltiplos separados por vírgula: ex 'APROVADO,EM_EXECUCAO')
         status_op = self.request.query_params.get('status_operacional')
@@ -127,6 +134,9 @@ class OrcamentoViewSet(viewsets.ModelViewSet):
                 Q(cliente__nome_fantasia__icontains=search_sanitizado) |
                 Q(equipamento__placa__icontains=search_sanitizado) |
                 Q(equipamento__descricao__icontains=search_sanitizado) |
+                Q(itens_orcamento__equipamento__placa__icontains=search_sanitizado) |
+                Q(itens_orcamento__equipamento__descricao__icontains=search_sanitizado) |
+                Q(itens_orcamento__equipamento__identificacao__icontains=search_sanitizado) |
                 Q(itens_orcamento__descricao_livre__icontains=search_sanitizado) |
                 Q(itens_orcamento__produto__nome__icontains=search_sanitizado) |
                 Q(itens_orcamento__item__nome__icontains=search_sanitizado)

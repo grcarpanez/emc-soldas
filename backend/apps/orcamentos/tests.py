@@ -680,3 +680,63 @@ class OrcamentosModuleTestCase(TestCase):
         self.assertEqual(res.data.get('status_operacional_display'), 'GERADO')
         self.assertEqual(res.data.get('status_financeiro_display'), 'A FATURAR')
 
+    def test_15_criacao_orcamento_com_multiplos_equipamentos_por_item(self):
+        """
+        Valida a vinculação granular de equipamentos aos itens do orçamento, permitindo
+        que um único orçamento contemple a manutenção de múltiplos veículos/equipamentos.
+        """
+        self.client.force_authenticate(user=self.operador_comercial)
+
+        equipamento_2 = Equipamento.objects.create(
+            descricao='Caminhão Mercedes Benz Atego 2426',
+            placa='RTS8H99'
+        )
+
+        payload = {
+            "cliente_id": self.cliente.id,
+            "equipamento_id": self.equipamento.id,
+            "validade_dias": 15,
+            "valor_desconto_aplicado": "0.00",
+            "itens": [
+                {
+                    "equipamento_id": self.equipamento.id,
+                    "produto_id": self.produto_reforco.id,
+                    "quantidade": 1,
+                    "custo_snapshot": "440.00",
+                    "valor_venda_snapshot": "600.00"
+                },
+                {
+                    "equipamento_id": equipamento_2.id,
+                    "descricao_livre": "REPARO EIXO TRASEIRO E SOLDA NO CHASSI",
+                    "quantidade": 2,
+                    "custo_snapshot": "100.00",
+                    "valor_venda_snapshot": "250.00"
+                }
+            ]
+        }
+
+        res = self.client.post('/api/orcamentos/', data=json.dumps(payload), content_type='application/json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+
+        orc_id = res.data['id']
+        orc = Orcamento.objects.get(id=orc_id)
+
+        # Verifica itens no banco
+        itens = list(orc.itens_orcamento.all().order_by('id'))
+        self.assertEqual(len(itens), 2)
+        self.assertEqual(itens[0].equipamento_id, self.equipamento.id)
+        self.assertEqual(itens[1].equipamento_id, equipamento_2.id)
+
+        # Verifica serialização de equipamentos envolvidos
+        self.assertIn('equipamentos_envolvidos', res.data)
+        self.assertEqual(len(res.data['equipamentos_envolvidos']), 2)
+
+        # Verifica endpoint de detalhe
+        res_det = self.client.get(f'/api/orcamentos/{orc_id}/')
+        self.assertEqual(res_det.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(res_det.data['itens']), 2)
+        self.assertEqual(res_det.data['itens'][0]['equipamento_id'], self.equipamento.id)
+        self.assertEqual(res_det.data['itens'][1]['equipamento_id'], equipamento_2.id)
+        self.assertIn('[RTS8H99]', res_det.data['itens'][1]['equipamento_display'])
+
+

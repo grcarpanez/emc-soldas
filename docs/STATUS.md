@@ -2,8 +2,8 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-05 (Stepper de Status Operacional em Orçamentos, Faturamento em Dois Momentos e Correção da Combobox na Conta Corrente - PWA v4.58)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento e Dashboard)  
+**Última Atualização:** 2026-10-07 (Prontuário de Manutenção de Equipamentos, Vinculação de Equipamento ao Item de Orçamento e Suporte a Múltiplos Veículos - PWA v4.59)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard e Prontuário de Manutenção)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -692,6 +692,28 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
     - Correção do payload em `gerarPreFatura` (`cliente` e `orcamento_ids`) e adição de suporte a aliases (`cliente_id`, `orcamentos_ids`) no `FaturaSerializer`.
   - **Versionamento PWA:** Cache `emc-soldas-v4.57` em `sw.js` e `?v=4.57` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-05_08_ajuste_conta_corrente_orcamentos_gerados_e_faturamento.md`.
+- [x] **Prontuário de Manutenção de Equipamentos e Vinculação de Equipamento ao Item do Orçamento (PWA v4.59):**
+  - **Modelagem Relacional de Orçamento Multi-Equipamento (`orcamentos/models.py` e `cadastros/models.py`):**
+    - Adicionado campo `equipamento` em `OrcamentoItem` (`ForeignKey('cadastros.Equipamento', on_delete=SET_NULL, null=True, blank=True, related_name='itens_orcamento')`), permitindo que um único orçamento englobe o reparo de $N$ veículos e máquinas distintos.
+    - Criados índices de alta performance no banco de dados: `idx_orc_item_orcamento` e `idx_orc_item_equipamento`.
+    - Criada migração com data migration retroativa (`0005_orcamentoitem_equipamento_and_more.py`) que copiou com 100% de integridade o equipamento do orçamento para os itens históricos preexistentes.
+  - **Endpoint de Prontuário de Manutenção (`/api/equipamentos/{id}/historico-manutencao/`):**
+    - Criada action no `EquipamentoViewSet` agregando todas as intervenções executadas no equipamento através de itens de orçamentos (`OrcamentoItem`).
+    - Métricas industriais computadas em tempo real: total de intervenções (orçamentos), total de itens aplicados, valor acumulado de investimento em manutenção, data da primeira e da última intervenção.
+    - Suporte a filtros dinâmicos por status operacional (múltiplos status separados por vírgula), intervalo de datas (`data_inicio`, `data_fim`) e busca textual em peças, serviços ou número de orçamento.
+    - Auditoria de pátio atualizada: filtros `no_patio=true` e propriedade `em_patio` agora consideram tanto o orçamento cabeçalho quanto itens com intervenções ativas.
+  - **Serializadores e Emissão de Propostas em PDF:**
+    - Atualizado `OrcamentoItemSerializer` com `equipamento_id`, `equipamento_placa`, `equipamento_descricao` e `equipamento_display`.
+    - Atualizado `OrcamentoSerializer` com campo de agregação `equipamentos_envolvidos` listando todos os veículos envolvidos no orçamento.
+    - Atualizado motor de PDF técnico (`pdf_service.py`): exibição de múltiplos veículos no cabeçalho e identificação técnica do veículo em cada linha de serviço quando houver múltiplos equipamentos.
+  - **Interface PWA (*Industrial Integrity*):**
+    - **Cadastros (`cadastros-view.js`):** Segregação semântica do botão de histórico de proprietários para `TITULARIDADE` e inclusão do botão `MANUTENÇÃO` na listagem de equipamentos e no modal de frota do cliente.
+    - **Modal de Prontuário:** Cards de KPI em padrão industrial, barra de pesquisa e filtro de status operacional em tempo real, grid técnico detalhado com data, orçamento, tipo, unidade, valores e botão de acesso direto `VER ORÇAMENTO`.
+    - **Orçamentos (`orcamentos-view.js`):** Inclusão de seletor pesquisável de veículo por linha de item (com herança automática do cabeçalho ou seleção avulsa), grid de conferência com coluna `VEÍCULO / EQUIPAMENTO` e modal de detalhes exibindo a frota atendida e veículos por item.
+  - **Bateria de Testes Automatizados:** 195 testes passando com 100% de sucesso (incluindo `test_15_criacao_orcamento_com_multiplos_equipamentos_por_item` e `test_historico_manutencao_equipamento`).
+  - **Versionamento PWA:** Cache `emc-soldas-v4.59` em `sw.js` e `?v=4.59` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-07_02_historico_manutencao_e_equipamento_por_item_orcamento.md`.
+
 
 
 
