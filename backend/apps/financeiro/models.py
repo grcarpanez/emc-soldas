@@ -384,6 +384,12 @@ class LancamentoFinanceiro(BaseModel):
         db_index=True,
         verbose_name="Data de Vencimento"
     )
+    data_competencia = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Data de Competência / Data da Compra"
+    )
     data_pagamento = models.DateTimeField(
         null=True,
         blank=True,
@@ -449,6 +455,20 @@ class LancamentoFinanceiro(BaseModel):
         blank=True,
         verbose_name="Nome do Arquivo do Comprovante"
     )
+    grupo_pagamento_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Identificador do Grupo de Pagamento Multi-Meio"
+    )
+    numero_parcela = models.IntegerField(
+        default=1,
+        verbose_name="Número da Parcela"
+    )
+    total_parcelas = models.IntegerField(
+        default=1,
+        verbose_name="Total de Parcelas"
+    )
 
     class Meta:
         db_table = 'lancamentos_financeiros'
@@ -460,6 +480,7 @@ class LancamentoFinanceiro(BaseModel):
             models.Index(fields=['data_pagamento'], name='idx_lanc_pagamento'),
             models.Index(fields=['status_pagamento'], name='idx_lanc_status_pagto'),
             models.Index(fields=['fitid'], name='idx_lanc_fitid'),
+            models.Index(fields=['grupo_pagamento_id'], name='idx_lanc_grupo_pagto'),
         ]
 
     def __str__(self):

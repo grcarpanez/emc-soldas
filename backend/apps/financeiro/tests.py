@@ -1089,3 +1089,243 @@ class CategoriasGovernancaETesourariaTestCase(TestCase):
         self.assertEqual(response.data['status_pagamento_display'], 'A VENCER')
 
 
+class CartaoParcelamentoMatrizPagamentoTestCase(TestCase):
+    """
+    Bateria de testes automatizados para Gestão de Cartões de Crédito Corporativos,
+    faturas, parcelamento em N vezes, ajuste de fechamento com redistribuição e
+    matriz de pagamentos multi-meio (caixa de mercado).
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+        self.operador = Usuario.objects.create_user(
+            email="operador.cartao@emcsoldas.com.br",
+            password="operadorpassword123",
+            role="Operador"
+        )
+        self.operador.permissoes.acesso_tesouraria = True
+        self.operador.permissoes.cadastros_financeiros = True
+        self.operador.permissoes.save()
+
+        self.conta = ContaBancaria.objects.create(
+            nome="BANCO DO BRASIL PRINCIPAL",
+            saldo=Decimal("2000.00"),
+            limite_credito=Decimal("500.00")
+        )
+
+        self.cat_despesa = CategoriaFinanceira.objects.create(
+            nome="SUPRIMENTOS DE OFICINA",
+            tipo="DESPESA"
+        )
+
+        self.cartao = CartaoCredito.objects.create(
+            nome="VISA CORPORATIVO DIRETORIA",
+            limite=Decimal("5000.00"),
+            dia_fechamento_padrao=20,
+            dia_vencimento=28,
+            conta_bancaria=self.conta,
+            permite_limite_emergencial=False
+        )
+
+        self.client.force_authenticate(user=self.operador)
+
+    def test_lancar_despesa_cartao_parcelada_n_vezes(self):
+        """Valida compra parcelada em 3x no cartão com centavo na 1ª parcela e faturas consecutivas."""
+        from apps.financeiro.services_cartao import lancar_despesa_cartao
+
+        lancamentos = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("100.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="KIT DISCOS DE CORTE 3M",
+            data_compra=date(2026, 10, 5),
+            total_parcelas=3,
+            comprovante="/media/comprovantes/nf_123.pdf",
+            nome_arquivo_comprovante="nf_123.pdf",
+            user=self.operador
+        )
+
+        self.assertEqual(len(lancamentos), 3)
+
+        # 1ª parcela
+        p1 = lancamentos[0]
+        self.assertEqual(p1.numero_parcela, 1)
+        self.assertEqual(p1.total_parcelas, 3)
+        self.assertEqual(p1.valor, Decimal("33.34"))
+        self.assertEqual(p1.data_competencia, date(2026, 10, 5))
+        self.assertEqual(p1.fatura_cartao.mes_referencia, "2026-10")
+        self.assertEqual(p1.comprovante, "/media/comprovantes/nf_123.pdf")
+        self.assertIn("(1/3)", p1.descricao)
+
+        # 2ª parcela
+        p2 = lancamentos[1]
+        self.assertEqual(p2.numero_parcela, 2)
+        self.assertEqual(p2.total_parcelas, 3)
+        self.assertEqual(p2.valor, Decimal("33.33"))
+        self.assertEqual(p2.data_competencia, date(2026, 10, 5))
+        self.assertEqual(p2.fatura_cartao.mes_referencia, "2026-11")
+        self.assertEqual(p2.comprovante, "/media/comprovantes/nf_123.pdf")
+        self.assertIn("(2/3)", p2.descricao)
+
+        # 3ª parcela
+        p3 = lancamentos[2]
+        self.assertEqual(p3.numero_parcela, 3)
+        self.assertEqual(p3.total_parcelas, 3)
+        self.assertEqual(p3.valor, Decimal("33.33"))
+        self.assertEqual(p3.data_competencia, date(2026, 10, 5))
+        self.assertEqual(p3.fatura_cartao.mes_referencia, "2026-12")
+        self.assertEqual(p3.comprovante, "/media/comprovantes/nf_123.pdf")
+        self.assertIn("(3/3)", p3.descricao)
+
+        # Soma das parcelas
+        self.assertEqual(p1.valor + p2.valor + p3.valor, Decimal("100.00"))
+
+        # Verificação do limite comprometido
+        from apps.financeiro.services_cartao import calcular_limite_disponivel_cartao
+        limite_info = calcular_limite_disponivel_cartao(self.cartao)
+        self.assertEqual(limite_info['total_comprometido'], Decimal("100.00"))
+        self.assertEqual(limite_info['limite_disponivel'], Decimal("4900.00"))
+
+    def test_ajustar_fechamento_fatura_redistribuicao(self):
+        """Valida que alterar data_fechamento_real redistribui compras entre faturas abertas."""
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            lancar_despesa_cartao,
+            ajustar_fechamento_fatura
+        )
+
+        fatura_out = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 20))
+
+        # Compra 1: dia 18/10 (cai na fatura 2026-10)
+        c1 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("150.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA DIA 18",
+            data_compra=date(2026, 10, 18),
+            user=self.operador
+        )
+        self.assertEqual(c1.fatura_cartao_id, fatura_out.id)
+
+        # 1. Antecipa fechamento de 20/10 para 15/10:
+        # A compra do dia 18 deve ser empurrada para a fatura 2026-11
+        res_ajuste = ajustar_fechamento_fatura(
+            fatura=fatura_out,
+            nova_data_fechamento=date(2026, 10, 15),
+            user=self.operador
+        )
+        fatura_atualizada = res_ajuste['fatura']
+        self.assertEqual(fatura_atualizada.data_fechamento_real, date(2026, 10, 15))
+        self.assertEqual(res_ajuste['itens_movidos_adiante'], 1)
+
+        c1.refresh_from_db()
+        self.assertNotEqual(c1.fatura_cartao_id, fatura_out.id)
+        self.assertEqual(c1.fatura_cartao.mes_referencia, "2026-11")
+
+        # 2. Posterga fechamento da fatura de 15/10 para 25/10:
+        # A compra do dia 18 deve ser puxada de volta para a fatura 2026-10!
+        res_revertido = ajustar_fechamento_fatura(
+            fatura=fatura_atualizada,
+            nova_data_fechamento=date(2026, 10, 25),
+            user=self.operador
+        )
+        fatura_revertida = res_revertido['fatura']
+        self.assertEqual(res_revertido['itens_puxados_de_volta'], 1)
+        c1.refresh_from_db()
+        self.assertEqual(c1.fatura_cartao_id, fatura_revertida.id)
+        self.assertEqual(c1.fatura_cartao.mes_referencia, "2026-10")
+
+    def test_registrar_compra_matriz_multi_meio(self):
+        """Valida compra multi-meio dividida em Dinheiro, PIX e Cartão com grupo_pagamento_id compartilhado."""
+        payload = {
+            "valor_total": "600.00",
+            "categoria_id": self.cat_despesa.id,
+            "descricao": "COMPRA EQUIPAMENTOS EM BALCAO",
+            "data_compra": "2026-10-07",
+            "comprovante": "/media/comprovantes/nf_balcao.pdf",
+            "nome_arquivo_comprovante": "nf_balcao.pdf",
+            "matriz_pagamentos": [
+                {
+                    "tipo_meio": "CONTA",
+                    "valor": "100.00",
+                    "conta_id": self.conta.id,
+                    "descricao": "PARTE EM DINHEIRO"
+                },
+                {
+                    "tipo_meio": "CONTA",
+                    "valor": "200.00",
+                    "conta_id": self.conta.id,
+                    "descricao": "PARTE EM PIX"
+                },
+                {
+                    "tipo_meio": "CARTAO",
+                    "valor": "300.00",
+                    "cartao_id": self.cartao.id,
+                    "total_parcelas": 3,
+                    "descricao": "PARTE EM CARTAO 3X"
+                }
+            ]
+        }
+
+        response = self.client.post('/api/lancamentos-financeiros/lancar-multi-meio/', data=payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertIsNotNone(response.data['grupo_pagamento_id'])
+
+        # Total de despesas criadas: 1 (dinheiro) + 1 (pix) + 3 (cartao 3x) = 5 lançamentos
+        lancamentos = response.data['lancamentos']
+        self.assertEqual(len(lancamentos), 5)
+
+        # Saldo da conta bancária deve ter sido debitado em 100 + 200 = 300
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, Decimal("1700.00"))
+
+        # Todos devem possuir o mesmo comprovante e mesmo grupo_pagamento_id
+        grupo_id = response.data['grupo_pagamento_id']
+        for l in lancamentos:
+            self.assertEqual(l['grupo_pagamento_id'], grupo_id)
+            self.assertEqual(l['comprovante'], "/media/comprovantes/nf_balcao.pdf")
+
+    def test_liquidacao_fatura_cartao_com_anexo_e_saldo(self):
+        """Valida fechamento e liquidação de fatura com comprovante e débito bancário."""
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            lancar_despesa_cartao
+        )
+
+        fatura = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("450.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="ALMOCO CORPORATIVO",
+            data_compra=date(2026, 10, 5),
+            user=self.operador
+        )
+
+        # 1. Fecha fatura
+        resp_fechar = self.client.post(f'/api/faturas-cartao/{fatura.id}/fechar/')
+        self.assertEqual(resp_fechar.status_code, status.HTTP_200_OK)
+
+        # 2. Liquida fatura
+        payload_liq = {
+            "valor_pago": "450.00",
+            "conta_id": self.conta.id,
+            "data_pagamento": "2026-10-28",
+            "comprovante": "/media/comprovantes/recibo_fatura_out.pdf",
+            "nome_arquivo_comprovante": "recibo_fatura_out.pdf"
+        }
+        resp_liq = self.client.post(f'/api/faturas-cartao/{fatura.id}/liquidar/', data=payload_liq, format='json')
+        self.assertEqual(resp_liq.status_code, status.HTTP_200_OK)
+
+        fatura.refresh_from_db()
+        self.assertEqual(fatura.status, 'PAGA')
+
+        # Conta bancária debitada
+        self.conta.refresh_from_db()
+        self.assertEqual(self.conta.saldo, Decimal("1550.00"))  # 2000 - 450
+
+

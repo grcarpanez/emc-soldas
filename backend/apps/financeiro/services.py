@@ -552,3 +552,203 @@ def obter_resumo_financeiro():
             'total': float(a_receber_a_vencer + a_receber_vencido)
         }
     }
+
+
+import uuid
+
+@transaction.atomic
+def registrar_compra_multi_meio(dados_compra=None, matriz_pagamento=None, comprovante_file=None, nome_arquivo_comprovante=None, user=None, **kwargs):
+    """
+    Registra uma despesa / compra paga com MÚLTIPLAS FORMAS DE PAGAMENTO (Split Payment).
+    Regras de Negócio e Integridade:
+    1. Valida que a soma de todos os pagamentos da matriz é rigorosamente igual ao valor total da compra.
+    2. Gera um grupo_pagamento_id (UUID) unificado vinculando todas as parcelas/lançamentos.
+    3. Replica o arquivo de comprovante / NF para todas as transações geradas.
+    4. Atualiza o saldo real de contas bancárias e caixa físico imediatamente para pagamentos à vista.
+    5. Para pagamentos em cartão, fragmenta nas faturas correspondentes comprometendo limite.
+    """
+    from apps.financeiro.models import CartaoCredito
+    from apps.financeiro.services_cartao import lancar_despesa_cartao
+
+    # Unifica parâmetros flexíveis
+    if not isinstance(dados_compra, dict):
+        dados_compra = {
+            'valor_total': kwargs.get('valor_total') or dados_compra,
+            'categoria_id': kwargs.get('categoria_id'),
+            'descricao': kwargs.get('descricao', ''),
+            'data_compra': kwargs.get('data_compra'),
+            'cliente_fornecedor_id': kwargs.get('cliente_fornecedor_id')
+        }
+    if matriz_pagamento is None:
+        matriz_pagamento = kwargs.get('matriz_pagamentos') or kwargs.get('matriz_pagamento')
+    if comprovante_file is None:
+        comprovante_file = kwargs.get('comprovante') or kwargs.get('comprovante_file')
+    if nome_arquivo_comprovante is None:
+        nome_arquivo_comprovante = kwargs.get('nome_arquivo_comprovante', '')
+
+    descricao = sanitizar_texto_maiusculo(dados_compra.get('descricao') or 'COMPRA / DESPESA MULTI-MEIO')
+    categoria_id = dados_compra.get('categoria_id')
+    categoria = CategoriaFinanceira.objects.filter(id=categoria_id, deleted_at__isnull=True).first()
+    if not categoria:
+        raise ValidationError({'categoria_id': 'Categoria financeira informada não encontrada ou inativa.'})
+
+    valor_total = Decimal(str(dados_compra.get('valor_total', 0)))
+    if valor_total <= Decimal('0.00'):
+        raise ValidationError({'valor_total': 'O valor total da compra deve ser maior que zero.'})
+
+    if not matriz_pagamento or not isinstance(matriz_pagamento, list):
+        raise ValidationError({'matriz_pagamento': 'A matriz de formas de pagamento é obrigatória e deve ser uma lista.'})
+
+    data_compra = dados_compra.get('data_compra')
+    if not data_compra:
+        data_compra = timezone.localdate()
+    elif isinstance(data_compra, str):
+        data_compra = timezone.datetime.fromisoformat(data_compra).date() if 'T' in data_compra else timezone.datetime.strptime(data_compra, '%Y-%m-%d').date()
+
+    cliente_fornecedor_id = dados_compra.get('cliente_fornecedor_id')
+
+    # Validação matemática da soma da matriz
+    soma_matriz = Decimal('0.00')
+    for item in matriz_pagamento:
+        v = Decimal(str(item.get('valor', 0)))
+        if v <= Decimal('0.00'):
+            raise ValidationError({'matriz_pagamento': 'Cada forma de pagamento deve possuir valor maior que zero.'})
+        soma_matriz += v
+
+    diferenca = abs(soma_matriz - valor_total)
+    if diferenca > Decimal('0.01'):
+        raise ValidationError({
+            'matriz_pagamento': f"A soma das formas de pagamento (R$ {soma_matriz:.2f}) não coincide com o valor total da compra (R$ {valor_total:.2f}). Diferença: R$ {abs(soma_matriz - valor_total):.2f}."
+        })
+
+    grupo_pagamento_id = uuid.uuid4()
+    lancamentos_gerados = []
+
+    for idx, item in enumerate(matriz_pagamento, start=1):
+        meio_id = item.get('meio_pagamento_id')
+        cartao_id = item.get('cartao_credito_id') or item.get('cartao_id')
+        tipo_meio = str(item.get('tipo_meio', '')).upper()
+
+        meio = None
+        if meio_id:
+            meio = MeioPagamento.objects.filter(id=meio_id, ativo=True, deleted_at__isnull=True).first()
+            if not meio:
+                raise ValidationError({'matriz_pagamento': f"Meio de pagamento #{meio_id} não encontrado ou inativo (item {idx})."})
+        elif cartao_id or 'CART' in tipo_meio:
+            meio = MeioPagamento.objects.filter(nome__icontains='CARTAO', ativo=True, deleted_at__isnull=True).first() \
+                   or MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True).first()
+        elif 'PIX' in tipo_meio:
+            meio = MeioPagamento.objects.filter(nome__icontains='PIX', ativo=True, deleted_at__isnull=True).first() \
+                   or MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True).first()
+        elif 'DINHEIRO' in tipo_meio or 'ESPECIE' in tipo_meio:
+            meio = MeioPagamento.objects.filter(nome__icontains='DINHEIRO', ativo=True, deleted_at__isnull=True).first() \
+                   or MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True).first()
+        else:
+            meio = MeioPagamento.objects.filter(ativo=True, deleted_at__isnull=True).first()
+
+        if not meio:
+            nome_default = "CARTAO DE CREDITO" if (cartao_id or 'CART' in tipo_meio) else "OUTROS"
+            meio, _ = MeioPagamento.objects.get_or_create(nome=nome_default, defaults={'ativo': True})
+
+        valor_item = Decimal(str(item.get('valor', 0)))
+
+        # Meio Cartão de Crédito
+        if cartao_id or (meio and 'CART' in meio.nome.upper() and 'CRED' in meio.nome.upper()) or 'CART' in tipo_meio:
+            if not cartao_id:
+                raise ValidationError({'matriz_pagamento': f"Para pagamento com cartão de crédito, informe o Cartão Corporativo (item {idx})."})
+            cartao = CartaoCredito.objects.filter(id=cartao_id, deleted_at__isnull=True).first()
+            if not cartao:
+                raise ValidationError({'matriz_pagamento': f"Cartão corporativo #{cartao_id} não encontrado (item {idx})."})
+
+            total_parcelas = int(item.get('total_parcelas') or 1)
+            desc_custom = item.get('descricao') or f"PARC. CARTAO {cartao.nome}"
+            desc_cartao = f"{descricao} - {desc_custom}"
+
+            res_cartao = lancar_despesa_cartao(
+                cartao=cartao,
+                valor=valor_item,
+                categoria_id=categoria.id,
+                descricao=desc_cartao,
+                data_compra=data_compra,
+                total_parcelas=total_parcelas,
+                comprovante=comprovante_file,
+                nome_arquivo_comprovante=nome_arquivo_comprovante,
+                grupo_pagamento_id=grupo_pagamento_id,
+                cliente_fornecedor_id=cliente_fornecedor_id,
+                user=user
+            )
+
+            if isinstance(res_cartao, list):
+                lancamentos_gerados.extend(res_cartao)
+            else:
+                lancamentos_gerados.append(res_cartao)
+
+        else:
+            # Pagamento Direto: Dinheiro, PIX, Débito, Transferência ou Boleto a prazo
+            conta_id = item.get('conta_id')
+            is_a_prazo = str(item.get('tipo_cobranca', '')).upper() in ['A_PRAZO', 'BOLETO'] or item.get('status_pagamento') == 'A_VENCER'
+
+            conta = None
+            if conta_id:
+                conta = ContaBancaria.objects.filter(id=conta_id, deleted_at__isnull=True).first()
+                if not conta:
+                    raise ValidationError({'matriz_pagamento': f"Conta bancária #{conta_id} não encontrada (item {idx})."})
+
+            if not is_a_prazo and not conta:
+                # Tenta fallback para a conta preferencial ou caixa físico
+                conta = ContaBancaria.objects.filter(deleted_at__isnull=True).order_by('id').first()
+                if not conta:
+                    raise ValidationError({'matriz_pagamento': f"Informe a Conta Bancária / Caixa de saída para o pagamento em {meio.nome}."})
+
+            data_venc = item.get('data_vencimento') or data_compra
+            if isinstance(data_venc, str):
+                data_venc = timezone.datetime.fromisoformat(data_venc).date() if 'T' in data_venc else timezone.datetime.strptime(data_venc, '%Y-%m-%d').date()
+
+            status_pagto = 'A_VENCER' if is_a_prazo else 'PAGO'
+            data_pagto = None if is_a_prazo else timezone.now()
+
+            # Se for pagamento à vista no caixa/banco, valida limite de cheque especial e debita imediatamente
+            if status_pagto == 'PAGO' and conta:
+                saldo_resultante = conta.saldo - valor_item
+                limite_minimo = -conta.limite_credito
+                if saldo_resultante < limite_minimo:
+                    raise ValidationError({
+                        'matriz_pagamento': f"Operação bloqueada por saldo insuficiente em '{conta.nome}'. "
+                                            f"Saldo: R$ {conta.saldo:.2f}, Limite: R$ {conta.limite_credito:.2f}, "
+                                            f"Tentativa de débito: R$ {valor_item:.2f}."
+                    })
+                conta.saldo -= valor_item
+                conta.save(update_fields=['saldo', 'updated_at'])
+
+            desc_item = f"{descricao} - {meio.nome}"
+            lanc = LancamentoFinanceiro.objects.create(
+                origem='AVULSO',
+                conta=conta,
+                meio_pagamento=meio,
+                categoria=categoria,
+                tipo_lancamento='SAIDA',
+                descricao=desc_item,
+                valor=valor_item,
+                data_competencia=data_compra,
+                data_vencimento=data_venc,
+                data_pagamento=data_pagto,
+                status_pagamento=status_pagto,
+                numero_parcela=idx,
+                total_parcelas=len(matriz_pagamento),
+                grupo_pagamento_id=grupo_pagamento_id,
+                cliente_fornecedor_id=cliente_fornecedor_id,
+                comprovante=comprovante_file or None,
+                nome_arquivo_comprovante=nome_arquivo_comprovante or None,
+                created_by_id=getattr(user, 'id', None)
+            )
+            lancamentos_gerados.append(lanc)
+            logger.info(f"[LANCAMENTO MULTI-MEIO CRIADO] #{lanc.id} ({meio.nome}) R$ {valor_item:.2f} grupo {grupo_pagamento_id}.")
+
+    return {
+        'grupo_pagamento_id': str(grupo_pagamento_id),
+        'total_lancamentos': len(lancamentos_gerados),
+        'valor_total': float(valor_total),
+        'lancamentos_ids': [l.id for l in lancamentos_gerados],
+        'lancamentos': lancamentos_gerados
+    }
+

@@ -563,103 +563,802 @@ window.FinanceiroView = {
   },
 
   // ==========================================================================
-  // 4. CARTÕES CORPORATIVOS
+  // 4. CARTÕES CORPORATIVOS E GESTÃO DE FATURAS
   // ==========================================================================
+  cartoesLista: [],
+  cartaoAtivo: null,
+  faturasLista: [],
+  faturaAtiva: null,
+
   async renderCartoes(container) {
     container.innerHTML = `
       <div class="card mb-16">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-          <p class="mono-text" style="font-size: 13px; color: var(--color-on-surface-variant);">GESTÃO DE CARTÕES DE CRÉDITO CORPORATIVOS E FATURAS EM ABERTO</p>
-          <button class="btn btn-primary" id="btn-novo-cartao">+ NOVO CARTÃO DE CRÉDITO</button>
+          <div>
+            <h2 style="font-size: 18px; font-weight: 700; margin: 0;">CARTÕES CORPORATIVOS & FATURAS</h2>
+            <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin: 4px 0 0 0;">
+              CONTROLE DE LIMITES, RECALCULO DE FECHAMENTO, PARCELAMENTO EM N VEZES E LIQUIDAÇÃO
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-editar-cartao-ativo" style="display: none;">✏️ EDITAR CARTÃO</button>
+            <button class="btn btn-primary btn-sm" id="btn-novo-cartao">+ NOVO CARTÃO CORPORATIVO</button>
+          </div>
         </div>
       </div>
 
-      <div id="cartoes-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
-        <div style="grid-column: 1 / -1; text-align: center; padding: 24px;"><div class="loader-spinner"></div></div>
+      <div id="cartoes-principal-view">
+        <div style="text-align: center; padding: 32px;"><div class="loader-spinner"></div></div>
       </div>
     `;
 
-    document.getElementById('btn-novo-cartao')?.addEventListener('click', () => {
-      window.EMCUtils.openModal({
-        title: 'NOVO CARTÃO DE CRÉDITO CORPORATIVO',
-        size: 'sm',
-        confirmText: 'CADASTRAR CARTÃO',
-        content: `
-          <div class="form-group">
-            <label class="form-label">Nome do Cartão *</label>
-            <input type="text" id="cartao-nome" class="form-control" placeholder="EX: ITAU MASTERCARD MASTER" required autofocus>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-            <div class="form-group">
-              <label class="form-label">Dia Vencimento</label>
-              <input type="number" min="1" max="31" id="cartao-dia-venc" class="form-control mono-text" value="10" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Dia Fechamento</label>
-              <input type="number" min="1" max="31" id="cartao-dia-fech" class="form-control mono-text" value="3" required>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Limite Total (R$)</label>
-            <input type="text" id="cartao-limite" class="form-control mono-text" data-mask="moeda-atm" value="R$ 10.000,00">
-          </div>
-        `,
-        onConfirm: async () => {
-          const nome = document.getElementById('cartao-nome').value.trim();
-          const dia_vencimento = parseInt(document.getElementById('cartao-dia-venc').value, 10);
-          const dia_fechamento_padrao = parseInt(document.getElementById('cartao-dia-fech').value, 10);
-          const limite = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cartao-limite').value);
-
-          if (!nome) return false;
-
-          try {
-            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO, {
-              nome, dia_vencimento, dia_fechamento_padrao, limite
-            });
-            window.EMCUtils.showToast('Cartão cadastrado com sucesso!', 'success');
-            this.renderCartoes(container);
-            return true;
-          } catch (e) {
-            window.EMCUtils.showToast(e.message || 'Erro ao cadastrar cartão.', 'error');
-            return false;
-          }
-        }
-      });
+    document.getElementById('btn-novo-cartao')?.addEventListener('click', () => this.abrirModalNovoCartao());
+    document.getElementById('btn-editar-cartao-ativo')?.addEventListener('click', () => {
+      if (this.cartaoAtivo) this.abrirModalNovoCartao(this.cartaoAtivo);
     });
+
+    await this.carregarListaCartoes();
+  },
+
+  async carregarListaCartoes(cartaoIdParaSelecionar = null) {
+    const viewContainer = document.getElementById('cartoes-principal-view');
+    if (!viewContainer) return;
 
     try {
       const res = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO);
-      const cartoes = res.results || res || [];
-      const grid = document.getElementById('cartoes-cards-grid');
+      this.cartoesLista = res.results || (Array.isArray(res) ? res : []);
 
-      if (!cartoes.length) {
-        grid.innerHTML = '<p class="mono-text" style="grid-column: 1 / -1; text-align: center; color: var(--color-on-surface-variant); padding: 24px;">Nenhum cartão corporativo cadastrado.</p>';
+      if (!this.cartoesLista.length) {
+        document.getElementById('btn-editar-cartao-ativo').style.display = 'none';
+        viewContainer.innerHTML = `
+          <div class="card text-center" style="padding: 48px 16px;">
+            <p class="mono-text" style="font-size: 14px; color: var(--color-on-surface-variant); margin-bottom: 16px;">
+              Nenhum Cartão Corporativo cadastrado no sistema.
+            </p>
+            <button class="btn btn-primary" onclick="window.FinanceiroView.abrirModalNovoCartao()">
+              + CADASTRAR PRIMEIRO CARTÃO CORPORATIVO
+            </button>
+          </div>
+        `;
         return;
       }
 
-      let html = '';
-      cartoes.forEach((c) => {
-        html += `
-          <div class="card" style="border-top: 3px solid var(--color-rust-orange);">
-            <div class="card-header">
-              <h3>${window.EMCUtils.escapeHtml(c.nome)}</h3>
-              <span class="status-chip info">VENC. DIA ${c.dia_vencimento}</span>
+      document.getElementById('btn-editar-cartao-ativo').style.display = 'inline-block';
+
+      // Define cartão ativo
+      if (cartaoIdParaSelecionar) {
+        this.cartaoAtivo = this.cartoesLista.find(c => c.id === Number(cartaoIdParaSelecionar)) || this.cartoesLista[0];
+      } else if (!this.cartaoAtivo || !this.cartoesLista.some(c => c.id === this.cartaoAtivo.id)) {
+        this.cartaoAtivo = this.cartoesLista[0];
+      }
+
+      this.renderEstruturaCartaoAtivo();
+    } catch (err) {
+      viewContainer.innerHTML = `<div class="card" style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  renderEstruturaCartaoAtivo() {
+    const viewContainer = document.getElementById('cartoes-principal-view');
+    if (!viewContainer || !this.cartaoAtivo) return;
+
+    const optionsCartoes = this.cartoesLista.map(c => `
+      <option value="${c.id}" ${c.id === this.cartaoAtivo.id ? 'selected' : ''}>
+        💳 ${window.EMCUtils.escapeHtml(c.nome)} (Venc. Dia ${c.dia_vencimento} / Fech. Dia ${c.dia_fechamento_padrao})
+      </option>
+    `).join('');
+
+    viewContainer.innerHTML = `
+      <!-- Seletor de Cartão -->
+      <div class="card mb-16" style="padding: 12px 16px; background-color: var(--color-surface-container);">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <label class="form-label mono-text" style="margin: 0; font-weight: 700; white-space: nowrap;">CARTÃO ATIVO:</label>
+          <select id="select-cartao-ativo" class="form-control" style="max-width: 480px; font-weight: 600;">
+            ${optionsCartoes}
+          </select>
+          <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">
+            Conta Preferencial: ${this.cartaoAtivo.conta_bancaria_nome ? window.EMCUtils.escapeHtml(this.cartaoAtivo.conta_bancaria_nome) : 'NÃO DEFINIDA'}
+          </span>
+        </div>
+      </div>
+
+      <!-- KPIs Flip Cards Industriais do Cartão -->
+      <div id="cartao-kpis-container" class="mb-16">
+        <div style="text-align: center; padding: 16px;"><div class="loader-spinner"></div></div>
+      </div>
+
+      <!-- Faturas e Lançamentos -->
+      <div class="card mb-16">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <h3 style="font-size: 14px; font-weight: 700; margin: 0;">HISTÓRICO E NAVEGAÇÃO DE FATURAS</h3>
+          <span class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">SELECIONE A COMPETÊNCIA DESEJADA</span>
+        </div>
+        <div id="cartao-faturas-timeline" style="display: flex; gap: 8px; overflow-x: auto; padding: 12px 4px; border-bottom: 1px solid var(--color-outline-variant);">
+          <div class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant);">Carregando faturas...</div>
+        </div>
+        <div id="fatura-ativa-detalhe-container" style="padding-top: 16px;">
+          <div style="text-align: center; padding: 24px;"><div class="loader-spinner"></div></div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('select-cartao-ativo')?.addEventListener('change', (e) => {
+      this.selecionarCartao(e.target.value);
+    });
+
+    this.carregarMetricasEFaturasCartao();
+  },
+
+  async selecionarCartao(cartaoId) {
+    this.cartaoAtivo = this.cartoesLista.find(c => c.id === Number(cartaoId));
+    this.faturaAtiva = null;
+    this.renderEstruturaCartaoAtivo();
+  },
+
+  async carregarMetricasEFaturasCartao() {
+    if (!this.cartaoAtivo) return;
+
+    try {
+      // 1. Busca Métricas e Limite Disponível
+      const endpointLimite = window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO + `${this.cartaoAtivo.id}/limite-disponivel/`;
+      const [resLimite, resFaturas] = await Promise.all([
+        window.api.get(endpointLimite),
+        window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO + `${this.cartaoAtivo.id}/faturas/`)
+      ]);
+
+      // Renderiza Flip Cards de KPI
+      const kpisContainer = document.getElementById('cartao-kpis-container');
+      if (kpisContainer) {
+        const limiteTotal = parseFloat(resLimite.limite_total || 0);
+        const totalComprometido = parseFloat(resLimite.total_comprometido || 0);
+        const limiteDisponivel = parseFloat(resLimite.limite_disponivel || 0);
+        const faturaAbertaAtual = parseFloat(resLimite.total_fatura_aberta_atual || 0);
+
+        const corDisponivel = limiteDisponivel < (limiteTotal * 0.15) ? 'var(--color-error)' : 'var(--color-success)';
+
+        kpisContainer.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+            <div class="card" style="border-left: 4px solid var(--color-outline); padding: 12px 16px;">
+              <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); font-weight: 700;">LIMITE TOTAL CONTRATUAL</div>
+              <div class="mono-text font-bold" style="font-size: 20px; color: var(--color-on-surface); margin-top: 4px;">
+                ${window.EMCUtils.formatarMoeda(limiteTotal)}
+              </div>
             </div>
-            <div style="margin-bottom: 16px; font-size: 13px; line-height: 1.8;">
-              • <strong>Limite Total:</strong> ${window.EMCUtils.formatarMoeda(c.limite)}<br>
-              • <strong>Dia de Fechamento:</strong> Dia ${c.dia_fechamento_padrao}<br>
-              • <strong>Fatura Aberta:</strong> <span class="mono-text" style="font-weight: 700; color: var(--color-rust-orange);">${window.EMCUtils.formatarMoeda(c.total_fatura_aberta || 0)}</span>
+
+            <div class="card" style="border-left: 4px solid var(--color-rust-orange); padding: 12px 16px;">
+              <div class="mono-text" style="font-size: 11px; color: var(--color-rust-orange); font-weight: 700;">LIMITE COMPROMETIDO (TOTAL)</div>
+              <div class="mono-text font-bold" style="font-size: 20px; color: var(--color-rust-orange); margin-top: 4px;">
+                ${window.EMCUtils.formatarMoeda(totalComprometido)}
+              </div>
             </div>
-            <div class="text-right">
-              <button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.verFaturasCartao(${c.id})">FATURAS</button>
+
+            <div class="card" style="border-left: 4px solid ${corDisponivel}; padding: 12px 16px;">
+              <div class="mono-text" style="font-size: 11px; color: ${corDisponivel}; font-weight: 700;">LIMITE DISPONÍVEL IMEDIATO</div>
+              <div class="mono-text font-bold" style="font-size: 20px; color: ${corDisponivel}; margin-top: 4px;">
+                ${window.EMCUtils.formatarMoeda(limiteDisponivel)}
+              </div>
+            </div>
+
+            <div class="card" style="border-left: 4px solid var(--color-warning); padding: 12px 16px;">
+              <div class="mono-text" style="font-size: 11px; color: var(--color-warning); font-weight: 700;">FATURA VIGENTE (ABERTA)</div>
+              <div class="mono-text font-bold" style="font-size: 20px; color: var(--color-warning); margin-top: 4px;">
+                ${window.EMCUtils.formatarMoeda(faturaAbertaAtual)}
+              </div>
             </div>
           </div>
         `;
-      });
-      grid.innerHTML = html;
+      }
+
+      // 2. Renderiza Linha do Tempo de Faturas
+      this.faturasLista = resFaturas.results || (Array.isArray(resFaturas) ? resFaturas : []);
+      const timelineContainer = document.getElementById('cartao-faturas-timeline');
+
+      if (!this.faturasLista.length) {
+        if (timelineContainer) {
+          timelineContainer.innerHTML = '<span class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant);">Nenhuma fatura gerada para este cartão. Lance uma compra para abrir a primeira competência.</span>';
+        }
+        const detalheContainer = document.getElementById('fatura-ativa-detalhe-container');
+        if (detalheContainer) {
+          detalheContainer.innerHTML = `
+            <div style="text-align: center; padding: 24px;">
+              <button class="btn btn-primary" onclick="window.FinanceiroView.abrirModalLancarDespesaCartao(window.FinanceiroView.cartaoAtivo)">
+                + LANÇAR PRIMEIRA COMPRA NO CARTÃO
+              </button>
+            </div>
+          `;
+        }
+        return;
+      }
+
+      // Seleciona primeira fatura aberta ou a mais recente
+      if (!this.faturaAtiva || !this.faturasLista.some(f => f.id === this.faturaAtiva.id)) {
+        const aberta = this.faturasLista.find(f => f.status === 'ABERTA');
+        this.faturaAtiva = aberta || this.faturasLista[0];
+      }
+
+      if (timelineContainer) {
+        timelineContainer.innerHTML = this.faturasLista.map(f => {
+          const isAtiva = f.id === this.faturaAtiva.id;
+          const statusClass = f.status === 'PAGA' ? 'success' : (f.status === 'FECHADA' ? 'warning' : 'info');
+          const borderStyle = isAtiva ? 'border: 2px solid var(--color-rust-orange); background: var(--color-surface-container);' : 'border: 1px solid var(--color-outline-variant);';
+
+          return `
+            <button type="button" class="btn btn-sm" 
+                    style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 14px; min-width: 110px; flex-shrink: 0; ${borderStyle}"
+                    onclick="window.FinanceiroView.selecionarFatura(${f.id})">
+              <span class="mono-text font-bold" style="font-size: 13px;">${f.mes_referencia}</span>
+              <span class="status-chip ${statusClass}" style="font-size: 9px; padding: 1px 4px;">${f.status}</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      await this.carregarDetalhesFaturaAtiva();
     } catch (err) {
-      document.getElementById('cartoes-cards-grid').innerHTML = `<p style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</p>`;
+      const detalheContainer = document.getElementById('fatura-ativa-detalhe-container');
+      if (detalheContainer) {
+        detalheContainer.innerHTML = `<div style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</div>`;
+      }
     }
+  },
+
+  async selecionarFatura(faturaId) {
+    this.faturaAtiva = this.faturasLista.find(f => f.id === Number(faturaId));
+    await this.carregarMetricasEFaturasCartao();
+  },
+
+  async carregarDetalhesFaturaAtiva() {
+    const detalheContainer = document.getElementById('fatura-ativa-detalhe-container');
+    if (!detalheContainer || !this.faturaAtiva) return;
+
+    detalheContainer.innerHTML = '<div style="text-align: center; padding: 24px;"><div class="loader-spinner"></div></div>';
+
+    try {
+      const endpointItens = window.CONFIG.ENDPOINTS.FINANCEIRO.FATURAS_CARTAO + `${this.faturaAtiva.id}/itens/`;
+      const resItens = await window.api.get(endpointItens);
+      const itens = resItens.results || (Array.isArray(resItens) ? resItens : []);
+
+      const f = this.faturaAtiva;
+      const statusBadge = f.status === 'PAGA' ? 'success' : (f.status === 'FECHADA' ? 'warning' : 'info');
+
+      // Botões contextuais por status da fatura
+      let acoesHtml = '';
+      if (f.status === 'ABERTA') {
+        acoesHtml = `
+          <button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.abrirModalAjustarFechamento(window.FinanceiroView.faturaAtiva)">
+            ✏️ AJUSTAR FECHAMENTO REAL
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalLancarDespesaCartao(window.FinanceiroView.cartaoAtivo, window.FinanceiroView.faturaAtiva)">
+            + LANÇAR COMPRA NESTA FATURA
+          </button>
+          <button class="btn btn-secondary btn-sm" style="border-color: var(--color-rust-orange); color: var(--color-rust-orange);" onclick="window.FinanceiroView.fecharFaturaConfirmacao(window.FinanceiroView.faturaAtiva)">
+            🔒 FECHAR FATURA
+          </button>
+        `;
+      } else if (f.status === 'FECHADA') {
+        acoesHtml = `
+          <button class="btn btn-primary btn-sm" style="background-color: var(--color-success); border-color: var(--color-success);" onclick="window.FinanceiroView.abrirModalLiquidarFatura(window.FinanceiroView.faturaAtiva)">
+            💰 LIQUIDAR / PAGAR FATURA
+          </button>
+        `;
+      } else if (f.status === 'PAGA') {
+        acoesHtml = `
+          <span class="status-chip success" style="font-size: 12px; padding: 6px 12px;">
+            ✅ FATURA INTEGRALMENTE QUITADA
+          </span>
+        `;
+      }
+
+      let tabelaItensHtml = '';
+      if (!itens.length) {
+        tabelaItensHtml = `
+          <tr>
+            <td colspan="8" class="text-center mono-text" style="color: var(--color-on-surface-variant); padding: 24px;">
+              Nenhuma despesa ou compra alocada nesta competência.
+            </td>
+          </tr>
+        `;
+      } else {
+        tabelaItensHtml = itens.map(item => {
+          const dtCompetencia = item.data_competencia || item.data_vencimento;
+          const parcelaTag = item.total_parcelas > 1 ? `${item.numero_parcela}/${item.total_parcelas}` : 'ÚNICA';
+          const anexoHtml = item.comprovante ? `
+            <a href="${item.comprovante}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" title="Ver Anexo / NF">
+              📎 VER
+            </a>
+          ` : '<span class="mono-text" style="color: var(--color-outline);">-</span>';
+
+          const remanejarBtn = (f.status === 'ABERTA') ? `
+            <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick="window.FinanceiroView.abrirModalRemanejarDespesa(${item.id})">
+              REMANEJAR
+            </button>
+          ` : '-';
+
+          return `
+            <tr>
+              <td class="mono-text">#${item.id}</td>
+              <td class="mono-text">${window.EMCUtils.formatarDataPtBr(dtCompetencia)}</td>
+              <td><strong>${window.EMCUtils.escapeHtml(item.descricao)}</strong></td>
+              <td><span class="status-chip info" style="font-size: 9px;">${window.EMCUtils.escapeHtml(item.categoria?.nome || 'CATEGORIA')}</span></td>
+              <td class="mono-text" style="text-align: center;"><span class="badge-parcela">${parcelaTag}</span></td>
+              <td class="mono-text font-bold" style="color: var(--color-error); text-align: right;">
+                ${window.EMCUtils.formatarMoeda(item.valor)}
+              </td>
+              <td style="text-align: center;">${anexoHtml}</td>
+              <td style="text-align: right;">${remanejarBtn}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      detalheContainer.innerHTML = `
+        <!-- Cabeçalho de Dados da Fatura Ativa -->
+        <div style="background-color: var(--color-surface-container); padding: 12px 16px; margin-bottom: 16px; border-left: 4px solid var(--color-rust-orange);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h4 style="margin: 0; font-size: 16px; font-weight: 700;">COMPETÊNCIA ${f.mes_referencia}</h4>
+                <span class="status-chip ${statusBadge}">${f.status}</span>
+              </div>
+              <div class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-top: 4px;">
+                Corte / Fechamento Real: <strong>${window.EMCUtils.formatarDataPtBr(f.data_fechamento_real)}</strong> | 
+                Vencimento do Pagamento: <strong>${window.EMCUtils.formatarDataPtBr(f.data_vencimento_calculada || f.data_fechamento_real)}</strong>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div style="text-align: right;">
+                <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant);">TOTAL DA FATURA</div>
+                <div class="mono-text font-bold" style="font-size: 18px; color: var(--color-error);">
+                  ${window.EMCUtils.formatarMoeda(f.total_despesas || 0)}
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                ${acoesHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela de Compras / Despesas da Fatura -->
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">ID</th>
+                <th style="width: 110px;">DATA COMPRA</th>
+                <th>DESCRIÇÃO / HISTÓRICO</th>
+                <th>CATEGORIA</th>
+                <th style="width: 80px; text-align: center;">PARCELA</th>
+                <th style="width: 120px; text-align: right;">VALOR</th>
+                <th style="width: 90px; text-align: center;">ANEXO</th>
+                <th style="width: 100px; text-align: right;">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tabelaItensHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      detalheContainer.innerHTML = `<div style="color: var(--color-error);">${window.EMCUtils.escapeHtml(err.message)}</div>`;
+    }
+  },
+
+  // --------------------------------------------------------------------------
+  // Modais de Cartões e Faturas
+  // --------------------------------------------------------------------------
+  async abrirModalNovoCartao(cartaoEdicao = null) {
+    const isEdicao = !!cartaoEdicao;
+    const resContas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
+    const listaContas = resContas.results || (Array.isArray(resContas) ? resContas : []);
+
+    let optsContas = '<option value="">-- NENHUMA (DEFINIR DEPOIS) --</option>';
+    listaContas.forEach(c => {
+      optsContas += `<option value="${c.id}" ${cartaoEdicao?.conta_bancaria_id === c.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
+    });
+
+    window.EMCUtils.openModal({
+      title: isEdicao ? `EDITAR CARTÃO CORPORATIVO #${cartaoEdicao.id}` : 'NOVO CARTÃO CORPORATIVO',
+      size: 'md',
+      confirmText: isEdicao ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR CARTÃO',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Identificação / Nome do Cartão *</label>
+          <input type="text" id="cartao-nome" class="form-control" placeholder="EX: VISA CORPORATIVO DIRETORIA" value="${cartaoEdicao ? window.EMCUtils.escapeHtml(cartaoEdicao.nome) : ''}" required autofocus>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Dia de Fechamento Padrão (1 a 31) *</label>
+            <input type="number" min="1" max="31" id="cartao-dia-fech" class="form-control mono-text" value="${cartaoEdicao?.dia_fechamento_padrao || 20}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dia de Vencimento (1 a 31) *</label>
+            <input type="number" min="1" max="31" id="cartao-dia-venc" class="form-control mono-text" value="${cartaoEdicao?.dia_vencimento || 28}" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Limite Total Contratual (R$) *</label>
+          <input type="text" id="cartao-limite" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(cartaoEdicao?.limite || 5000)}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Conta Bancária Preferencial de Débito</label>
+          <select id="cartao-conta-pref" class="form-control">${optsContas}</select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+            <input type="checkbox" id="cartao-permite-emergencial" ${cartaoEdicao?.permite_limite_emergencial ? 'checked' : ''}>
+            Permitir Limite Emergencial (Não travar compras que ultrapassem o limite)
+          </label>
+        </div>
+      `,
+      onConfirm: async () => {
+        const nome = document.getElementById('cartao-nome')?.value.trim();
+        const dia_fechamento_padrao = parseInt(document.getElementById('cartao-dia-fech')?.value, 10);
+        const dia_vencimento = parseInt(document.getElementById('cartao-dia-venc')?.value, 10);
+        const limite = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cartao-limite')?.value || '0');
+        const conta_bancaria_id = document.getElementById('cartao-conta-pref')?.value || null;
+        const permite_limite_emergencial = document.getElementById('cartao-permite-emergencial')?.checked || false;
+
+        if (!nome || !dia_fechamento_padrao || !dia_vencimento || limite <= 0) {
+          window.EMCUtils.showToast('Preencha corretamente os campos obrigatórios.', 'warning');
+          return false;
+        }
+
+        const payload = {
+          nome,
+          dia_fechamento_padrao,
+          dia_vencimento,
+          limite,
+          conta_bancaria_id: conta_bancaria_id ? Number(conta_bancaria_id) : null,
+          permite_limite_emergencial
+        };
+
+        try {
+          if (isEdicao) {
+            await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/`, payload);
+            window.EMCUtils.showToast('Cartão atualizado com sucesso!', 'success');
+          } else {
+            const novo = await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO, payload);
+            window.EMCUtils.showToast('Cartão cadastrado com sucesso!', 'success');
+            cartaoEdicao = novo;
+          }
+          await this.carregarListaCartoes(cartaoEdicao?.id);
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao salvar cartão.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  abrirModalAjustarFechamento(fatura) {
+    window.EMCUtils.openModal({
+      title: `AJUSTE DE FECHAMENTO REAL - FATURA ${fatura.mes_referencia}`,
+      size: 'md',
+      confirmText: 'CONFIRMAR E RECALCULAR ITENS',
+      content: `
+        <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-rust-orange); padding: 10px 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
+          ⚡ <strong>Recálculo Automatizado:</strong> Ao alterar a data de fechamento real desta fatura:
+          <ul style="margin: 6px 0 0 16px; padding: 0;">
+            <li>Se <strong>antecipar</strong> o fechamento, compras realizadas após a nova data serão transferidas automaticamente para a próxima fatura em aberto.</li>
+            <li>Se <strong>postergar</strong> o fechamento, compras já registradas na próxima fatura dentro do novo intervalo serão puxadas de volta para esta fatura.</li>
+          </ul>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data de Fechamento Real Vigente</label>
+          <input type="text" class="form-control mono-text" value="${window.EMCUtils.formatarDataPtBr(fatura.data_fechamento_real)}" disabled>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Nova Data de Fechamento Real *</label>
+          <input type="date" id="nova-data-fechamento" class="form-control mono-text" value="${fatura.data_fechamento_real}" required autofocus>
+        </div>
+      `,
+      onConfirm: async () => {
+        const novaData = document.getElementById('nova-data-fechamento')?.value;
+        if (!novaData) return false;
+
+        try {
+          const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.AJUSTAR_FECHAMENTO.replace('{id}', fatura.id);
+          const res = await window.api.post(endpoint, { data_fechamento_real: novaData });
+
+          const dados = res.dados || res;
+          let msg = 'Fechamento ajustado com sucesso!';
+          if (dados.itens_movidos_adiante > 0) {
+            msg += ` ${dados.itens_movidos_adiante} compra(s) transferida(s) para a próxima fatura.`;
+          }
+          if (dados.itens_puxados_de_volta > 0) {
+            msg += ` ${dados.itens_puxados_de_volta} compra(s) puxada(s) de volta para esta fatura.`;
+          }
+
+          window.EMCUtils.showToast(msg, 'success');
+          await this.carregarMetricasEFaturasCartao();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao ajustar fechamento da fatura.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async fecharFaturaConfirmacao(fatura) {
+    const confirmar = confirm(`Confirma o fechamento da fatura ${fatura.mes_referencia}?\n\nIsso consolidará o valor total de R$ ${fatura.total_despesas || 0} e gerará o título correspondente no Contas a Pagar.`);
+    if (!confirmar) return;
+
+    try {
+      const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.FECHAR_FATURA.replace('{id}', fatura.id);
+      await window.api.post(endpoint, {});
+      window.EMCUtils.showToast(`Fatura ${fatura.mes_referencia} fechada com sucesso! Título gerado no Contas a Pagar.`, 'success');
+      await this.carregarMetricasEFaturasCartao();
+    } catch (e) {
+      window.EMCUtils.showToast(e.message || 'Erro ao fechar fatura.', 'error');
+    }
+  },
+
+  async abrirModalLiquidarFatura(fatura) {
+    const resContas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
+    const listaContas = resContas.results || (Array.isArray(resContas) ? resContas : []);
+
+    let optsContas = '<option value="">-- SELECIONE A CONTA BANCÁRIA DE DÉBITO * --</option>';
+    listaContas.forEach(c => {
+      const selecionada = this.cartaoAtivo?.conta_bancaria_id === c.id ? 'selected' : '';
+      optsContas += `<option value="${c.id}" ${selecionada}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)} | Limite: ${window.EMCUtils.formatarMoeda(c.limite_credito)})</option>`;
+    });
+
+    const valorTotalFatura = parseFloat(fatura.total_despesas || 0);
+
+    window.EMCUtils.openModal({
+      title: `LIQUIDAÇÃO / PAGAMENTO DA FATURA ${fatura.mes_referencia}`,
+      size: 'md',
+      confirmText: 'CONFIRMAR PAGAMENTO',
+      content: `
+        <div style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-success); padding: 10px 12px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;">
+          💳 <strong>Pagamento Total ou Parcial (Rollover):</strong>
+          Caso pague um valor inferior ao total da fatura (R$ ${window.EMCUtils.formatarMoeda(valorTotalFatura)}), o saldo remanescente será automaticamente transferido como encargo/rollover para a fatura do mês seguinte.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Valor Total da Fatura</label>
+          <input type="text" class="form-control mono-text" value="${window.EMCUtils.formatarMoeda(valorTotalFatura)}" disabled>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Valor a Liquidar (R$) *</label>
+          <input type="text" id="liq-fatura-valor" class="form-control mono-text font-bold" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(valorTotalFatura)}" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Conta Bancária de Saída *</label>
+          <select id="liq-fatura-conta" class="form-control" required>${optsContas}</select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data do Pagamento *</label>
+          <input type="date" id="liq-fatura-data" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Comprovante de Pagamento (Opcional)</label>
+          <input type="file" id="liq-fatura-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
+        </div>
+      `,
+      onConfirm: async () => {
+        const valorPago = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('liq-fatura-valor')?.value || '0');
+        const contaId = document.getElementById('liq-fatura-conta')?.value;
+        const dataPagamento = document.getElementById('liq-fatura-data')?.value;
+
+        if (valorPago <= 0 || !contaId || !dataPagamento) {
+          window.EMCUtils.showToast('Preencha os campos obrigatórios.', 'warning');
+          return false;
+        }
+
+        let comprovantePath = null;
+        let nomeComprovante = null;
+
+        const fileInput = document.getElementById('liq-fatura-comprovante');
+        if (fileInput?.files?.length > 0) {
+          try {
+            window.EMCUtils.showToast('Enviando comprovante de pagamento...', 'info');
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+            comprovantePath = resUp.comprovante_path;
+            nomeComprovante = resUp.nome_arquivo_comprovante;
+          } catch (errUp) {
+            window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
+            return false;
+          }
+        }
+
+        try {
+          const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.LIQUIDAR_FATURA.replace('{id}', fatura.id);
+          const payload = {
+            valor_pago: valorPago,
+            conta_id: Number(contaId),
+            data_pagamento: `${dataPagamento}T12:00:00`,
+            comprovante: comprovantePath,
+            nome_arquivo_comprovante: nomeComprovante
+          };
+
+          await window.api.post(endpoint, payload);
+          window.EMCUtils.showToast('Fatura liquidada com sucesso! Débito efetuado em conta bancária.', 'success');
+          await this.carregarMetricasEFaturasCartao();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao liquidar fatura.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async abrirModalLancarDespesaCartao(cartao, fatura = null) {
+    const resCat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}?ativo=true`);
+    const listaCat = resCat.results || (Array.isArray(resCat) ? resCat : []);
+    const catsDespesa = listaCat.filter(c => c.tipo === 'DESPESA' || c.tipo === 'AMBOS');
+
+    let optsCat = '<option value="">-- SELECIONE A CATEGORIA DRE * --</option>';
+    catsDespesa.forEach(c => {
+      optsCat += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)}</option>`;
+    });
+
+    window.EMCUtils.openModal({
+      title: `LANÇAR COMPRA NO CARTÃO ${cartao.nome}`,
+      size: 'md',
+      confirmText: 'REGISTRAR COMPRA',
+      content: `
+        <div class="form-group">
+          <label class="form-label">Descrição / Histórico da Compra *</label>
+          <input type="text" id="cd-desc" class="form-control" placeholder="EX: COMPRA DE ELETRODOS E DISCOS DE CORTE" required autofocus>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Valor Total da Compra (R$) *</label>
+            <input type="text" id="cd-valor" class="form-control mono-text font-bold" data-mask="moeda-atm" value="R$ 0,00" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Número de Parcelas *</label>
+            <select id="cd-parcelas" class="form-control mono-text">
+              <option value="1">1x (À vista no cartão)</option>
+              <option value="2">2x</option>
+              <option value="3">3x</option>
+              <option value="4">4x</option>
+              <option value="5">5x</option>
+              <option value="6">6x</option>
+              <option value="10">10x</option>
+              <option value="12">12x</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 140px; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Categoria DRE *</label>
+            <select id="cd-cat" class="form-control" required>${optsCat}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data da Compra *</label>
+            <input type="date" id="cd-data" class="form-control mono-text" value="${new Date().toISOString().split('T')[0]}" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Anexar Comprovante / Nota Fiscal (Opcional)</label>
+          <input type="file" id="cd-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
+        </div>
+      `,
+      onConfirm: async () => {
+        const descricao = document.getElementById('cd-desc')?.value.trim();
+        const valor = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('cd-valor')?.value || '0');
+        const totalParcelas = parseInt(document.getElementById('cd-parcelas')?.value || '1', 10);
+        const categoriaId = document.getElementById('cd-cat')?.value;
+        const dataCompra = document.getElementById('cd-data')?.value;
+
+        if (!descricao || valor <= 0 || !categoriaId || !dataCompra) {
+          window.EMCUtils.showToast('Preencha os campos obrigatórios.', 'warning');
+          return false;
+        }
+
+        let comprovantePath = null;
+        let nomeComprovante = null;
+
+        const fileInput = document.getElementById('cd-comprovante');
+        if (fileInput?.files?.length > 0) {
+          try {
+            window.EMCUtils.showToast('Enviando anexo da compra...', 'info');
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+            comprovantePath = resUp.comprovante_path;
+            nomeComprovante = resUp.nome_arquivo_comprovante;
+          } catch (errUp) {
+            window.EMCUtils.showToast(`Erro ao enviar anexo: ${errUp.message}`, 'error');
+            return false;
+          }
+        }
+
+        try {
+          // Utiliza o endpoint lancar-multi-meio para consistência total com N parcelas e comprovante único
+          const payload = {
+            descricao,
+            categoria_id: Number(categoriaId),
+            valor_total: valor,
+            data_compra: dataCompra,
+            comprovante: comprovantePath,
+            nome_arquivo_comprovante: nomeComprovante,
+            matriz_pagamentos: [
+              {
+                tipo_meio: 'CARTAO',
+                cartao_id: cartao.id,
+                total_parcelas: totalParcelas,
+                valor: valor,
+                descricao: `COMPRA CARTÃO ${cartao.nome}`
+              }
+            ]
+          };
+
+          await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAR_MULTI_MEIO, payload);
+          window.EMCUtils.showToast(`Compra de R$ ${window.EMCUtils.formatarMoeda(valor)} registrada com sucesso em ${totalParcelas}x!`, 'success');
+          await this.carregarMetricasEFaturasCartao();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao registrar compra no cartão.', 'error');
+          return false;
+        }
+      }
+    });
+  },
+
+  async abrirModalRemanejarDespesa(lancamentoId) {
+    if (!this.faturasLista.length) return;
+
+    let optsFaturas = '<option value="">-- SELECIONE A NOVA FATURA DESTINO --</option>';
+    this.faturasLista.filter(f => f.status === 'ABERTA' && f.id !== this.faturaAtiva?.id).forEach(f => {
+      optsFaturas += `<option value="${f.id}">Fatura ${f.mes_referencia} (Fechamento: ${window.EMCUtils.formatarDataPtBr(f.data_fechamento_real)})</option>`;
+    });
+
+    window.EMCUtils.openModal({
+      title: `REMANEJAR DESPESA #${lancamentoId}`,
+      size: 'sm',
+      confirmText: 'TRANSFERIR COMPETÊNCIA',
+      content: `
+        <p class="mono-text" style="font-size: 12px; color: var(--color-on-surface-variant); margin-bottom: 12px;">
+          Transfira esta compra para outra fatura em aberto deste cartão.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Nova Fatura Aberta *</label>
+          <select id="reman-fatura-id" class="form-control">${optsFaturas}</select>
+        </div>
+      `,
+      onConfirm: async () => {
+        const novaFaturaId = document.getElementById('reman-fatura-id')?.value;
+        if (!novaFaturaId) {
+          window.EMCUtils.showToast('Selecione a fatura de destino.', 'warning');
+          return false;
+        }
+
+        try {
+          const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.REMANEJAR_DESPESA.replace('{id}', lancamentoId);
+          await window.api.post(endpoint, { nova_fatura_cartao_id: Number(novaFaturaId) });
+          window.EMCUtils.showToast('Despesa remanejada com sucesso!', 'success');
+          await this.carregarMetricasEFaturasCartao();
+          return true;
+        } catch (e) {
+          window.EMCUtils.showToast(e.message || 'Erro ao remanejar despesa.', 'error');
+          return false;
+        }
+      }
+    });
   },
 
   async abrirModalLiquidarLancamento(lancamentoId) {
@@ -889,15 +1588,17 @@ window.FinanceiroView = {
 
   async abrirModalNovoLancamento(defaultTipo = 'SAIDA', modo = 'competencia') {
     const isExtrato = modo === 'extrato' || this.currentTab === 'extrato';
-    const [contas, categorias, meios] = await Promise.all([
+    const [contas, categorias, meios, cartoes] = await Promise.all([
       window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS),
       window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CATEGORIAS}?ativo=true`),
-      window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO)
+      window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.MEIOS_PAGAMENTO),
+      window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO).catch(() => [])
     ]);
 
     const listaContas = contas.results || contas || [];
     const listaCat = categorias.results || categorias || [];
     const listaMeios = meios.results || meios || [];
+    const listaCartoes = cartoes.results || cartoes || [];
 
     let optionsContas = `<option value="">${isExtrato ? 'SELECIONE A CONTA BANCÁRIA / CAIXA *' : 'SELECIONE A CONTA (OPCIONAL)...'}</option>`;
     listaContas.forEach((c) => { optionsContas += `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)} (SALDO: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`; });
@@ -935,14 +1636,14 @@ window.FinanceiroView = {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" for="nl-valor">Valor (R$) *</label>
-              <input type="text" id="nl-valor" class="form-control mono-text" data-mask="moeda-atm" value="R$ 0,00" required>
+              <label class="form-label" for="nl-valor">Valor Total (R$) *</label>
+              <input type="text" id="nl-valor" class="form-control mono-text font-bold" data-mask="moeda-atm" value="R$ 0,00" required>
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="nl-desc">Descrição / Histórico *</label>
-            <input type="text" id="nl-desc" class="form-control" placeholder="EX: PAGAMENTO ENERGIA ELETRICA OFICINA" required>
+            <input type="text" id="nl-desc" class="form-control" placeholder="EX: PAGAMENTO FORNECEDOR / COMPRA BALCÃO" required>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 160px; gap: 10px; margin-bottom: 10px;">
@@ -958,36 +1659,176 @@ window.FinanceiroView = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 10px;">
-            <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
-              <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
-            </div>
-            <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" for="nl-meio">Meio de Pagamento</label>
-              <select id="nl-meio" class="form-control">${optionsMeios}</select>
+          <!-- Chaveamento de Múltiplas Formas de Pagamento (Caixa de Mercado) -->
+          <div id="wrapper-toggle-matriz" style="background-color: var(--color-surface-container); border-left: 3px solid var(--color-rust-orange); padding: 10px 12px; margin-bottom: 12px; margin-top: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; font-size: 13px; margin: 0;">
+              <input type="checkbox" id="nl-toggle-multi-meio">
+              DIVIDIR EM MÚLTIPLAS FORMAS DE PAGAMENTO (MATRIZ / CAIXA DE MERCADO)
+            </label>
+            <div class="mono-text" style="font-size: 11px; color: var(--color-on-surface-variant); margin-top: 4px;">
+              Pague parte em dinheiro/PIX e parte no cartão corporativo parcelado, mantendo anexo e rastreabilidade unificados.
             </div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" for="nl-comprovante">Anexar Comprovante / Nota Fiscal (Opcional)</label>
+          <!-- 1. Pagamento Simples Tradicional -->
+          <div id="container-pagamento-simples">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 10px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
+                <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" for="nl-meio">Meio de Pagamento</label>
+                <select id="nl-meio" class="form-control">${optionsMeios}</select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Matriz de Pagamentos Multi-Meio -->
+          <div id="container-matriz-pagamento" style="display: none; border: 1px solid var(--color-outline-variant); padding: 12px; margin-bottom: 12px; background: var(--color-surface);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong style="font-size: 13px;">MATRIZ DE DISTRIBUIÇÃO DO PAGAMENTO:</strong>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-forma-pagto">+ ADICIONAR FORMA</button>
+            </div>
+
+            <div id="matriz-linhas-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
+
+            <!-- Balanço Matemático em Tempo Real -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; background: var(--color-surface-container); padding: 8px 12px; border: 1px solid var(--color-outline-variant);" class="mono-text">
+              <div>
+                <span style="font-size: 10px; color: var(--color-on-surface-variant); display: block;">VALOR DA COMPRA</span>
+                <strong id="matriz-display-total" style="font-size: 14px;">R$ 0,00</strong>
+              </div>
+              <div>
+                <span style="font-size: 10px; color: var(--color-on-surface-variant); display: block;">TOTAL ALOCADO</span>
+                <strong id="matriz-display-alocado" style="font-size: 14px; color: var(--color-primary);">R$ 0,00</strong>
+              </div>
+              <div>
+                <span style="font-size: 10px; color: var(--color-on-surface-variant); display: block;">DIFERENÇA RESTANTE</span>
+                <strong id="matriz-display-diferenca" style="font-size: 14px; color: var(--color-error);">R$ 0,00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0; margin-top: 10px;">
+            <label class="form-label" for="nl-comprovante">Anexar Comprovante / Nota Fiscal (Único e Reutilizável)</label>
             <input type="file" id="nl-comprovante" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.xml,.csv,.txt">
           </div>
         </form>
       `,
       onConfirm: async () => {
         const tipo_lancamento = document.getElementById('nl-tipo')?.value;
-        const valor = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
+        const valorTotal = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
         const descricao = document.getElementById('nl-desc')?.value.trim();
         const categoria_id = document.getElementById('nl-cat')?.value;
         const data_vencimento = document.getElementById('nl-venc')?.value;
-        const conta_id = document.getElementById('nl-conta')?.value || null;
-        const meio_pagamento_id = document.getElementById('nl-meio')?.value || null;
+        const isMultiMeio = document.getElementById('nl-toggle-multi-meio')?.checked;
 
-        if (!descricao || valor <= 0 || !categoria_id) {
+        if (!descricao || valorTotal <= 0 || !categoria_id) {
           window.EMCUtils.showToast('Preencha os campos obrigatórios (Descrição, Valor e Categoria).', 'warning');
           return false;
         }
+
+        let comprovantePath = null;
+        let nomeComprovante = null;
+
+        const fileInput = document.getElementById('nl-comprovante');
+        if (fileInput?.files?.length > 0) {
+          try {
+            window.EMCUtils.showToast('Enviando comprovante...', 'info');
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
+            comprovantePath = resUp.comprovante_path;
+            nomeComprovante = resUp.nome_arquivo_comprovante;
+          } catch (errUp) {
+            window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
+            return false;
+          }
+        }
+
+        // Fluxo 1: Matriz de Pagamentos Multi-Meio
+        if (isMultiMeio) {
+          const linhas = document.querySelectorAll('.matriz-pagto-row');
+          if (!linhas.length) {
+            window.EMCUtils.showToast('Adicione ao menos uma forma de pagamento na matriz.', 'warning');
+            return false;
+          }
+
+          const matrizPayload = [];
+          let somaMatriz = 0;
+
+          for (const row of linhas) {
+            const tipoMeio = row.querySelector('.matriz-tipo-meio').value;
+            const valorLinha = window.EMCUtils.converterMoedaATMParaFloat(row.querySelector('.matriz-row-valor').value || '0');
+            somaMatriz += valorLinha;
+
+            if (valorLinha <= 0) {
+              window.EMCUtils.showToast('Todas as formas de pagamento devem ter valor maior que zero.', 'warning');
+              return false;
+            }
+
+            if (tipoMeio === 'CARTAO') {
+              const cartaoId = row.querySelector('.matriz-cartao-id').value;
+              const parcelas = parseInt(row.querySelector('.matriz-parcelas').value || '1', 10);
+              if (!cartaoId) {
+                window.EMCUtils.showToast('Selecione o Cartão Corporativo na matriz.', 'warning');
+                return false;
+              }
+              matrizPayload.push({
+                tipo_meio: 'CARTAO',
+                cartao_id: Number(cartaoId),
+                total_parcelas: parcelas,
+                valor: valorLinha,
+                descricao: `PARC. CARTAO (${parcelas}X)`
+              });
+            } else {
+              const contaId = row.querySelector('.matriz-conta-id').value;
+              if (!contaId) {
+                window.EMCUtils.showToast('Selecione a Conta Bancária de saída na matriz.', 'warning');
+                return false;
+              }
+              matrizPayload.push({
+                tipo_meio: 'CONTA',
+                conta_id: Number(contaId),
+                valor: valorLinha,
+                descricao: 'PAGAMENTO CONTA / CAIXA'
+              });
+            }
+          }
+
+          if (Math.abs(somaMatriz - valorTotal) > 0.01) {
+            window.EMCUtils.showToast(`A soma da matriz (R$ ${somaMatriz.toFixed(2)}) deve ser exatamente igual ao valor da compra (R$ ${valorTotal.toFixed(2)}).`, 'warning');
+            return false;
+          }
+
+          const payloadMulti = {
+            descricao,
+            categoria_id: Number(categoria_id),
+            valor_total: valorTotal,
+            data_compra: data_vencimento,
+            comprovante: comprovantePath,
+            nome_arquivo_comprovante: nomeComprovante,
+            matriz_pagamentos: matrizPayload
+          };
+
+          try {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAR_MULTI_MEIO, payloadMulti);
+            window.EMCUtils.showToast(`Compra multi-meio registrada com sucesso (${matrizPayload.length} lançamentos vinculados)!`, 'success');
+            if (this.currentTab === 'extrato') this.carregarListaExtrato();
+            else if (this.currentTab === 'cartoes') this.carregarMetricasEFaturasCartao();
+            else if (this.currentTab === 'pagar') this.carregarListaContasPagar();
+            else this.render(document.getElementById('app-root'));
+            return true;
+          } catch (err) {
+            window.EMCUtils.showToast(err.message || 'Erro ao registrar compra multi-meio.', 'error');
+            return false;
+          }
+        }
+
+        // Fluxo 2: Pagamento Simples Convencional
+        const conta_id = document.getElementById('nl-conta')?.value || null;
+        const meio_pagamento_id = document.getElementById('nl-meio')?.value || null;
 
         if (isExtrato && !conta_id) {
           window.EMCUtils.showToast('Selecione a Conta Bancária / Caixa para o lançamento no Extrato.', 'warning');
@@ -996,7 +1837,7 @@ window.FinanceiroView = {
 
         const payload = {
           tipo_lancamento,
-          valor,
+          valor: valorTotal,
           descricao,
           categoria: parseInt(categoria_id, 10),
           categoria_id: parseInt(categoria_id, 10),
@@ -1004,7 +1845,9 @@ window.FinanceiroView = {
           conta: conta_id ? parseInt(conta_id, 10) : null,
           conta_id: conta_id ? parseInt(conta_id, 10) : null,
           meio_pagamento: meio_pagamento_id ? parseInt(meio_pagamento_id, 10) : null,
-          meio_pagamento_id: meio_pagamento_id ? parseInt(meio_pagamento_id, 10) : null
+          meio_pagamento_id: meio_pagamento_id ? parseInt(meio_pagamento_id, 10) : null,
+          comprovante: comprovantePath,
+          nome_arquivo_comprovante: nomeComprovante
         };
 
         if (isExtrato) {
@@ -1013,21 +1856,6 @@ window.FinanceiroView = {
           payload.origem = 'AVULSO';
         } else {
           payload.origem = 'AGENDA';
-        }
-
-        const fileInput = document.getElementById('nl-comprovante');
-        if (fileInput?.files?.length > 0) {
-          try {
-            window.EMCUtils.showToast('Enviando comprovante do lançamento...', 'info');
-            const formData = new FormData();
-            formData.append('arquivo', fileInput.files[0]);
-            const resUp = await window.api.post(window.CONFIG.ENDPOINTS.CONCILIACAO.UPLOAD_COMPROVANTE, formData);
-            payload.comprovante = resUp.comprovante_path;
-            payload.nome_arquivo_comprovante = resUp.nome_arquivo_comprovante;
-          } catch (errUp) {
-            window.EMCUtils.showToast(`Erro ao enviar comprovante: ${errUp.message}`, 'error');
-            return false;
-          }
         }
 
         try {
@@ -1050,7 +1878,121 @@ window.FinanceiroView = {
       }
     });
 
-    // Função de Filtragem Dinâmica de Categorias com base no Tipo de Movimentação selecionado
+    // Lógica Dinâmica da Matriz de Pagamentos
+    const toggleMatriz = document.getElementById('nl-toggle-multi-meio');
+    const boxSimples = document.getElementById('container-pagamento-simples');
+    const boxMatriz = document.getElementById('container-matriz-pagamento');
+    const matrizLinhas = document.getElementById('matriz-linhas-container');
+
+    const atualizarBalancoMatriz = () => {
+      const vTotal = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
+      let soma = 0;
+      document.querySelectorAll('.matriz-row-valor').forEach(inp => {
+        soma += window.EMCUtils.converterMoedaATMParaFloat(inp.value || '0');
+      });
+      const diff = vTotal - soma;
+
+      const dispTotal = document.getElementById('matriz-display-total');
+      const dispAlocado = document.getElementById('matriz-display-alocado');
+      const dispDiff = document.getElementById('matriz-display-diferenca');
+
+      if (dispTotal) dispTotal.textContent = window.EMCUtils.formatarMoeda(vTotal);
+      if (dispAlocado) dispAlocado.textContent = window.EMCUtils.formatarMoeda(soma);
+      if (dispDiff) {
+        dispDiff.textContent = window.EMCUtils.formatarMoeda(diff);
+        dispDiff.style.color = Math.abs(diff) < 0.01 ? 'var(--color-success)' : 'var(--color-error)';
+      }
+    };
+
+    const adicionarLinhaMatriz = (tipoDefault = 'CONTA', valorDefault = 0) => {
+      const row = document.createElement('div');
+      row.className = 'matriz-pagto-row';
+      row.style.cssText = 'display: grid; grid-template-columns: 140px 1fr 130px 36px; gap: 8px; align-items: center; background: var(--color-surface-container); padding: 6px 8px; border: 1px solid var(--color-outline-variant);';
+
+      const optsContasRow = listaContas.map(c => `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`).join('');
+      const optsCartoesRow = listaCartoes.map(c => `<option value="${c.id}">💳 ${window.EMCUtils.escapeHtml(c.nome)}</option>`).join('');
+
+      row.innerHTML = `
+        <select class="form-control matriz-tipo-meio" style="font-size: 11.5px;">
+          <option value="CONTA" ${tipoDefault === 'CONTA' ? 'selected' : ''}>CONTA / CAIXA</option>
+          <option value="CARTAO" ${tipoDefault === 'CARTAO' ? 'selected' : ''}>CARTÃO CRÉDITO</option>
+        </select>
+
+        <div class="matriz-alvo-container">
+          <!-- Renderizado dinamicamente -->
+        </div>
+
+        <input type="text" class="form-control mono-text matriz-row-valor font-bold" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(valorDefault)}">
+
+        <button type="button" class="btn btn-secondary btn-sm btn-remover-linha-matriz" style="color: var(--color-error); padding: 4px;" title="Remover Forma">✕</button>
+      `;
+
+      const alvoContainer = row.querySelector('.matriz-alvo-container');
+      const tipoSelect = row.querySelector('.matriz-tipo-meio');
+
+      const renderAlvo = (tipo) => {
+        if (tipo === 'CARTAO') {
+          alvoContainer.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 100px; gap: 6px;">
+              <select class="form-control matriz-cartao-id" style="font-size: 11.5px;">${optsCartoesRow || '<option value="">NENHUM CARTÃO</option>'}</select>
+              <select class="form-control mono-text matriz-parcelas" style="font-size: 11.5px;">
+                <option value="1">1x</option>
+                <option value="2">2x</option>
+                <option value="3">3x</option>
+                <option value="4">4x</option>
+                <option value="5">5x</option>
+                <option value="6">6x</option>
+                <option value="10">10x</option>
+                <option value="12">12x</option>
+              </select>
+            </div>
+          `;
+        } else {
+          alvoContainer.innerHTML = `
+            <select class="form-control matriz-conta-id" style="font-size: 11.5px;">${optsContasRow || '<option value="">NENHUMA CONTA</option>'}</select>
+          `;
+        }
+      };
+
+      tipoSelect.addEventListener('change', (e) => renderAlvo(e.target.value));
+      renderAlvo(tipoDefault);
+
+      row.querySelector('.matriz-row-valor').addEventListener('input', atualizarBalancoMatriz);
+      row.querySelector('.btn-remover-linha-matriz').addEventListener('click', () => {
+        row.remove();
+        atualizarBalancoMatriz();
+      });
+
+      matrizLinhas.appendChild(row);
+      window.EMCUtils.aplicarMascaras();
+      atualizarBalancoMatriz();
+    };
+
+    toggleMatriz?.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      boxSimples.style.display = checked ? 'none' : 'block';
+      boxMatriz.style.display = checked ? 'block' : 'none';
+
+      if (checked && !matrizLinhas.children.length) {
+        const total = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
+        adicionarLinhaMatriz('CONTA', total > 0 ? total : 0);
+      }
+      atualizarBalancoMatriz();
+    });
+
+    document.getElementById('btn-add-forma-pagto')?.addEventListener('click', () => {
+      const vTotal = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
+      let soma = 0;
+      document.querySelectorAll('.matriz-row-valor').forEach(inp => {
+        soma += window.EMCUtils.converterMoedaATMParaFloat(inp.value || '0');
+      });
+      const restante = Math.max(0, vTotal - soma);
+      adicionarLinhaMatriz(listaCartoes.length ? 'CARTAO' : 'CONTA', restante);
+    });
+
+    document.getElementById('nl-valor')?.addEventListener('input', atualizarBalancoMatriz);
+
+    // Filtragem Dinâmica de Categorias com base no Tipo de Movimentação selecionado
     const atualizarCategoriasDinamicas = (tipoMov) => {
       const selCat = document.getElementById('nl-cat');
       if (!selCat) return;
@@ -1073,13 +2015,11 @@ window.FinanceiroView = {
       });
       selCat.innerHTML = opts;
 
-      // Mantém a categoria selecionada se ela for permitida no novo tipo
       if (valorAnterior && filtradas.some((c) => String(c.id) === String(valorAnterior))) {
         selCat.value = valorAnterior;
       }
     };
 
-    // Popula imediatamente no início e adiciona o evento de troca
     atualizarCategoriasDinamicas(defaultTipo);
     document.getElementById('nl-tipo')?.addEventListener('change', (e) => {
       atualizarCategoriasDinamicas(e.target.value);

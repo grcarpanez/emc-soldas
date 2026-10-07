@@ -2,8 +2,8 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-07 (Prontuário de Manutenção de Equipamentos, Vinculação de Equipamento ao Item de Orçamento e Suporte a Múltiplos Veículos - PWA v4.59)  
-**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard e Prontuário de Manutenção)  
+**Última Atualização:** 2026-10-07 (Gestão Completa de Cartões Corporativos, Faturas com Recálculo Dinâmico, Parcelamento N Vezes, Matriz Multi-Meio de Pagamento e Reúso de Anexos na Conciliação - PWA v4.60)  
+**Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
 ---
@@ -713,26 +713,40 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 195 testes passando com 100% de sucesso (incluindo `test_15_criacao_orcamento_com_multiplos_equipamentos_por_item` e `test_historico_manutencao_equipamento`).
   - **Versionamento PWA:** Cache `emc-soldas-v4.59` em `sw.js` e `?v=4.59` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-07_02_historico_manutencao_e_equipamento_por_item_orcamento.md`.
-
-
-
-
-
-
-
+- [x] **Gestão Completa de Cartões Corporativos, Faturas com Recálculo Dinâmico, Parcelamento N Vezes, Matriz Multi-Meio de Pagamento e Reúso de Anexos na Conciliação (PWA v4.60):**
+  - **Modelagem Relacional e Migrações (`financeiro/models.py`):**
+    - Adicionados campos em `LancamentoFinanceiro`: `grupo_pagamento_id` (UUID indexado para transações multi-meio), `numero_parcela` e `total_parcelas` (rastreamento de compras a prazo), e `data_competencia` (data real da despesa para recálculo determinístico de faturas).
+    - Criadas e aplicadas migrações `0007_lancamentofinanceiro_grupo_pagamento_id_and_more.py` e `0008_lancamentofinanceiro_data_competencia.py`.
+  - **Serviços Especializados de Cartão e Fatura (`financeiro/services_cartao.py`):**
+    - `lancar_despesa_cartao`: divisão atômica em $N$ faturas consecutivas, ajuste aritmético exato de centavos na 1ª parcela, criação sob demanda de faturas futuras abertas, validação de limite disponível e vínculo a grupo de pagamento.
+    - `ajustar_fechamento_fatura`: alteração dinâmica da data de corte (`data_fechamento_real`) com remanejamento automático de despesas (postergação puxa compras anteriores; antecipação empurra compras posteriores para a próxima fatura aberta, preservando parcelas fixadas).
+    - `fechar_fatura_cartao`: consolidação de fatura com geração de título principal a pagar (Contas a Pagar) com data de vencimento correspondente.
+    - `liquidar_fatura_cartao`: quitação total ou parcial via débito em conta corrente corporativa, validação de saldo e cheque especial, anexação de comprovante e rollover automático de saldo remanescente para a próxima fatura mensal.
+    - `remanejar_despesa_fatura`: transferência assistida de item individual entre faturas abertas do mesmo cartão.
+  - **Matriz de Pagamentos Multi-Meio ("Caixa de Mercado" em `financeiro/services.py`):**
+    - `registrar_compra_multi_meio`: split-payment atômico (`@transaction.atomic`) permitindo pagar uma mesma compra com múltiplos meios (ex: Dinheiro + PIX + Cartão de Crédito em 3x).
+    - Validação de integridade de centavos da soma da matriz contra o valor total da compra, proteção de saldo de contas bancárias, replicação de comprovante único em todos os lançamentos gerados e compartilhamento do mesmo `grupo_pagamento_id`.
+  - **Reúso de Comprovantes na Conciliação Bancária (`conciliacao-view.js`):**
+    - Herança automática de comprovante e nome do arquivo anexados no ERP para transações combinadas do extrato OFX/CSV, evitando re-upload pelo operador.
+  - **Interface PWA Industrial Integrity (`financeiro-view.js` e `industrial-integrity.css`):**
+    - **Aba "CARTÕES CORPORATIVOS":** Seletor de cartões, 4 Flip Cards de KPI (Limite Contratual, Limite Comprometido, Limite Disponível, Fatura Vigente), linha do tempo de faturas mensais com badges dinâmicos (`ABERTA`, `FECHADA`, `PAGA`), detalhamento da fatura selecionada com tabela de despesas, tags de parcelas (`1/3`), visualização de comprovante e botões de ação com governança RBAC.
+    - **Modais Dedicados:** Novo Cartão Corporativo, Lançar Despesa no Cartão, Alterar Fechamento (Corte), Fechar Fatura, Liquidar Fatura (com conta de débito e upload de comprovante) e Remanejar Despesa.
+    - **Matriz de Pagamentos no Modal de Despesa:** Switch interativo "DIVIDIR EM MÚLTIPLOS MEIOS DE PAGAMENTO", linhas dinâmicas de composição (Meio, Conta/Cartão, Parcelas, Valor), totalizador em tempo real e bloqueio de submissão caso haja diferença.
+  - **Bateria de Testes Automatizados:** 209 testes passando com 100% de sucesso (incluindo suíte completa `CartaoParcelamentoMatrizPagamentoTestCase` e testes de regressão de todos os apps).
+  - **Versionamento PWA:** Cache `emc-soldas-v4.60` em `sw.js` e `?v=4.60` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-07_03_gestao_cartoes_faturas_parcelamento_e_matriz_pagamento.md`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
-Abaixo estÃ£o registradas as entidades que jÃ¡ possuem modelos ORM, validaÃ§Ãµes e rotas de API REST prontas e blindadas no backend, mas que ainda nÃ£o contam com tela/painel de gestÃ£o visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
-- [x] **GestÃ£o de Contas BancÃ¡rias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
-  - *SituaÃ§Ã£o:* **ConcluÃ­da**. Implementada aba dedicada "CONTAS BANCÃRIAS" no mÃ³dulo Tesouraria & Caixa (`financeiro-view.js`), com cards de KPI (Saldo Total, Limite Cheque Especial, DisponÃ­vel Real), listagem de contas, modal de cadastro e ediÃ§Ã£o de saldos/limites, e inativaÃ§Ã£o por soft delete.
-- [x] **GestÃ£o de Categorias Financeiras DRE na AdministraÃ§Ã£o (`apps/financeiro` - `/api/categorias-financeiras/`):**
-  - *SituaÃ§Ã£o:* **ConcluÃ­da**. Implementada aba dedicada "CATEGORIAS FINANCEIRAS (DRE)" na Central Administrativa (`administracao-view.js`) com suporte a tipos `RECEITA`, `DESPESA`, `AMBOS` (cadastral) e `TRANSFERENCIA`, status Ativo/Inativo, seleÃ§Ã£o de categoria pai, modal com aviso de governanÃ§a contÃ¡bil, e exclusÃ£o protegida com bloqueio se houver lanÃ§amentos ou subcategorias ativas.
-  - *Extrato Real & Tesouraria:* CorreÃ§Ã£o do modal de lanÃ§amento avulso no Extrato Real (`status_pagamento='PAGO'`, conta obrigatÃ³ria e atualizaÃ§Ã£o imediata de saldo), resoluÃ§Ã£o da ingestÃ£o de chaves `_id` no DRF, filtro dinÃ¢mico de categorias em tempo real de acordo com a operaÃ§Ã£o (`SAIDA` -> despesa/ambos; `ENTRADA` -> receita/ambos), coluna de categoria na tabela, busca por categoria e modal de reclassificaÃ§Ã£o/ediÃ§Ã£o de lanÃ§amentos.
-  - *PermissÃ£o:* AcessÃ­vel por administradores ou colaboradores com permissÃ£o `cadastros_financeiros` (leitura liberada para tesouraria).
-- [ ] **GestÃ£o de CartÃµes de CrÃ©dito Corporativos & Fechamento de Faturas (`apps/financeiro` - `/api/cartoes/` e `/api/faturas-cartao/`):**
-  - *SituaÃ§Ã£o atual:* Tabelas 19 e 20 do FSD. CartÃµes e faturas mensais modelados no backend, mas geridos hoje apenas via modal auxiliar no lanÃ§amento de despesas.
-  - *Local sugerido:* Aba dedicada na Tesouraria.
-- [ ] **Editor Dedicado de Ficha TÃ©cnica / Estrutura de Insumos BOM (`apps/catalogo` - `/api/fichas-tecnicas/`):**
+Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
+- [x] **Gestão de Contas Bancárias Corporativas (`apps/financeiro` - `/api/contas-bancarias/`):**
+  - *Situação:* **Concluída**. Implementada aba dedicada "CONTAS BANCÁRIAS" no módulo Tesouraria & Caixa (`financeiro-view.js`), com cards de KPI (Saldo Total, Limite Cheque Especial, Disponível Real), listagem de contas, modal de cadastro e edição de saldos/limites, e inativação por soft delete.
+- [x] **Gestão de Categorias Financeiras DRE na Administração (`apps/financeiro` - `/api/categorias-financeiras/`):**
+  - *Situação:* **Concluída**. Implementada aba dedicada "CATEGORIAS FINANCEIRAS (DRE)" na Central Administrativa (`administracao-view.js`) com suporte a tipos `RECEITA`, `DESPESA`, `AMBOS` (cadastral) e `TRANSFERENCIA`, status Ativo/Inativo, seleção de categoria pai, modal com aviso de governança contábil, e exclusão protegida com bloqueio se houver lançamentos ou subcategorias ativas.
+  - *Extrato Real & Tesouraria:* Correção do modal de lançamento avulso no Extrato Real (`status_pagamento='PAGO'`, conta obrigatória e atualização imediata de saldo), resolução da ingestão de chaves `_id` no DRF, filtro dinâmico de categorias em tempo real de acordo com a operação (`SAIDA` -> despesa/ambos; `ENTRADA` -> receita/ambos), coluna de categoria na tabela, busca por categoria e modal de reclassificação/edição de lançamentos.
+  - *Permissão:* Acessível por administradores ou colaboradores com permissão `cadastros_financeiros` (leitura liberada para tesouraria).
+- [x] **Gestão de Cartões de Crédito Corporativos & Fechamento de Faturas (`apps/financeiro` - `/api/cartoes/` e `/api/faturas-cartao/`):**
+  - *Situação:* **Concluída**. Implementada aba dedicada "CARTÕES CORPORATIVOS" no módulo Tesouraria & Caixa (`financeiro-view.js`), com cards de KPI (Limite Contratual, Comprometido, Disponível, Fatura Vigente), seletor de faturas com badges de status, modais para alteração dinâmica de corte com recálculo automatizado, remanejamento de itens, fechamento formal e liquidação total/parcial com rollover, além de suporte a matriz de pagamento multi-meio e parcelamento em N vezes.
+- [ ] **Editor Dedicado de Ficha Técnica / Estrutura de Insumos BOM (`apps/catalogo` - `/api/fichas-tecnicas/`):**
   - *SituaÃ§Ã£o atual:* O cadastro de produtos permite definir itens no modal, mas uma visualizaÃ§Ã£o em Ã¡rvore de composiÃ§Ã£o detalhada e ajuste em lote da receita ainda pode ser expandida.
 
 ### Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de ConclusÃ£o e Deploy

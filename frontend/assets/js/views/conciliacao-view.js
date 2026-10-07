@@ -316,10 +316,11 @@ window.ConciliacaoView = {
         fatura_id: faturaId,
         fatura_sugerida: t.fatura_sugerida,
         duplicidade: isDuplicado,
-        duplicidade_motivo: t.duplicidade_motivo,
         lancamento_correspondente: t.lancamento_correspondente || null,
         acao_duplicidade: temCorrespondente ? 'VINCULAR' : 'CRIAR',
         lancamento_existente_id: temCorrespondente ? t.lancamento_correspondente.id : null,
+        comprovante_path: (temCorrespondente && t.lancamento_correspondente.comprovante) ? t.lancamento_correspondente.comprovante : null,
+        nome_arquivo_comprovante: (temCorrespondente && t.lancamento_correspondente.comprovante) ? (t.lancamento_correspondente.nome_arquivo_comprovante || 'COMPROVANTE ERP') : null,
         descartado: isDuplicado // Se já existe no ERP, descarta por padrão para proteger contra duplicidades
       };
     });

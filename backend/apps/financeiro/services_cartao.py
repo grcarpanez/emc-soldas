@@ -7,7 +7,7 @@ from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from rest_framework.exceptions import ValidationError
 
 from apps.financeiro.models import (
@@ -155,27 +155,36 @@ def calcular_limite_disponivel_cartao(cartao):
 
 
 @transaction.atomic
-def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_compra=None, fatura_cartao_id=None, user=None):
+def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_compra=None, fatura_cartao_id=None,
+                         total_parcelas=1, comprovante=None, nome_arquivo_comprovante=None,
+                         grupo_pagamento_id=None, cliente_fornecedor_id=None, user=None):
     """
-    Registra uma despesa avulsa em Cartão Corporativo.
-    Regra de Ouro: NÃO debita conta bancária de imediato.
-    Vincula à FaturaCartao ABERTA correspondente, impactando o limite do cartão.
+    Registra uma despesa avulsa ou parcelada em Cartão Corporativo.
+    Regras:
+    1. NÃO debita conta bancária de imediato.
+    2. Valida o limite total da compra contra o limite disponível do cartão.
+    3. Se total_parcelas == 1: vincula à fatura aberta correspondente.
+    4. Se total_parcelas > 1: divide o valor em N parcelas (ajustando centavos na 1ª parcela),
+       identifica/cria as N faturas consecutivas e cria os N lançamentos vinculados.
+    5. Grava data_competencia com a data real da compra.
     """
     valor = Decimal(str(valor))
     if valor <= Decimal('0.00'):
         raise ValidationError({'valor': 'O valor da despesa deve ser maior que zero.'})
 
+    total_parcelas = max(1, int(total_parcelas or 1))
+
     categoria = CategoriaFinanceira.objects.filter(id=categoria_id, deleted_at__isnull=True).first()
     if not categoria:
         raise ValidationError({'categoria_id': 'Categoria financeira informada não encontrada ou inativa.'})
 
-    # Validação de Limite
+    # Validação de Limite Total
     info_limite = calcular_limite_disponivel_cartao(cartao)
     limite_disp = Decimal(str(info_limite['limite_disponivel']))
     if valor > limite_disp and not cartao.permite_limite_emergencial:
         raise ValidationError({
             'valor': f"Despesa excede o limite disponível do cartão. "
-                     f"Limite disponível: R$ {limite_disp}, Valor da compra: R$ {valor}."
+                     f"Limite disponível: R$ {limite_disp:.2f}, Valor total da compra: R$ {valor:.2f}."
         })
 
     if not data_compra:
@@ -183,45 +192,90 @@ def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_comp
     elif isinstance(data_compra, str):
         data_compra = date.fromisoformat(data_compra)
 
-    # Identifica a fatura aberta
-    if fatura_cartao_id:
-        fatura = FaturaCartao.objects.filter(id=fatura_cartao_id, cartao=cartao, deleted_at__isnull=True).first()
-        if not fatura:
+    desc_base = sanitizar_texto_maiusculo(descricao or f"COMPRA CARTAO {cartao.nome} - {categoria.nome}")
+
+    # Determinação da primeira fatura
+    if fatura_cartao_id and total_parcelas == 1:
+        fatura_inicial = FaturaCartao.objects.filter(id=fatura_cartao_id, cartao=cartao, deleted_at__isnull=True).first()
+        if not fatura_inicial:
             raise ValidationError({'fatura_cartao_id': 'Fatura de cartão informada não encontrada.'})
-        if fatura.status != 'ABERTA':
-            raise ValidationError({'fatura_cartao_id': f"Não é possível lançar despesas em fatura com status '{fatura.get_status_display()}'."})
+        if fatura_inicial.status != 'ABERTA':
+            raise ValidationError({'fatura_cartao_id': f"Não é possível lançar despesas em fatura com status '{fatura_inicial.get_status_display()}'."})
     else:
-        # Determina o mês de referência pela data da compra e data de fechamento
         mes_ref = f"{data_compra.year:04d}-{data_compra.month:02d}"
-        fatura = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref, user=user)
+        fatura_inicial = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref, user=user)
 
         # Se a compra for após o fechamento real da fatura desse mês, joga para o próximo mês
-        if data_compra > fatura.data_fechamento_real:
+        if data_compra > fatura_inicial.data_fechamento_real:
             prox_mes = data_compra.month + 1
             prox_ano = data_compra.year
             if prox_mes > 12:
                 prox_mes = 1
                 prox_ano += 1
             mes_ref_prox = f"{prox_ano:04d}-{prox_mes:02d}"
-            fatura = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_prox, user=user)
+            fatura_inicial = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_prox, user=user)
 
-    desc = sanitizar_texto_maiusculo(descricao or f"COMPRA CARTAO {cartao.nome} - {categoria.nome}")
+    # Cálculo da divisão de parcelas
+    parcela_base = (valor / total_parcelas).quantize(Decimal('0.01'))
+    centavos_excedentes = valor - (parcela_base * total_parcelas)
 
-    lancamento = LancamentoFinanceiro.objects.create(
-        origem='CARTAO',
-        cartao_credito=cartao,
-        fatura_cartao=fatura,
-        categoria=categoria,
-        tipo_lancamento='SAIDA',
-        descricao=desc,
-        valor=valor,
-        data_vencimento=fatura.data_fechamento_real,
-        status_pagamento='A_VENCER',
-        created_by_id=getattr(user, 'id', None)
-    )
+    partes = fatura_inicial.mes_referencia.split('-')
+    ano_base = int(partes[0])
+    mes_base = int(partes[1])
 
-    logger.info(f"[DESPESA CARTAO REGISTRADA] #{lancamento.id} R$ {valor} na fatura {fatura.mes_referencia} do cartão '{cartao.nome}'.")
-    return lancamento
+    lancamentos_criados = []
+
+    for i in range(1, total_parcelas + 1):
+        # Mês da parcela i
+        mes_i = mes_base + (i - 1)
+        ano_i = ano_base
+        while mes_i > 12:
+            mes_i -= 12
+            ano_i += 1
+
+        mes_ref_i = f"{ano_i:04d}-{mes_i:02d}"
+        if i == 1:
+            fatura_i = fatura_inicial
+        else:
+            fatura_i = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_i, user=user)
+
+        # Valor da parcela
+        valor_parcela = parcela_base + (centavos_excedentes if i == 1 else Decimal('0.00'))
+
+        # Descrição com identificador de parcelas se total_parcelas > 1
+        if total_parcelas > 1:
+            desc_parcela = f"{desc_base} ({i}/{total_parcelas})"
+        else:
+            desc_parcela = desc_base
+
+        lanc = LancamentoFinanceiro.objects.create(
+            origem='CARTAO',
+            cartao_credito=cartao,
+            fatura_cartao=fatura_i,
+            categoria=categoria,
+            tipo_lancamento='SAIDA',
+            descricao=desc_parcela,
+            valor=valor_parcela,
+            data_competencia=data_compra,
+            data_vencimento=fatura_i.data_fechamento_real,
+            status_pagamento='A_VENCER',
+            numero_parcela=i,
+            total_parcelas=total_parcelas,
+            grupo_pagamento_id=grupo_pagamento_id,
+            cliente_fornecedor_id=cliente_fornecedor_id,
+            comprovante=comprovante or None,
+            nome_arquivo_comprovante=nome_arquivo_comprovante or None,
+            created_by_id=getattr(user, 'id', None)
+        )
+        lancamentos_criados.append(lanc)
+        logger.info(f"[DESPESA CARTAO REGISTRADA] #{lanc.id} R$ {valor_parcela} na fatura {fatura_i.mes_referencia} ({i}/{total_parcelas}) do cartão '{cartao.nome}'.")
+
+    if total_parcelas == 1:
+        primeiro = lancamentos_criados[0]
+        primeiro.lancamentos_parcelas = lancamentos_criados
+        return primeiro
+
+    return lancamentos_criados
 
 
 @transaction.atomic
@@ -260,23 +314,107 @@ def remanejar_despesa_cartao(lancamento, nova_fatura_cartao_id=None, novo_mes_re
 def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
     """
     Ajusta a data de fechamento real de uma fatura específica de cartão.
-    Atualiza as datas de vencimento dos lançamentos vinculados que ainda estejam A_VENCER.
+    Regras de Recálculo Dinâmico:
+    1. Apenas faturas com status ABERTA podem ter a data de fechamento alterada.
+    2. Se nova_data_fechamento < data_antiga (antecipação do fechamento):
+       - As compras já efetuadas após o novo corte (data_competencia > nova_data_fechamento)
+         são redistribuídas automaticamente para a fatura do mês subsequente.
+       - A fatura do mês subsequente deve estar em status ABERTA (se já estiver FECHADA ou PAGA, bloqueia).
+    3. Se nova_data_fechamento > data_antiga (adiamento do fechamento):
+       - As compras da fatura do mês subsequente que ocorreram até a nova data de corte
+         (data_competencia <= nova_data_fechamento) são puxadas de volta para esta fatura.
+    4. Sincroniza a data_vencimento de todos os lançamentos abertos restantes da fatura.
     """
+    if fatura.status != 'ABERTA':
+        raise ValidationError({
+            'status': f"Apenas faturas em status ABERTA podem ter a data de fechamento ajustada. Status atual: {fatura.get_status_display()}."
+        })
+
     if isinstance(nova_data_fechamento, str):
         nova_data_fechamento = date.fromisoformat(nova_data_fechamento)
+
+    data_antiga = fatura.data_fechamento_real
+
+    partes = fatura.mes_referencia.split('-')
+    ano = int(partes[0])
+    mes = int(partes[1])
+    prox_mes = mes + 1
+    prox_ano = ano
+    if prox_mes > 12:
+        prox_mes = 1
+        prox_ano += 1
+    mes_ref_prox = f"{prox_ano:04d}-{prox_mes:02d}"
+
+    itens_movidos_adiante = 0
+    itens_puxados_de_volta = 0
+
+    if nova_data_fechamento < data_antiga:
+        # Antecipação do corte: itens com data_competencia > nova_data_fechamento vão para a fatura seguinte
+        fatura_prox = obter_ou_criar_fatura_aberta(fatura.cartao, mes_referencia=mes_ref_prox, user=user)
+        if fatura_prox.status != 'ABERTA':
+            raise ValidationError({
+                'nova_data_fechamento': f"Não é possível antecipar o fechamento: existem compras posteriores ao novo corte que precisariam ser transferidas para a fatura {mes_ref_prox}, porém ela já se encontra {fatura_prox.get_status_display()}."
+            })
+
+        despesas_posteriores = fatura.despesas_fatura.filter(
+            status_pagamento='A_VENCER',
+            deleted_at__isnull=True
+        ).filter(
+            Q(data_competencia__gt=nova_data_fechamento) |
+            (Q(data_competencia__isnull=True) & Q(data_vencimento__gt=nova_data_fechamento))
+        )
+        itens_movidos_adiante = despesas_posteriores.count()
+        despesas_posteriores.update(
+            fatura_cartao=fatura_prox,
+            data_vencimento=fatura_prox.data_fechamento_real,
+            updated_at=timezone.now(),
+            updated_by_id=getattr(user, 'id', None)
+        )
+
+    elif nova_data_fechamento > data_antiga:
+        # Adiamento do corte: se a fatura seguinte tem compras com data_competencia <= nova_data_fechamento, puxa de volta
+        fatura_prox = FaturaCartao.objects.filter(
+            cartao=fatura.cartao,
+            mes_referencia=mes_ref_prox,
+            deleted_at__isnull=True
+        ).first()
+
+        if fatura_prox and fatura_prox.status == 'ABERTA':
+            despesas_a_puxar = fatura_prox.despesas_fatura.filter(
+                status_pagamento='A_VENCER',
+                deleted_at__isnull=True
+            ).filter(
+                Q(data_competencia__lte=nova_data_fechamento) |
+                (Q(data_competencia__isnull=True) & Q(created_at__date__lte=nova_data_fechamento))
+            )
+            itens_puxados_de_volta = despesas_a_puxar.count()
+            despesas_a_puxar.update(
+                fatura_cartao=fatura,
+                data_vencimento=nova_data_fechamento,
+                updated_at=timezone.now(),
+                updated_by_id=getattr(user, 'id', None)
+            )
 
     fatura.data_fechamento_real = nova_data_fechamento
     fatura.updated_by_id = getattr(user, 'id', None)
     fatura.save(update_fields=['data_fechamento_real', 'updated_at', 'updated_by_id'])
 
-    # Atualiza lançamentos a vencer
+    # Sincroniza lançamentos que permaneceram nesta fatura
     fatura.despesas_fatura.filter(status_pagamento='A_VENCER', deleted_at__isnull=True).update(
         data_vencimento=nova_data_fechamento,
         updated_at=timezone.now()
     )
 
-    logger.info(f"[FECHAMENTO FATURA AJUSTADO] Fatura #{fatura.id} ({fatura.mes_referencia}) nova data fechamento: {nova_data_fechamento}.")
-    return fatura
+    logger.info(
+        f"[FECHAMENTO FATURA AJUSTADO] Fatura #{fatura.id} ({fatura.mes_referencia}) fechamento: {nova_data_fechamento}. "
+        f"Itens movidos adiante: {itens_movidos_adiante}, Itens puxados de volta: {itens_puxados_de_volta}."
+    )
+    return {
+        'fatura': fatura,
+        'nova_data_fechamento': nova_data_fechamento,
+        'itens_movidos_adiante': itens_movidos_adiante,
+        'itens_puxados_de_volta': itens_puxados_de_volta
+    }
 
 
 @transaction.atomic
@@ -294,6 +432,8 @@ def fechar_fatura_cartao(fatura, user=None):
     total_despesas = fatura.despesas_fatura.filter(
         tipo_lancamento='SAIDA',
         deleted_at__isnull=True
+    ).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     partes = fatura.mes_referencia.split('-')
@@ -328,6 +468,7 @@ def fechar_fatura_cartao(fatura, user=None):
                 tipo_lancamento='SAIDA',
                 descricao=desc,
                 valor=total_despesas,
+                data_competencia=fatura.data_fechamento_real,
                 data_vencimento=data_vencimento,
                 status_pagamento='A_VENCER',
                 created_by_id=getattr(user, 'id', None)
@@ -347,7 +488,7 @@ def fechar_fatura_cartao(fatura, user=None):
 
 
 @transaction.atomic
-def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=None, user=None):
+def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=None, comprovante=None, nome_arquivo_comprovante=None, user=None):
     """
     Liquida (total ou parcialmente) uma fatura fechada de cartão de crédito.
     Regras:
@@ -355,9 +496,10 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     2. Pagamento Total (valor_pago >= total_fatura):
        - Transita a fatura para 'PAGA'.
        - Transita todas as despesas vinculadas para 'PAGO'.
+       - Quita o título mestre gerado no Contas a Pagar.
     3. Pagamento Parcial (valor_pago < total_fatura):
        - Aplica ROLLOVER DE SALDO DEVEDOR: calcula o saldo residual não pago (total - valor_pago).
-       - Transita a fatura atual para 'PAGA' (ou liquidada com rollover).
+       - Transita a fatura atual para 'PAGA'.
        - Abre/localiza a fatura do mês seguinte para o mesmo cartão.
        - Cria um lançamento de despesa na fatura do mês seguinte: "SALDO ANTERIOR / ROLLOVER FATURA {mes_referencia}".
     """
@@ -374,7 +516,7 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
         tipo_lancamento='SAIDA',
         deleted_at__isnull=True
     ).exclude(
-        descricao__startswith=f"PAGAMENTO FATURA CARTAO"
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     # Conta de pagamento
@@ -393,8 +535,8 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     if saldo_resultante < limite_tolerado:
         raise ValidationError({
             'conta_id': f"Operação bloqueada por limite de cheque especial. "
-                        f"Saldo atual: R$ {conta.saldo}, Limite: R$ {conta.limite_credito}, "
-                        f"Saldo após pagamento: R$ {saldo_resultante}."
+                        f"Saldo atual: R$ {conta.saldo:.2f}, Limite: R$ {conta.limite_credito:.2f}, "
+                        f"Saldo após pagamento: R$ {saldo_resultante:.2f}."
         })
 
     if not data_pagamento:
@@ -405,12 +547,30 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     conta.save(update_fields=['saldo', 'updated_at'])
 
     # 2. Atualiza despesas da fatura
-    fatura.despesas_fatura.filter(deleted_at__isnull=True).update(
+    fatura.despesas_fatura.filter(deleted_at__isnull=True).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).update(
         status_pagamento='PAGO',
         data_pagamento=data_pagamento,
         conta=conta,
         updated_at=timezone.now()
     )
+
+    # 3. Quita ou atualiza o título mestre de contas a pagar se existir
+    titulo_fatura = LancamentoFinanceiro.objects.filter(
+        fatura_cartao=fatura,
+        descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
+        deleted_at__isnull=True
+    ).first()
+    if titulo_fatura:
+        titulo_fatura.status_pagamento = 'PAGO'
+        titulo_fatura.data_pagamento = data_pagamento
+        titulo_fatura.conta = conta
+        titulo_fatura.valor = valor_pago
+        if comprovante:
+            titulo_fatura.comprovante = comprovante
+            titulo_fatura.nome_arquivo_comprovante = nome_arquivo_comprovante
+        titulo_fatura.save()
 
     fatura.status = 'PAGA'
     fatura.updated_by_id = getattr(user, 'id', None)
@@ -420,7 +580,7 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     fatura_proxima = None
     lancamento_rollover = None
 
-    # 3. Rollover de Pagamento Parcial
+    # 4. Rollover de Pagamento Parcial
     if saldo_devedor_remanescente > Decimal('0.00'):
         partes = fatura.mes_referencia.split('-')
         ano = int(partes[0])
@@ -443,6 +603,7 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
             tipo_lancamento='SAIDA',
             descricao=f"SALDO ANTERIOR / ROLLOVER FATURA {fatura.mes_referencia}",
             valor=saldo_devedor_remanescente,
+            data_competencia=timezone.localdate(),
             data_vencimento=fatura_proxima.data_fechamento_real,
             status_pagamento='A_VENCER',
             created_by_id=getattr(user, 'id', None)

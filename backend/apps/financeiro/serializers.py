@@ -246,13 +246,16 @@ class RegraPagamentoSerializer(serializers.ModelSerializer):
 
 
 class CartaoCreditoSerializer(serializers.ModelSerializer):
-    """Serializer para Cartões de Crédito Corporativos."""
+    """Serializer para Cartões de Crédito Corporativos com limites em tempo real."""
     conta_bancaria_nome = serializers.CharField(
         source='conta_bancaria.nome',
         read_only=True,
         allow_null=True
     )
     total_faturas_abertas = serializers.SerializerMethodField()
+    limite_disponivel = serializers.SerializerMethodField()
+    total_comprometido = serializers.SerializerMethodField()
+    fatura_atual_id = serializers.SerializerMethodField()
 
     class Meta:
         model = CartaoCredito
@@ -262,6 +265,9 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
             'dia_vencimento',
             'dia_fechamento_padrao',
             'limite',
+            'limite_disponivel',
+            'total_comprometido',
+            'fatura_atual_id',
             'permite_limite_emergencial',
             'conta_bancaria',
             'conta_bancaria_nome',
@@ -273,6 +279,20 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
 
     def get_total_faturas_abertas(self, obj):
         return obj.faturas.filter(status='ABERTA', deleted_at__isnull=True).count()
+
+    def get_limite_disponivel(self, obj):
+        from apps.financeiro.services_cartao import calcular_limite_disponivel_cartao
+        info = calcular_limite_disponivel_cartao(obj)
+        return float(info['limite_disponivel'])
+
+    def get_total_comprometido(self, obj):
+        from apps.financeiro.services_cartao import calcular_limite_disponivel_cartao
+        info = calcular_limite_disponivel_cartao(obj)
+        return float(info['total_comprometido'])
+
+    def get_fatura_atual_id(self, obj):
+        fatura = obj.faturas.filter(status='ABERTA', deleted_at__isnull=True).order_by('-mes_referencia').first()
+        return fatura.id if fatura else None
 
     def validate_nome(self, value):
         nome_sanitizado = sanitizar_texto_maiusculo(value)
@@ -372,8 +392,12 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'tipo_lancamento',
             'descricao',
             'valor',
+            'data_competencia',
             'data_vencimento',
             'data_pagamento',
+            'numero_parcela',
+            'total_parcelas',
+            'grupo_pagamento_id',
             'status_pagamento',
             'status_pagamento_display',
             'motivo_cancelamento',
@@ -464,6 +488,7 @@ class FaturaCartaoSerializer(serializers.ModelSerializer):
     cartao_nome = serializers.CharField(source='cartao.nome', read_only=True)
     total_despesas = serializers.SerializerMethodField()
     quantidade_itens = serializers.SerializerMethodField()
+    data_vencimento_calculada = serializers.SerializerMethodField()
     despesas_detalhadas = serializers.SerializerMethodField()
 
     class Meta:
@@ -474,6 +499,7 @@ class FaturaCartaoSerializer(serializers.ModelSerializer):
             'cartao_nome',
             'mes_referencia',
             'data_fechamento_real',
+            'data_vencimento_calculada',
             'status',
             'total_despesas',
             'quantidade_itens',
@@ -482,6 +508,13 @@ class FaturaCartaoSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_data_vencimento_calculada(self, obj):
+        from apps.financeiro.services_cartao import calcular_data_vencimento_fatura
+        partes = obj.mes_referencia.split('-')
+        ano = int(partes[0])
+        mes = int(partes[1])
+        return calcular_data_vencimento_fatura(obj.cartao, ano, mes).isoformat()
 
     def get_total_despesas(self, obj):
         from django.db.models import Sum
@@ -560,6 +593,43 @@ class FaturaCartaoLiquidarSerializer(serializers.Serializer):
     valor_pago = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
     conta_id = serializers.IntegerField(required=False, allow_null=True)
     data_pagamento = serializers.DateTimeField(required=False, allow_null=True)
+    comprovante = ComprovanteFileOrCharField(required=False, allow_null=True)
+    nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+
+class ItemMatrizPagamentoSerializer(serializers.Serializer):
+    """Linha individual de pagamento dentro da matriz multi-meio."""
+    tipo_meio = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    meio_pagamento_id = serializers.IntegerField(required=False, allow_null=True)
+    conta_id = serializers.IntegerField(required=False, allow_null=True)
+    cartao_id = serializers.IntegerField(required=False, allow_null=True)
+    cartao_credito_id = serializers.IntegerField(required=False, allow_null=True)
+    total_parcelas = serializers.IntegerField(required=False, default=1)
+    valor = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
+    tipo_cobranca = serializers.CharField(max_length=20, required=False, allow_blank=True, allow_null=True)
+    data_vencimento = serializers.DateField(required=False, allow_null=True)
+    descricao = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+
+
+class LancamentoMultiMeioSerializer(serializers.Serializer):
+    """Payload para registro de compras/despesas pagas com múltiplas formas."""
+    descricao = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    categoria_id = serializers.IntegerField(required=True)
+    valor_total = serializers.DecimalField(max_digits=12, decimal_places=2, required=True)
+    data_compra = serializers.DateField(required=False, allow_null=True)
+    cliente_fornecedor_id = serializers.IntegerField(required=False, allow_null=True)
+    comprovante = ComprovanteFileOrCharField(required=False, allow_null=True)
+    nome_arquivo_comprovante = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+    matriz_pagamento = ItemMatrizPagamentoSerializer(many=True, required=False)
+    matriz_pagamentos = ItemMatrizPagamentoSerializer(many=True, required=False)
+
+    def validate(self, attrs):
+        matriz = attrs.get('matriz_pagamento') or attrs.get('matriz_pagamentos')
+        if not matriz:
+            raise serializers.ValidationError({"matriz_pagamento": "Informe ao menos uma forma de pagamento na matriz."})
+        attrs['matriz_pagamento'] = matriz
+        attrs['matriz_pagamentos'] = matriz
+        return attrs
 
 
 class LogEstornoSerializer(serializers.ModelSerializer):

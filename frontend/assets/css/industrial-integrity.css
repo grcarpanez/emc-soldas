@@ -2050,3 +2050,27 @@ input[type="file"].form-control::file-selector-button:hover {
   transform: scaleY(1.03);
   transform-origin: bottom;
 }
+
+/* Gestão de Cartões Corporativos e Matriz de Pagamentos */
+.badge-parcela {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-outline-variant);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 0px !important;
+  letter-spacing: 0.05em;
+}
+
+.matriz-pagto-row {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.matriz-pagto-row:hover {
+  background-color: var(--color-surface-container-high) !important;
+  border-color: var(--color-steel-gray) !important;
+}
+

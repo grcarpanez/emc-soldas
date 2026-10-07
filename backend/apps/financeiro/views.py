@@ -35,6 +35,7 @@ from apps.financeiro.serializers import (
     LancamentoFinanceiroEstornarSerializer,
     TransferenciaInterContasSerializer,
     RemanejarDespesaCartaoSerializer,
+    LancamentoMultiMeioSerializer,
     LogEstornoSerializer
 )
 from apps.financeiro.services import (
@@ -42,7 +43,8 @@ from apps.financeiro.services import (
     cancelar_lancamento,
     estornar_lancamento,
     transferir_inter_contas,
-    obter_resumo_financeiro
+    obter_resumo_financeiro,
+    registrar_compra_multi_meio
 )
 from apps.financeiro.services_cartao import (
     obter_ou_criar_fatura_aberta,
@@ -318,6 +320,14 @@ class CartaoCreditoViewSet(viewsets.ModelViewSet):
         info = calcular_limite_disponivel_cartao(cartao)
         return Response(info, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'], url_path='faturas')
+    def faturas(self, request, pk=None):
+        """Retorna histórico de faturas do cartão ordenadas de forma decrescente."""
+        cartao = self.get_object()
+        faturas_qs = cartao.faturas.filter(deleted_at__isnull=True).order_by('-mes_referencia')
+        serializer = FaturaCartaoSerializer(faturas_qs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     def perform_destroy(self, instance):
         if instance.faturas.filter(deleted_at__isnull=True).exists():
             raise ValidationError("Não é possível excluir um cartão de crédito que possui faturas registradas.")
@@ -354,6 +364,18 @@ class FaturaCartaoViewSet(viewsets.ModelViewSet):
 
         return qs
 
+    @action(detail=True, methods=['get'], url_path='itens')
+    def itens(self, request, pk=None):
+        """Retorna os lançamentos associados a esta fatura."""
+        fatura = self.get_object()
+        despesas = fatura.despesas_fatura.filter(
+            deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith="PAGAMENTO FATURA CARTAO"
+        ).order_by('data_competencia', 'data_vencimento', 'id')
+        serializer = LancamentoFinanceiroSerializer(despesas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'], url_path='fechar')
     def fechar(self, request, pk=None):
         """Fecha a fatura do cartão e gera o título a pagar no Contas a Pagar."""
@@ -368,7 +390,7 @@ class FaturaCartaoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='liquidar')
     def liquidar(self, request, pk=None):
-        """Liquida a fatura do cartão com suporte a pagamento parcial e rollover."""
+        """Liquida a fatura do cartão com suporte a pagamento parcial, anexo e rollover."""
         fatura = self.get_object()
         serializer = FaturaCartaoLiquidarSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -378,6 +400,8 @@ class FaturaCartaoViewSet(viewsets.ModelViewSet):
             valor_pago=serializer.validated_data['valor_pago'],
             conta_id=serializer.validated_data.get('conta_id'),
             data_pagamento=serializer.validated_data.get('data_pagamento'),
+            comprovante=serializer.validated_data.get('comprovante'),
+            nome_arquivo_comprovante=serializer.validated_data.get('nome_arquivo_comprovante', ''),
             user=request.user
         )
         resultado['fatura'] = FaturaCartaoSerializer(resultado['fatura']).data
@@ -389,17 +413,22 @@ class FaturaCartaoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='ajustar-fechamento')
     def ajustar_fechamento(self, request, pk=None):
-        """Ajusta a data de fechamento real de uma fatura específica."""
+        """Ajusta a data de fechamento real de uma fatura específica com recálculo dos itens."""
         fatura = self.get_object()
         serializer = FaturaCartaoAjustarFechamentoSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        fatura_atualizada = ajustar_fechamento_fatura(
+        resultado = ajustar_fechamento_fatura(
             fatura=fatura,
             nova_data_fechamento=serializer.validated_data['data_fechamento_real'],
             user=request.user
         )
-        return Response(FaturaCartaoSerializer(fatura_atualizada).data, status=status.HTTP_200_OK)
+        resultado['fatura'] = FaturaCartaoSerializer(resultado['fatura']).data
+        return Response({
+            'status': 'success',
+            'message': 'Data de fechamento da fatura ajustada com sucesso.',
+            'dados': resultado
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='lancar-despesa')
     def lancar_despesa(self, request, pk=None):
@@ -632,6 +661,35 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             user=request.user
         )
         return Response(LancamentoFinanceiroSerializer(lancamento_atualizado).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='lancar-multi-meio')
+    def lancar_multi_meio(self, request):
+        """
+        Registra uma compra corporativa com divisão em múltiplos meios de pagamento
+        (Dinheiro, PIX, Cartão de Crédito parcelado, etc.) garantindo integridade atômica
+        e rastreabilidade unificada via grupo_pagamento_id.
+        """
+        serializer = LancamentoMultiMeioSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        resultado = registrar_compra_multi_meio(
+            valor_total=serializer.validated_data['valor_total'],
+            categoria_id=serializer.validated_data['categoria_id'],
+            descricao=serializer.validated_data['descricao'],
+            matriz_pagamentos=serializer.validated_data['matriz_pagamentos'],
+            data_compra=serializer.validated_data.get('data_compra'),
+            comprovante=serializer.validated_data.get('comprovante'),
+            nome_arquivo_comprovante=serializer.validated_data.get('nome_arquivo_comprovante', ''),
+            user=request.user
+        )
+
+        dados_serializados = LancamentoFinanceiroSerializer(resultado['lancamentos'], many=True).data
+        return Response({
+            'status': 'success',
+            'message': f"Compra de {len(dados_serializados)} despesa(s) registrada com sucesso através da matriz de pagamentos.",
+            'grupo_pagamento_id': resultado['grupo_pagamento_id'],
+            'lancamentos': dados_serializados
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='transferir')
     def transferir(self, request):
