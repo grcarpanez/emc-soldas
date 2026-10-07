@@ -630,6 +630,8 @@ window.FinanceiroView = {
         this.cartaoAtivo = this.cartoesLista.find(c => c.id === Number(cartaoIdParaSelecionar)) || this.cartoesLista[0];
       } else if (!this.cartaoAtivo || !this.cartoesLista.some(c => c.id === this.cartaoAtivo.id)) {
         this.cartaoAtivo = this.cartoesLista[0];
+      } else {
+        this.cartaoAtivo = this.cartoesLista.find(c => c.id === this.cartaoAtivo.id) || this.cartoesLista[0];
       }
 
       this.renderEstruturaCartaoAtivo();
@@ -951,14 +953,36 @@ window.FinanceiroView = {
   // --------------------------------------------------------------------------
   async abrirModalNovoCartao(cartaoEdicao = null) {
     const isEdicao = !!cartaoEdicao;
+
+    // Se for edição, obtém dados atualizados diretamente da API REST
+    let cartao = cartaoEdicao;
+    if (isEdicao && cartaoEdicao?.id) {
+      try {
+        const fresco = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/`);
+        if (fresco && fresco.id) {
+          cartao = fresco;
+          this.cartaoAtivo = fresco;
+          const idx = this.cartoesLista.findIndex(c => c.id === fresco.id);
+          if (idx !== -1) {
+            this.cartoesLista[idx] = fresco;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao obter dados frescos do cartão:', err);
+      }
+    }
+
     const resContas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
     const listaContas = resContas.results || (Array.isArray(resContas) ? resContas : []);
 
-    const contaIdAtual = cartaoEdicao?.conta_bancaria_id || cartaoEdicao?.conta_bancaria || null;
+    const contaIdAtual = cartao?.conta_bancaria_id ?? 
+                         (typeof cartao?.conta_bancaria === 'object' ? cartao?.conta_bancaria?.id : cartao?.conta_bancaria) ?? 
+                         null;
 
-    let optsContas = '<option value="">-- NENHUMA (DEFINIR DEPOIS) --</option>';
+    let optsContas = '<option value="">-- NENHUMA (SEM DÉBITO EM CONTA) --</option>';
     listaContas.forEach(c => {
-      optsContas += `<option value="${c.id}" ${String(c.id) === String(contaIdAtual) ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
+      const isSelected = contaIdAtual !== null && contaIdAtual !== undefined && String(c.id) === String(contaIdAtual);
+      optsContas += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
     });
 
     const dHoje = new Date();
@@ -970,7 +994,7 @@ window.FinanceiroView = {
     if (isEdicao) {
       let faturasAbertas = [];
       try {
-        const resFat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/faturas/?status=ABERTA`);
+        const resFat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartao.id}/faturas/?status=ABERTA`);
         faturasAbertas = resFat.results || (Array.isArray(resFat) ? resFat : []);
         faturasAbertas.sort((a, b) => (a.mes_referencia || '').localeCompare(b.mes_referencia || ''));
       } catch (err) {
@@ -985,29 +1009,29 @@ window.FinanceiroView = {
     }
 
     window.EMCUtils.openModal({
-      title: isEdicao ? `EDITAR CARTÃO CORPORATIVO #${cartaoEdicao.id}` : 'NOVO CARTÃO CORPORATIVO',
+      title: isEdicao ? `EDITAR CARTÃO CORPORATIVO #${cartao.id}` : 'NOVO CARTÃO CORPORATIVO',
       size: 'md',
       confirmText: isEdicao ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR CARTÃO',
       content: `
         <div class="form-group">
           <label class="form-label">Identificação / Nome do Cartão *</label>
-          <input type="text" id="cartao-nome" class="form-control" placeholder="EX: VISA CORPORATIVO DIRETORIA" value="${cartaoEdicao ? window.EMCUtils.escapeHtml(cartaoEdicao.nome) : ''}" required autofocus>
+          <input type="text" id="cartao-nome" class="form-control" placeholder="EX: VISA CORPORATIVO DIRETORIA" value="${cartao ? window.EMCUtils.escapeHtml(cartao.nome) : ''}" required autofocus>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <div class="form-group">
             <label class="form-label">Dia de Fechamento Padrão (1 a 31) *</label>
-            <input type="number" min="1" max="31" id="cartao-dia-fech" class="form-control mono-text" value="${cartaoEdicao?.dia_fechamento_padrao || 20}" required>
+            <input type="number" min="1" max="31" id="cartao-dia-fech" class="form-control mono-text" value="${cartao?.dia_fechamento_padrao || 20}" required>
           </div>
           <div class="form-group">
             <label class="form-label">Dia de Vencimento (1 a 31) *</label>
-            <input type="number" min="1" max="31" id="cartao-dia-venc" class="form-control mono-text" value="${cartaoEdicao?.dia_vencimento || 28}" required>
+            <input type="number" min="1" max="31" id="cartao-dia-venc" class="form-control mono-text" value="${cartao?.dia_vencimento || 28}" required>
           </div>
         </div>
 
         <div class="form-group">
           <label class="form-label">Limite Total Contratual (R$) *</label>
-          <input type="text" id="cartao-limite" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(cartaoEdicao?.limite || 5000)}">
+          <input type="text" id="cartao-limite" class="form-control mono-text" data-mask="moeda-atm" value="${window.EMCUtils.formatarMoeda(cartao?.limite || 5000)}">
         </div>
 
         <div class="form-group">
@@ -1017,7 +1041,7 @@ window.FinanceiroView = {
 
         <div class="form-group" style="margin-bottom: 0;">
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
-            <input type="checkbox" id="cartao-permite-emergencial" ${cartaoEdicao?.permite_limite_emergencial ? 'checked' : ''}>
+            <input type="checkbox" id="cartao-permite-emergencial" ${cartao?.permite_limite_emergencial ? 'checked' : ''}>
             Permitir Limite Emergencial (Não travar compras que ultrapassem o limite)
           </label>
         </div>
@@ -1085,8 +1109,9 @@ window.FinanceiroView = {
         };
 
         try {
+          let cartaoIdFinal = cartao?.id;
           if (isEdicao) {
-            const resp = await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/`, payload);
+            const resp = await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartao.id}/`, payload);
             let msg = 'Cartão atualizado com sucesso!';
             if (resp?.recalculo && resp.recalculo.faturas_recalculadas > 0) {
               msg += ` ${resp.recalculo.faturas_recalculadas} fatura(s) recalculada(s) a partir de ${resp.recalculo.competencia_inicial}.`;
@@ -1095,9 +1120,9 @@ window.FinanceiroView = {
           } else {
             const novo = await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO, payload);
             window.EMCUtils.showToast('Cartão cadastrado com sucesso!', 'success');
-            cartaoEdicao = novo;
+            cartaoIdFinal = novo?.id;
           }
-          await this.carregarListaCartoes(cartaoEdicao?.id);
+          await this.carregarListaCartoes(cartaoIdFinal);
           return true;
         } catch (e) {
           window.EMCUtils.showToast(e.message || 'Erro ao salvar cartão.', 'error');
@@ -1106,8 +1131,12 @@ window.FinanceiroView = {
       }
     });
 
-    if (isEdicao) {
-      setTimeout(() => {
+    setTimeout(() => {
+      const selectConta = document.getElementById('cartao-conta-pref');
+      if (selectConta && contaIdAtual !== null && contaIdAtual !== undefined) {
+        selectConta.value = String(contaIdAtual);
+      }
+      if (isEdicao) {
         const escopoSelect = document.getElementById('cartao-escopo-recalculo');
         const wrapperEsp = document.getElementById('wrapper-competencia-especifica');
         if (escopoSelect && wrapperEsp) {
@@ -1115,8 +1144,8 @@ window.FinanceiroView = {
             wrapperEsp.style.display = escopoSelect.value === 'ESPECIFICA' ? 'block' : 'none';
           });
         }
-      }, 50);
-    }
+      }
+    }, 50);
   },
 
   abrirModalAjustarFechamento(fatura) {
@@ -1189,9 +1218,13 @@ window.FinanceiroView = {
     const resContas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
     const listaContas = resContas.results || (Array.isArray(resContas) ? resContas : []);
 
+    const contaCartaoId = this.cartaoAtivo?.conta_bancaria_id ?? 
+                          (typeof this.cartaoAtivo?.conta_bancaria === 'object' ? this.cartaoAtivo?.conta_bancaria?.id : this.cartaoAtivo?.conta_bancaria) ?? 
+                          null;
+
     let optsContas = '<option value="">-- SELECIONE A CONTA BANCÁRIA DE DÉBITO * --</option>';
     listaContas.forEach(c => {
-      const selecionada = this.cartaoAtivo?.conta_bancaria_id === c.id ? 'selected' : '';
+      const selecionada = contaCartaoId !== null && contaCartaoId !== undefined && String(contaCartaoId) === String(c.id) ? 'selected' : '';
       optsContas += `<option value="${c.id}" ${selecionada}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)} | Limite: ${window.EMCUtils.formatarMoeda(c.limite_credito)})</option>`;
     });
 
@@ -1280,6 +1313,13 @@ window.FinanceiroView = {
         }
       }
     });
+
+    setTimeout(() => {
+      const selectConta = document.getElementById('liq-fatura-conta');
+      if (selectConta && contaCartaoId !== null && contaCartaoId !== undefined) {
+        selectConta.value = String(contaCartaoId);
+      }
+    }, 50);
   },
 
   async abrirModalLancarDespesaCartao(cartao, fatura = null) {

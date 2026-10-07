@@ -811,6 +811,58 @@ class CartoesCorporativosTestCase(TestCase):
         self.assertEqual(rollover_lanc.valor, Decimal("600.00"))
         self.assertEqual(rollover_lanc.status_pagamento, 'A_VENCER')
 
+    def test_atualizacao_cartao_preservacao_e_remocao_conta_bancaria(self):
+        """Valida que GET e PUT em cartao de credito recuperam e preservam conta_bancaria_id corretamente."""
+        self.client.force_authenticate(user=self.operador)
+        # 1. Verifica recuperação via GET
+        resp_get = self.client.get(f"/api/cartoes-credito/{self.cartao.id}/")
+        self.assertEqual(resp_get.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp_get.data['conta_bancaria'], self.conta.id)
+        self.assertEqual(resp_get.data['conta_bancaria_id'], self.conta.id)
+        self.assertEqual(resp_get.data['conta_bancaria_nome'], self.conta.nome)
+
+        # 2. Atualiza outros campos mantendo conta_bancaria_id
+        resp_put = self.client.put(f"/api/cartoes-credito/{self.cartao.id}/", {
+            "nome": "CARTAO SANTANDER ATUALIZADO",
+            "dia_fechamento_padrao": 12,
+            "dia_vencimento": 22,
+            "limite": "6000.00",
+            "conta_bancaria_id": self.conta.id,
+            "permite_limite_emergencial": True
+        }, format='json')
+        self.assertEqual(resp_put.status_code, status.HTTP_200_OK)
+        self.cartao.refresh_from_db()
+        self.assertEqual(self.cartao.nome, "CARTAO SANTANDER ATUALIZADO")
+        self.assertEqual(self.cartao.conta_bancaria_id, self.conta.id)
+
+        # 3. Atualiza com conta_bancaria_id=None (opção NENHUMA)
+        resp_put_none = self.client.put(f"/api/cartoes-credito/{self.cartao.id}/", {
+            "nome": "CARTAO SANTANDER SEM CONTA",
+            "dia_fechamento_padrao": 12,
+            "dia_vencimento": 22,
+            "limite": "6000.00",
+            "conta_bancaria_id": None,
+            "permite_limite_emergencial": True
+        }, format='json')
+        self.assertEqual(resp_put_none.status_code, status.HTTP_200_OK)
+        self.cartao.refresh_from_db()
+        self.assertIsNone(self.cartao.conta_bancaria_id)
+        self.assertIsNone(resp_put_none.data['conta_bancaria'])
+        self.assertIsNone(resp_put_none.data['conta_bancaria_id'])
+
+        # 4. Restaura vínculo com a conta bancária
+        resp_put_revinculo = self.client.put(f"/api/cartoes-credito/{self.cartao.id}/", {
+            "nome": "CARTAO SANTANDER VINCULADO",
+            "dia_fechamento_padrao": 12,
+            "dia_vencimento": 22,
+            "limite": "6000.00",
+            "conta_bancaria_id": self.conta.id,
+            "permite_limite_emergencial": True
+        }, format='json')
+        self.assertEqual(resp_put_revinculo.status_code, status.HTTP_200_OK)
+        self.cartao.refresh_from_db()
+        self.assertEqual(self.cartao.conta_bancaria_id, self.conta.id)
+
 
 class CategoriasGovernancaETesourariaTestCase(TestCase):
     """Bateria de testes para a Matriz de Governança de Categorias, indicação AMBOS e Lançamento no Extrato."""

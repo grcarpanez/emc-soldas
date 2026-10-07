@@ -285,8 +285,10 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         data = data.copy() if hasattr(data, 'copy') else dict(data)
-        if 'conta_bancaria_id' in data and 'conta_bancaria' not in data:
+        if 'conta_bancaria_id' in data and data.get('conta_bancaria_id') is not None:
             data['conta_bancaria'] = data['conta_bancaria_id']
+        elif 'conta_bancaria_id' in data and data.get('conta_bancaria_id') is None and 'conta_bancaria' not in data:
+            data['conta_bancaria'] = None
         return super().to_internal_value(data)
 
     def get_total_faturas_abertas(self, obj):

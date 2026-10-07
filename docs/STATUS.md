@@ -767,6 +767,15 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 211 testes passando com 100% de sucesso.
   - **Versionamento PWA:** Cache `emc-soldas-v4.62` em `sw.js` e `?v=4.62` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-07_05_recalculo_lote_faturas_e_conta_vinculada_cartao.md`.
+- [x] **Recuperação e Pré-Seleção Fidedigna da Conta Vinculada na Edição de Cartão (PWA v4.63):**
+  - **Preservação da Opção "NENHUMA":** Mantida a opção `-- NENHUMA (SEM DÉBITO EM CONTA) --` como facultativa e legítima para cartões corporativos que não possuem conta corrente ou débito automático vinculado.
+  - **Consulta Obrigatória Direta (`Fresh Fetch`):** O método `abrirModalNovoCartao` agora executa chamada direta `GET /api/cartoes-credito/{id}/` ao abrir para edição, garantindo que o objeto em memória nunca permaneça com dados obsoletos de sessões anteriores.
+  - **Sincronização de Referência em Memória:** Correção no método `carregarListaCartoes` com inclusão do ramo `else`, garantindo que `this.cartaoAtivo` seja atualizado com a referência fresca retornada da API.
+  - **Extração Polimórfica e Atribuição Programática no DOM:** Resolução à prova de falhas de `contaIdAtual` (`conta_bancaria_id ?? conta_bancaria?.id ?? conta_bancaria`) e atribuição explícita `select.value = String(contaIdAtual)` no ciclo de montagem do modal, eliminando redefinições indevidas para o índice 0 no Chrome Mobile / WebKit.
+  - **Liquidação de Fatura Aprimorada:** Mesma robustez polimórfica e seleção programática estendida ao modal de quitação/liquidação de fatura (`abrirModalLiquidarFatura`).
+  - **Bateria de Testes Automatizados:** 212 testes passando com 100% de sucesso (novo teste `test_atualizacao_cartao_preservacao_e_remocao_conta_bancaria` adicionado).
+  - **Versionamento PWA:** Cache `emc-soldas-v4.63` em `sw.js` e `?v=4.63` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-07_06_recuperacao_conta_vinculada_cartao.md`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):
