@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-07 (Gestão Completa de Cartões Corporativos, Faturas com Recálculo Dinâmico, Parcelamento N Vezes, Matriz Multi-Meio de Pagamento e Reúso de Anexos na Conciliação - PWA v4.60)  
+**Última Atualização:** 2026-10-07 (Ajustes de Faturas Crescentes, Estilo Industrial dos Botões de Linha do Tempo, Cartão no Modal Simples e Meios Explícitos na Matriz de Pagamentos - PWA v4.61)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -735,6 +735,21 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 209 testes passando com 100% de sucesso (incluindo suíte completa `CartaoParcelamentoMatrizPagamentoTestCase` e testes de regressão de todos os apps).
   - **Versionamento PWA:** Cache `emc-soldas-v4.60` em `sw.js` e `?v=4.60` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-07_03_gestao_cartoes_faturas_parcelamento_e_matriz_pagamento.md`.
+- [x] **Refinamentos de Faturas de Cartão, Estilo Industrial de Botões e Meios Explícitos na Matriz de Pagamentos (PWA v4.61):**
+  - **Ordenação Linear Crescente:** Faturas corporativas dispostas em ordem cronológica estritamente crescente (`2026-10`, `2026-11`, `2026-12`), permitindo acompanhamento fluido das competências.
+  - **Design System Industrial Integrity para Linha do Tempo:** Criação da classe mecânica `.fatura-timeline-btn` com fundo dark uniforme (`#1e1e1e`), eliminando o botão padrão claro do browser. No estado ativo, aplicação de fundo ferroso escuro (`#241610`), borda de 2px Rust Orange (`#B7410E`) e tipografia técnica em branco puro de alto contraste (`#FFFFFF !important`).
+  - **Seletor de Cartão no Modal Simples de Lançamentos:**
+    - Adicionado seletor `#nl-cartao` com lista de cartões corporativos ativos e limites.
+    - Sincronização reativa: selecionar um cartão define automaticamente o meio como "CARTÃO DE CRÉDITO" (travado `disabled`), oculta a conta bancária de saída imediata e exibe o parcelamento (1x a 12x). Selecionar outros meios esconde o seletor de cartão e reexibe a conta bancária.
+    - Despacho atômico via `POST /api/lancamentos-financeiros/lancar-multi-meio/` quando selecionado cartão, com rateio automático na fatura aberta do mês.
+  - **Meio de Pagamento Explícito em Cada Linha da Matriz ("Caixa de Mercado"):**
+    - Cada linha da matriz possui dropdown próprio com os meios cadastrados (Dinheiro, PIX, Cartão de Crédito, Débito, Transferência, Boleto, etc.).
+    - Ao selecionar Cartão de Crédito, a linha renderiza seletor de Cartão + Parcelas; para qualquer outro meio, exibe seletor de Conta Bancária / Caixa com saldo em tempo real.
+    - Submissão da matriz preserva meio, cartão, parcelas e conta em cada fração da despesa.
+  - **Compatibilidade no Serializer:** `LancamentoFinanceiroSerializer` ajustado para aceitar `cartao_id` como alias de `cartao_credito`.
+  - **Bateria de Testes Automatizados:** 209 testes passando com 100% de sucesso.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.61` em `sw.js` e `?v=4.61` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-07_04_ajustes_faturas_crescentes_botoes_cartao_e_matriz_meios.md`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

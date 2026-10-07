@@ -749,8 +749,9 @@ window.FinanceiroView = {
         `;
       }
 
-      // 2. Renderiza Linha do Tempo de Faturas
+      // 2. Renderiza Linha do Tempo de Faturas (Ordem Cronológica Crescente)
       this.faturasLista = resFaturas.results || (Array.isArray(resFaturas) ? resFaturas : []);
+      this.faturasLista.sort((a, b) => (a.mes_referencia || '').localeCompare(b.mes_referencia || ''));
       const timelineContainer = document.getElementById('cartao-faturas-timeline');
 
       if (!this.faturasLista.length) {
@@ -780,14 +781,13 @@ window.FinanceiroView = {
         timelineContainer.innerHTML = this.faturasLista.map(f => {
           const isAtiva = f.id === this.faturaAtiva.id;
           const statusClass = f.status === 'PAGA' ? 'success' : (f.status === 'FECHADA' ? 'warning' : 'info');
-          const borderStyle = isAtiva ? 'border: 2px solid var(--color-rust-orange); background: var(--color-surface-container);' : 'border: 1px solid var(--color-outline-variant);';
+          const activeClass = isAtiva ? 'active' : '';
 
           return `
-            <button type="button" class="btn btn-sm" 
-                    style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 14px; min-width: 110px; flex-shrink: 0; ${borderStyle}"
+            <button type="button" class="fatura-timeline-btn ${activeClass}" 
                     onclick="window.FinanceiroView.selecionarFatura(${f.id})">
-              <span class="mono-text font-bold" style="font-size: 13px;">${f.mes_referencia}</span>
-              <span class="status-chip ${statusClass}" style="font-size: 9px; padding: 1px 4px;">${f.status}</span>
+              <span class="fatura-mes">${f.mes_referencia}</span>
+              <span class="status-chip ${statusClass}" style="font-size: 9px; padding: 2px 6px;">${f.status}</span>
             </button>
           `;
         }).join('');
@@ -1606,6 +1606,12 @@ window.FinanceiroView = {
     let optionsMeios = '<option value="">SELECIONE O MEIO...</option>';
     listaMeios.forEach((m) => { optionsMeios += `<option value="${m.id}">${window.EMCUtils.escapeHtml(m.nome)}</option>`; });
 
+    let optionsCartoes = '<option value="">-- SELECIONE O CARTÃO (OPCIONAL) --</option>';
+    listaCartoes.forEach((c) => {
+      const disp = c.limite_disponivel !== undefined ? c.limite_disponivel : c.limite;
+      optionsCartoes += `<option value="${c.id}">💳 ${window.EMCUtils.escapeHtml(c.nome)} (Disp: ${window.EMCUtils.formatarMoeda(disp)})</option>`;
+    });
+
     let modalTitle = 'NOVO LANÇAMENTO AVULSO';
     if (isExtrato) {
       modalTitle = 'NOVO LANÇAMENTO AVULSO NO EXTRATO (CAIXA REAL)';
@@ -1672,14 +1678,31 @@ window.FinanceiroView = {
 
           <!-- 1. Pagamento Simples Tradicional -->
           <div id="container-pagamento-simples">
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 10px;">
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
-                <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
-              </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label" for="nl-meio">Meio de Pagamento</label>
                 <select id="nl-meio" class="form-control">${optionsMeios}</select>
+              </div>
+              <div class="form-group" id="wrapper-nl-conta" style="margin-bottom: 0;">
+                <label class="form-label" for="nl-conta">Conta Bancária / Caixa ${isExtrato ? '*' : ''}</label>
+                <select id="nl-conta" class="form-control" ${isExtrato ? 'required' : ''}>${optionsContas}</select>
+              </div>
+              <div class="form-group" id="wrapper-nl-cartao" style="margin-bottom: 0; display: ${defaultTipo === 'SAIDA' ? 'block' : 'none'};">
+                <label class="form-label" for="nl-cartao">Cartão de Crédito Corporativo</label>
+                <select id="nl-cartao" class="form-control">${optionsCartoes}</select>
+              </div>
+              <div class="form-group" id="wrapper-nl-parcelas" style="margin-bottom: 0; display: none;">
+                <label class="form-label" for="nl-parcelas">Número de Parcelas</label>
+                <select id="nl-parcelas" class="form-control mono-text">
+                  <option value="1">1x (À Vista na Fatura)</option>
+                  <option value="2">2x</option>
+                  <option value="3">3x</option>
+                  <option value="4">4x</option>
+                  <option value="5">5x</option>
+                  <option value="6">6x</option>
+                  <option value="10">10x</option>
+                  <option value="12">12x</option>
+                </select>
               </div>
             </div>
           </div>
@@ -1759,8 +1782,8 @@ window.FinanceiroView = {
           let somaMatriz = 0;
 
           for (const row of linhas) {
-            const tipoMeio = row.querySelector('.matriz-tipo-meio').value;
-            const valorLinha = window.EMCUtils.converterMoedaATMParaFloat(row.querySelector('.matriz-row-valor').value || '0');
+            const meioId = Number(row.querySelector('.matriz-meio-id')?.value);
+            const valorLinha = window.EMCUtils.converterMoedaATMParaFloat(row.querySelector('.matriz-row-valor')?.value || '0');
             somaMatriz += valorLinha;
 
             if (valorLinha <= 0) {
@@ -1768,31 +1791,36 @@ window.FinanceiroView = {
               return false;
             }
 
-            if (tipoMeio === 'CARTAO') {
-              const cartaoId = row.querySelector('.matriz-cartao-id').value;
-              const parcelas = parseInt(row.querySelector('.matriz-parcelas').value || '1', 10);
+            const isCartao = isMeioCartaoCredito(meioId);
+
+            if (isCartao) {
+              const cartaoId = row.querySelector('.matriz-cartao-id')?.value;
+              const parcelas = parseInt(row.querySelector('.matriz-parcelas')?.value || '1', 10);
               if (!cartaoId) {
                 window.EMCUtils.showToast('Selecione o Cartão Corporativo na matriz.', 'warning');
                 return false;
               }
               matrizPayload.push({
                 tipo_meio: 'CARTAO',
+                meio_pagamento_id: meioId,
                 cartao_id: Number(cartaoId),
                 total_parcelas: parcelas,
                 valor: valorLinha,
                 descricao: `PARC. CARTAO (${parcelas}X)`
               });
             } else {
-              const contaId = row.querySelector('.matriz-conta-id').value;
+              const contaId = row.querySelector('.matriz-conta-id')?.value;
               if (!contaId) {
                 window.EMCUtils.showToast('Selecione a Conta Bancária de saída na matriz.', 'warning');
                 return false;
               }
+              const meioObj = listaMeios.find(m => m.id === meioId);
               matrizPayload.push({
                 tipo_meio: 'CONTA',
+                meio_pagamento_id: meioId,
                 conta_id: Number(contaId),
                 valor: valorLinha,
-                descricao: 'PAGAMENTO CONTA / CAIXA'
+                descricao: `PAGTO ${meioObj?.nome || 'CONTA / CAIXA'}`
               });
             }
           }
@@ -1827,6 +1855,41 @@ window.FinanceiroView = {
         }
 
         // Fluxo 2: Pagamento Simples Convencional
+        const cartao_id = document.getElementById('nl-cartao')?.value;
+        const parcelas = parseInt(document.getElementById('nl-parcelas')?.value || '1', 10);
+
+        if (tipo_lancamento === 'SAIDA' && cartao_id) {
+          const payloadCard = {
+            descricao,
+            categoria_id: Number(categoria_id),
+            valor_total: valorTotal,
+            data_compra: data_vencimento,
+            comprovante: comprovantePath,
+            nome_arquivo_comprovante: nomeComprovante,
+            matriz_pagamentos: [{
+              tipo_meio: 'CARTAO',
+              meio_pagamento_id: meioCartaoCredito ? meioCartaoCredito.id : null,
+              cartao_id: Number(cartao_id),
+              total_parcelas: parcelas,
+              valor: valorTotal,
+              descricao: parcelas > 1 ? `PARC. CARTAO (${parcelas}X)` : 'COMPRA CARTAO'
+            }]
+          };
+
+          try {
+            await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.LANCAR_MULTI_MEIO, payloadCard);
+            window.EMCUtils.showToast(parcelas > 1 ? `Despesa parcelada em ${parcelas}x no cartão com sucesso!` : 'Despesa registrada no cartão com sucesso!', 'success');
+            if (this.currentTab === 'extrato') this.carregarListaExtrato();
+            else if (this.currentTab === 'cartoes') this.carregarMetricasEFaturasCartao();
+            else if (this.currentTab === 'pagar') this.carregarListaContasPagar();
+            else this.render(document.getElementById('app-root'));
+            return true;
+          } catch (err) {
+            window.EMCUtils.showToast(err.message || 'Erro ao registrar despesa no cartão.', 'error');
+            return false;
+          }
+        }
+
         const conta_id = document.getElementById('nl-conta')?.value || null;
         const meio_pagamento_id = document.getElementById('nl-meio')?.value || null;
 
@@ -1878,6 +1941,87 @@ window.FinanceiroView = {
       }
     });
 
+    // Detecção do meio de Cartão de Crédito
+    const meioCartaoCredito = listaMeios.find(m => {
+      const n = (m.nome || '').toUpperCase();
+      return (n.includes('CART') && n.includes('CRED')) || n.includes('CREDITO');
+    }) || listaMeios.find(m => (m.nome || '').toUpperCase().includes('CART'));
+
+    const isMeioCartaoCredito = (meioId) => {
+      const m = listaMeios.find(x => x.id === Number(meioId));
+      if (!m) return false;
+      const n = (m.nome || '').toUpperCase();
+      return (n.includes('CART') && n.includes('CRED')) || n.includes('CREDITO');
+    };
+
+    // Sincronização Reativa do Pagamento Simples
+    const selCartao = document.getElementById('nl-cartao');
+    const selMeio = document.getElementById('nl-meio');
+    const wrapConta = document.getElementById('wrapper-nl-conta');
+    const wrapCartao = document.getElementById('wrapper-nl-cartao');
+    const wrapParcelas = document.getElementById('wrapper-nl-parcelas');
+    const selTipo = document.getElementById('nl-tipo');
+
+    selCartao?.addEventListener('change', () => {
+      if (selCartao.value) {
+        if (meioCartaoCredito) {
+          selMeio.value = String(meioCartaoCredito.id);
+          selMeio.disabled = true;
+        }
+        if (wrapConta) wrapConta.style.display = 'none';
+        if (wrapParcelas) wrapParcelas.style.display = 'block';
+      } else {
+        selMeio.disabled = false;
+        selMeio.value = '';
+        if (wrapConta) wrapConta.style.display = 'block';
+        if (wrapParcelas) wrapParcelas.style.display = 'none';
+      }
+    });
+
+    selMeio?.addEventListener('change', () => {
+      const isCartao = isMeioCartaoCredito(selMeio.value);
+      if (isCartao) {
+        if (wrapCartao) wrapCartao.style.display = 'block';
+        if (wrapParcelas) wrapParcelas.style.display = 'block';
+        if (wrapConta) wrapConta.style.display = 'none';
+        if (!selCartao.value && listaCartoes.length > 0) {
+          selCartao.focus();
+        }
+      } else if (selMeio.value) {
+        // Outro meio selecionado (PIX, Dinheiro, etc.): oculta a opção de cartão de crédito
+        if (wrapCartao) {
+          wrapCartao.style.display = 'none';
+          selCartao.value = '';
+        }
+        if (wrapParcelas) wrapParcelas.style.display = 'none';
+        if (wrapConta) wrapConta.style.display = 'block';
+      } else {
+        // Meio em branco
+        if (selTipo?.value === 'SAIDA') {
+          if (wrapCartao) wrapCartao.style.display = 'block';
+        }
+        if (wrapConta) wrapConta.style.display = 'block';
+        if (wrapParcelas) wrapParcelas.style.display = 'none';
+      }
+    });
+
+    selTipo?.addEventListener('change', () => {
+      if (selTipo.value === 'ENTRADA') {
+        if (wrapCartao) {
+          wrapCartao.style.display = 'none';
+          selCartao.value = '';
+        }
+        if (wrapParcelas) wrapParcelas.style.display = 'none';
+        if (wrapConta) wrapConta.style.display = 'block';
+        selMeio.disabled = false;
+      } else {
+        if (!selMeio.value || isMeioCartaoCredito(selMeio.value)) {
+          if (wrapCartao) wrapCartao.style.display = 'block';
+        }
+      }
+      atualizarCategoriasDinamicas(selTipo.value);
+    });
+
     // Lógica Dinâmica da Matriz de Pagamentos
     const toggleMatriz = document.getElementById('nl-toggle-multi-meio');
     const boxSimples = document.getElementById('container-pagamento-simples');
@@ -1904,18 +2048,25 @@ window.FinanceiroView = {
       }
     };
 
-    const adicionarLinhaMatriz = (tipoDefault = 'CONTA', valorDefault = 0) => {
+    const adicionarLinhaMatriz = (meioDefaultId = null, valorDefault = 0) => {
       const row = document.createElement('div');
       row.className = 'matriz-pagto-row';
-      row.style.cssText = 'display: grid; grid-template-columns: 140px 1fr 130px 36px; gap: 8px; align-items: center; background: var(--color-surface-container); padding: 6px 8px; border: 1px solid var(--color-outline-variant);';
+      row.style.cssText = 'display: grid; grid-template-columns: 160px 1fr 130px 36px; gap: 8px; align-items: center; background: var(--color-surface-container); padding: 6px 8px; border: 1px solid var(--color-outline-variant);';
 
       const optsContasRow = listaContas.map(c => `<option value="${c.id}">${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`).join('');
       const optsCartoesRow = listaCartoes.map(c => `<option value="${c.id}">💳 ${window.EMCUtils.escapeHtml(c.nome)}</option>`).join('');
 
+      let defaultId = meioDefaultId;
+      if (!defaultId && listaMeios.length > 0) {
+        const d = listaMeios.find(m => (m.nome || '').toUpperCase().includes('DINH')) ||
+                  listaMeios.find(m => (m.nome || '').toUpperCase().includes('PIX')) ||
+                  listaMeios[0];
+        defaultId = d ? d.id : null;
+      }
+
       row.innerHTML = `
-        <select class="form-control matriz-tipo-meio" style="font-size: 11.5px;">
-          <option value="CONTA" ${tipoDefault === 'CONTA' ? 'selected' : ''}>CONTA / CAIXA</option>
-          <option value="CARTAO" ${tipoDefault === 'CARTAO' ? 'selected' : ''}>CARTÃO CRÉDITO</option>
+        <select class="form-control matriz-meio-id" style="font-size: 11.5px;">
+          ${listaMeios.map(m => `<option value="${m.id}" ${String(m.id) === String(defaultId) ? 'selected' : ''}>${window.EMCUtils.escapeHtml(m.nome)}</option>`).join('')}
         </select>
 
         <div class="matriz-alvo-container">
@@ -1928,13 +2079,14 @@ window.FinanceiroView = {
       `;
 
       const alvoContainer = row.querySelector('.matriz-alvo-container');
-      const tipoSelect = row.querySelector('.matriz-tipo-meio');
+      const meioSelect = row.querySelector('.matriz-meio-id');
 
-      const renderAlvo = (tipo) => {
-        if (tipo === 'CARTAO') {
+      const renderAlvo = (selectedMeioId) => {
+        const isCartao = isMeioCartaoCredito(selectedMeioId);
+        if (isCartao) {
           alvoContainer.innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 100px; gap: 6px;">
-              <select class="form-control matriz-cartao-id" style="font-size: 11.5px;">${optsCartoesRow || '<option value="">NENHUM CARTÃO</option>'}</select>
+            <div style="display: grid; grid-template-columns: 1fr 90px; gap: 6px;">
+              <select class="form-control matriz-cartao-id" style="font-size: 11.5px;">${optsCartoesRow || '<option value="">NENHUM CARTÃO CADASTRADO</option>'}</select>
               <select class="form-control mono-text matriz-parcelas" style="font-size: 11.5px;">
                 <option value="1">1x</option>
                 <option value="2">2x</option>
@@ -1949,13 +2101,13 @@ window.FinanceiroView = {
           `;
         } else {
           alvoContainer.innerHTML = `
-            <select class="form-control matriz-conta-id" style="font-size: 11.5px;">${optsContasRow || '<option value="">NENHUMA CONTA</option>'}</select>
+            <select class="form-control matriz-conta-id" style="font-size: 11.5px;">${optsContasRow || '<option value="">NENHUMA CONTA CADASTRADA</option>'}</select>
           `;
         }
       };
 
-      tipoSelect.addEventListener('change', (e) => renderAlvo(e.target.value));
-      renderAlvo(tipoDefault);
+      meioSelect.addEventListener('change', (e) => renderAlvo(e.target.value));
+      renderAlvo(defaultId);
 
       row.querySelector('.matriz-row-valor').addEventListener('input', atualizarBalancoMatriz);
       row.querySelector('.btn-remover-linha-matriz').addEventListener('click', () => {
@@ -1975,7 +2127,7 @@ window.FinanceiroView = {
 
       if (checked && !matrizLinhas.children.length) {
         const total = window.EMCUtils.converterMoedaATMParaFloat(document.getElementById('nl-valor')?.value || '0');
-        adicionarLinhaMatriz('CONTA', total > 0 ? total : 0);
+        adicionarLinhaMatriz(null, total > 0 ? total : 0);
       }
       atualizarBalancoMatriz();
     });
@@ -1987,7 +2139,8 @@ window.FinanceiroView = {
         soma += window.EMCUtils.converterMoedaATMParaFloat(inp.value || '0');
       });
       const restante = Math.max(0, vTotal - soma);
-      adicionarLinhaMatriz(listaCartoes.length ? 'CARTAO' : 'CONTA', restante);
+      const defaultMeio = meioCartaoCredito ? meioCartaoCredito.id : null;
+      adicionarLinhaMatriz(defaultMeio, restante);
     });
 
     document.getElementById('nl-valor')?.addEventListener('input', atualizarBalancoMatriz);

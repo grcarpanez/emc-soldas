@@ -429,6 +429,8 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             data['meio_pagamento'] = data['meio_pagamento_id']
         if 'cartao_credito_id' in data and 'cartao_credito' not in data:
             data['cartao_credito'] = data['cartao_credito_id']
+        if 'cartao_id' in data and 'cartao_credito' not in data:
+            data['cartao_credito'] = data['cartao_id']
         if 'fatura_cartao_id' in data and 'fatura_cartao' not in data:
             data['fatura_cartao'] = data['fatura_cartao_id']
         return super().to_internal_value(data)
