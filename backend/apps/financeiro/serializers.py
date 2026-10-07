@@ -252,6 +252,11 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True
     )
+    conta_bancaria_id = serializers.IntegerField(
+        source='conta_bancaria.id',
+        read_only=True,
+        allow_null=True
+    )
     total_faturas_abertas = serializers.SerializerMethodField()
     limite_disponivel = serializers.SerializerMethodField()
     total_comprometido = serializers.SerializerMethodField()
@@ -270,12 +275,19 @@ class CartaoCreditoSerializer(serializers.ModelSerializer):
             'fatura_atual_id',
             'permite_limite_emergencial',
             'conta_bancaria',
+            'conta_bancaria_id',
             'conta_bancaria_nome',
             'total_faturas_abertas',
             'created_at',
             'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'conta_bancaria_id' in data and 'conta_bancaria' not in data:
+            data['conta_bancaria'] = data['conta_bancaria_id']
+        return super().to_internal_value(data)
 
     def get_total_faturas_abertas(self, obj):
         return obj.faturas.filter(status='ABERTA', deleted_at__isnull=True).count()

@@ -1328,4 +1328,95 @@ class CartaoParcelamentoMatrizPagamentoTestCase(TestCase):
         self.conta.refresh_from_db()
         self.assertEqual(self.conta.saldo, Decimal("1550.00"))  # 2000 - 450
 
+    def test_cartao_serializer_preservacao_conta_bancaria(self):
+        """Valida que CartaoCreditoSerializer aceita conta_bancaria_id e preserva a conta vinculada."""
+        # 1. Update enviando conta_bancaria_id
+        payload = {
+            "nome": "CARTAO TESTE COM CONTA",
+            "dia_fechamento_padrao": 20,
+            "dia_vencimento": 28,
+            "limite": "6000.00",
+            "conta_bancaria_id": self.conta.id,
+            "permite_limite_emergencial": False
+        }
+        resp = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        dados = resp.json()
+        self.assertEqual(dados['conta_bancaria'], self.conta.id)
+        self.assertEqual(dados['conta_bancaria_id'], self.conta.id)
+        self.assertEqual(dados['conta_bancaria_nome'], self.conta.nome)
+
+        self.cartao.refresh_from_db()
+        self.assertEqual(self.cartao.conta_bancaria_id, self.conta.id)
+
+    def test_recalcular_faturas_cartao_em_lote_atual_e_proxima(self):
+        """Valida recálculo em lote ao alterar dia_fechamento_padrao na configuração do cartão."""
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            lancar_despesa_cartao
+        )
+
+        fatura_out = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        fatura_nov = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-11", user=self.operador)
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 20))
+        self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 20))
+
+        # Compra no dia 18/10 (cai na fatura de outubro pois fechamento era dia 20)
+        c1 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("200.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA DIA 18 OUTUBRO",
+            data_compra=date(2026, 10, 18),
+            user=self.operador
+        )
+        self.assertEqual(c1.fatura_cartao_id, fatura_out.id)
+
+        # 1. Altera fechamento padrão do cartão para dia 15 a partir de 2026-10
+        payload_atual = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 15,
+            "dia_vencimento": 25,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-10"
+        }
+        resp = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_atual, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        dados = resp.json()
+        self.assertIn('recalculo', dados)
+        self.assertGreaterEqual(dados['recalculo']['faturas_recalculadas'], 1)
+
+        # Faturas devem estar no dia 15
+        fatura_out.refresh_from_db()
+        fatura_nov.refresh_from_db()
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 15))
+        self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 15))
+
+        # A compra do dia 18/10 deve ter sido empurrada para a fatura 2026-11!
+        c1.refresh_from_db()
+        self.assertEqual(c1.fatura_cartao_id, fatura_nov.id)
+
+        # 2. Testa recálculo a partir da PRÓXIMA competência (2026-11)
+        # Altera fechamento padrão para dia 10 apenas a partir de 2026-11:
+        # A fatura de outubro (2026-10) deve continuar no dia 15, e a de novembro deve ir para dia 10!
+        payload_proxima = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 10,
+            "dia_vencimento": 20,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-11"
+        }
+        resp2 = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_proxima, format='json')
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+
+        fatura_out.refresh_from_db()
+        fatura_nov.refresh_from_db()
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 15))  # Permaneceu 15!
+        self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 10))  # Atualizado para 10!
+
+
 

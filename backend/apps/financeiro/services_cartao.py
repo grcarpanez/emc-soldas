@@ -384,6 +384,8 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
                 status_pagamento='A_VENCER',
                 deleted_at__isnull=True
             ).filter(
+                Q(numero_parcela=1) | Q(total_parcelas=1) | Q(numero_parcela__isnull=True)
+            ).filter(
                 Q(data_competencia__lte=nova_data_fechamento) |
                 (Q(data_competencia__isnull=True) & Q(created_at__date__lte=nova_data_fechamento))
             )
@@ -414,6 +416,56 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
         'nova_data_fechamento': nova_data_fechamento,
         'itens_movidos_adiante': itens_movidos_adiante,
         'itens_puxados_de_volta': itens_puxados_de_volta
+    }
+
+
+@transaction.atomic
+def recalcular_faturas_cartao(cartao, competencia_inicial, user=None):
+    """
+    Recalcula as faturas abertas do cartão de crédito a partir da competência inicial informada (YYYY-MM).
+    Para cada fatura aberta (mes_referencia >= competencia_inicial):
+    1. Calcula a nova data de fechamento real baseada em cartao.dia_fechamento_padrao.
+    2. Se a data_fechamento_real for diferente da nova data calculada, executa ajustar_fechamento_fatura,
+       redistribuindo despesas entre as faturas abertas e sincronizando vencimentos.
+    Retorna o sumário de faturas recalculadas e despesas remanejadas.
+    """
+    if not competencia_inicial or not isinstance(competencia_inicial, str) or len(competencia_inicial) != 7:
+        raise ValidationError({'competencia_inicial': 'Competência inicial inválida. Formato esperado: YYYY-MM.'})
+
+    faturas_abertas = FaturaCartao.objects.filter(
+        cartao=cartao,
+        status='ABERTA',
+        mes_referencia__gte=competencia_inicial,
+        deleted_at__isnull=True
+    ).order_by('mes_referencia')
+
+    total_faturas_recalculadas = 0
+    total_movidos_adiante = 0
+    total_puxados_de_volta = 0
+
+    for fatura in faturas_abertas:
+        partes = fatura.mes_referencia.split('-')
+        ano = int(partes[0])
+        mes = int(partes[1])
+        nova_data_fech = calcular_data_fechamento_padrao(cartao, ano, mes)
+
+        if nova_data_fech != fatura.data_fechamento_real:
+            res = ajustar_fechamento_fatura(fatura, nova_data_fech, user=user)
+            total_faturas_recalculadas += 1
+            total_movidos_adiante += res.get('itens_movidos_adiante', 0)
+            total_puxados_de_volta += res.get('itens_puxados_de_volta', 0)
+
+    logger.info(
+        f"[RECALCULO FATURAS CARTAO] Cartão '{cartao.nome}' a partir de {competencia_inicial}: "
+        f"{total_faturas_recalculadas} fatura(s) recalculada(s). "
+        f"Itens adiante: {total_movidos_adiante}, Itens de volta: {total_puxados_de_volta}."
+    )
+    return {
+        'cartao_id': cartao.id,
+        'competencia_inicial': competencia_inicial,
+        'faturas_recalculadas': total_faturas_recalculadas,
+        'itens_movidos_adiante': total_movidos_adiante,
+        'itens_puxados_de_volta': total_puxados_de_volta
     }
 
 

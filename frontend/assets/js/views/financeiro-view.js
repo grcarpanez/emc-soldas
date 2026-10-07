@@ -954,10 +954,35 @@ window.FinanceiroView = {
     const resContas = await window.api.get(window.CONFIG.ENDPOINTS.FINANCEIRO.CONTAS_BANCARIAS);
     const listaContas = resContas.results || (Array.isArray(resContas) ? resContas : []);
 
+    const contaIdAtual = cartaoEdicao?.conta_bancaria_id || cartaoEdicao?.conta_bancaria || null;
+
     let optsContas = '<option value="">-- NENHUMA (DEFINIR DEPOIS) --</option>';
     listaContas.forEach(c => {
-      optsContas += `<option value="${c.id}" ${cartaoEdicao?.conta_bancaria_id === c.id ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
+      optsContas += `<option value="${c.id}" ${String(c.id) === String(contaIdAtual) ? 'selected' : ''}>${window.EMCUtils.escapeHtml(c.nome)} (Saldo: ${window.EMCUtils.formatarMoeda(c.saldo)})</option>`;
     });
+
+    const dHoje = new Date();
+    const mesAtual = dHoje.toISOString().substring(0, 7);
+    const dProx = new Date(dHoje.getFullYear(), dHoje.getMonth() + 1, 1);
+    const mesProximo = dProx.toISOString().substring(0, 7);
+
+    let optsMesesEspecificos = '';
+    if (isEdicao) {
+      let faturasAbertas = [];
+      try {
+        const resFat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/faturas/?status=ABERTA`);
+        faturasAbertas = resFat.results || (Array.isArray(resFat) ? resFat : []);
+        faturasAbertas.sort((a, b) => (a.mes_referencia || '').localeCompare(b.mes_referencia || ''));
+      } catch (err) {
+        console.warn('Erro ao carregar faturas abertas do cartão:', err);
+      }
+
+      if (faturasAbertas.length > 0) {
+        optsMesesEspecificos = faturasAbertas.map(f => `<option value="${f.mes_referencia}">Competência ${f.mes_referencia} (Fechamento Atual: ${window.EMCUtils.formatarDataPtBr(f.data_fechamento_real)})</option>`).join('');
+      } else {
+        optsMesesEspecificos = `<option value="${mesAtual}">Competência ${mesAtual}</option><option value="${mesProximo}">Competência ${mesProximo}</option>`;
+      }
+    }
 
     window.EMCUtils.openModal({
       title: isEdicao ? `EDITAR CARTÃO CORPORATIVO #${cartaoEdicao.id}` : 'NOVO CARTÃO CORPORATIVO',
@@ -996,6 +1021,28 @@ window.FinanceiroView = {
             Permitir Limite Emergencial (Não travar compras que ultrapassem o limite)
           </label>
         </div>
+
+        ${isEdicao ? `
+          <div style="background: var(--color-surface-container); border: 1px solid var(--color-outline-variant); border-left: 3px solid var(--color-rust-orange); padding: 12px; margin-top: 14px;">
+            <label class="form-label" style="display: flex; align-items: center; gap: 6px; color: var(--color-rust-orange); font-weight: 700; margin-bottom: 4px;">
+              ⚡ REPERCUSSÃO NAS FATURAS ABERTAS EXISTENTES
+            </label>
+            <div style="font-size: 11.5px; color: var(--color-on-surface-variant); margin-bottom: 8px; line-height: 1.4;">
+              Ao alterar os dias de fechamento ou vencimento, escolha a partir de qual competência as faturas em aberto devem ser recalculadas e seus lançamentos remanejados:
+            </div>
+            <select id="cartao-escopo-recalculo" class="form-control" style="font-size: 12.5px;">
+              <option value="ATUAL">A partir da competência atual (${mesAtual}) e futuras</option>
+              <option value="PROXIMA">A partir da próxima competência (${mesProximo}) e futuras</option>
+              <option value="ESPECIFICA">A partir de uma competência específica...</option>
+            </select>
+            <div id="wrapper-competencia-especifica" style="display: none; margin-top: 8px;">
+              <label class="form-label">Competência Inicial para Recálculo *</label>
+              <select id="cartao-mes-especifico" class="form-control mono-text">
+                ${optsMesesEspecificos}
+              </select>
+            </div>
+          </div>
+        ` : ''}
       `,
       onConfirm: async () => {
         const nome = document.getElementById('cartao-nome')?.value.trim();
@@ -1010,19 +1057,41 @@ window.FinanceiroView = {
           return false;
         }
 
+        let recalcular_faturas = false;
+        let competencia_inicial_recalculo = null;
+
+        if (isEdicao) {
+          const escopo = document.getElementById('cartao-escopo-recalculo')?.value || 'ATUAL';
+          recalcular_faturas = true;
+          if (escopo === 'ATUAL') {
+            competencia_inicial_recalculo = mesAtual;
+          } else if (escopo === 'PROXIMA') {
+            competencia_inicial_recalculo = mesProximo;
+          } else if (escopo === 'ESPECIFICA') {
+            competencia_inicial_recalculo = document.getElementById('cartao-mes-especifico')?.value || mesAtual;
+          }
+        }
+
         const payload = {
           nome,
           dia_fechamento_padrao,
           dia_vencimento,
           limite,
+          conta_bancaria: conta_bancaria_id ? Number(conta_bancaria_id) : null,
           conta_bancaria_id: conta_bancaria_id ? Number(conta_bancaria_id) : null,
-          permite_limite_emergencial
+          permite_limite_emergencial,
+          recalcular_faturas,
+          competencia_inicial_recalculo
         };
 
         try {
           if (isEdicao) {
-            await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/`, payload);
-            window.EMCUtils.showToast('Cartão atualizado com sucesso!', 'success');
+            const resp = await window.api.put(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartaoEdicao.id}/`, payload);
+            let msg = 'Cartão atualizado com sucesso!';
+            if (resp?.recalculo && resp.recalculo.faturas_recalculadas > 0) {
+              msg += ` ${resp.recalculo.faturas_recalculadas} fatura(s) recalculada(s) a partir de ${resp.recalculo.competencia_inicial}.`;
+            }
+            window.EMCUtils.showToast(msg, 'success');
           } else {
             const novo = await window.api.post(window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO, payload);
             window.EMCUtils.showToast('Cartão cadastrado com sucesso!', 'success');
@@ -1036,6 +1105,18 @@ window.FinanceiroView = {
         }
       }
     });
+
+    if (isEdicao) {
+      setTimeout(() => {
+        const escopoSelect = document.getElementById('cartao-escopo-recalculo');
+        const wrapperEsp = document.getElementById('wrapper-competencia-especifica');
+        if (escopoSelect && wrapperEsp) {
+          escopoSelect.addEventListener('change', () => {
+            wrapperEsp.style.display = escopoSelect.value === 'ESPECIFICA' ? 'block' : 'none';
+          });
+        }
+      }, 50);
+    }
   },
 
   abrirModalAjustarFechamento(fatura) {

@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-07 (Ajustes de Faturas Crescentes, Estilo Industrial dos Botões de Linha do Tempo, Cartão no Modal Simples e Meios Explícitos na Matriz de Pagamentos - PWA v4.61)  
+**Última Atualização:** 2026-10-07 (Preservação de Conta Vinculada do Cartão Corporativo e Recálculo em Lote de Faturas Abertas por Competência - PWA v4.62)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -750,6 +750,23 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 209 testes passando com 100% de sucesso.
   - **Versionamento PWA:** Cache `emc-soldas-v4.61` em `sw.js` e `?v=4.61` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-07_04_ajustes_faturas_crescentes_botoes_cartao_e_matriz_meios.md`.
+- [x] **Preservação de Conta Vinculada do Cartão e Recálculo em Lote de Faturas por Competência (PWA v4.62):**
+  - **Preservação de Conta Bancária Vinculada:**
+    - Ajustado `CartaoCreditoSerializer` para mapear `conta_bancaria_id` para `conta_bancaria` no `to_internal_value` e expor ambos os campos no JSON (`conta_bancaria` e `conta_bancaria_id`).
+    - Frontend atualizado em `abrirModalNovoCartao` para recuperar resilientemente `conta_bancaria_id || conta_bancaria`, convertendo tipos (`String(c.id) === String(contaIdAtual)`), garantindo que a conta vinculada no banco nunca mais seja resetada para nula ao editar o cartão.
+  - **Recálculo em Lote de Faturas Abertas por Competência:**
+    - Criado serviço atômico `recalcular_faturas_cartao` em `services_cartao.py`, iterando sobre todas as faturas abertas a partir da competência indicada (`mes_referencia >= competencia_inicial`), recalculando a nova data de fechamento e executando `ajustar_fechamento_fatura` em cascata.
+    - Proteção contábil em `ajustar_fechamento_fatura`: restringe despesas puxadas de volta da fatura seguinte estritamente a compras à vista ou à 1ª parcela (`numero_parcela=1`), garantindo que parcelas 2, 3... de compras a prazo não sejam agrupadas no mês anterior.
+    - Atualizado `CartaoCreditoViewSet.update` e criada action `recalcular-faturas` para processar o recálculo na mesma transação atômica e devolver o sumário de faturas recalculadas.
+  - **Interface no Modal de Cartão:**
+    - Inclusão do painel técnico "REPERCUSSÃO NAS FATURAS ABERTAS EXISTENTES" no modo de edição do cartão:
+      - `[ATUAL]` A partir da competência atual (`YYYY-MM`) e futuras
+      - `[PROXIMA]` A partir da próxima competência (`YYYY-MM`) e futuras
+      - `[ESPECIFICA]` A partir de uma competência aberta específica selecionada em dropdown
+    - Notificação toast detalhada informando o total de faturas recalculadas.
+  - **Bateria de Testes Automatizados:** 211 testes passando com 100% de sucesso.
+  - **Versionamento PWA:** Cache `emc-soldas-v4.62` em `sw.js` e `?v=4.62` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-07_05_recalculo_lote_faturas_e_conta_vinculada_cartao.md`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

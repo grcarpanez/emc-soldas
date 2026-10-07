@@ -4,6 +4,7 @@ Em conformidade com docs/FSD.md e docs/PLANO.md (Fase 4 e Fase 10).
 """
 from datetime import date
 from decimal import Decimal
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
@@ -52,6 +53,7 @@ from apps.financeiro.services_cartao import (
     lancar_despesa_cartao,
     remanejar_despesa_cartao,
     ajustar_fechamento_fatura,
+    recalcular_faturas_cartao,
     fechar_fatura_cartao,
     liquidar_fatura_cartao
 )
@@ -327,6 +329,46 @@ class CartaoCreditoViewSet(viewsets.ModelViewSet):
         faturas_qs = cartao.faturas.filter(deleted_at__isnull=True).order_by('-mes_referencia')
         serializer = FaturaCartaoSerializer(faturas_qs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        recalcular = request.data.get('recalcular_faturas', False)
+        competencia_inicial = request.data.get('competencia_inicial_recalculo')
+
+        stats_recalculo = None
+        with transaction.atomic():
+            instance = serializer.save(
+                updated_by_id=request.user.id if request.user and request.user.is_authenticated else None
+            )
+            if recalcular and competencia_inicial:
+                stats_recalculo = recalcular_faturas_cartao(
+                    cartao=instance,
+                    competencia_inicial=competencia_inicial,
+                    user=request.user
+                )
+
+        data = serializer.data
+        if stats_recalculo:
+            data['recalculo'] = stats_recalculo
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='recalcular-faturas')
+    def recalcular_faturas(self, request, pk=None):
+        """Dispara recálculo em lote das faturas abertas do cartão a partir de uma competência."""
+        cartao = self.get_object()
+        competencia_inicial = request.data.get('competencia_inicial')
+        if not competencia_inicial:
+            raise ValidationError({'competencia_inicial': 'Campo obrigatório no formato YYYY-MM.'})
+        res = recalcular_faturas_cartao(cartao=cartao, competencia_inicial=competencia_inicial, user=request.user)
+        return Response({
+            'status': 'success',
+            'message': f"{res['faturas_recalculadas']} fatura(s) recalculada(s) com sucesso.",
+            'dados': res
+        }, status=status.HTTP_200_OK)
 
     def perform_destroy(self, instance):
         if instance.faturas.filter(deleted_at__isnull=True).exists():
