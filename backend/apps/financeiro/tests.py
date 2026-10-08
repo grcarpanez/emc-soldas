@@ -1470,5 +1470,203 @@ class CartaoParcelamentoMatrizPagamentoTestCase(TestCase):
         self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 15))  # Permaneceu 15!
         self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 10))  # Atualizado para 10!
 
+    def test_recalculo_em_cadeia_parcelas_cartao_dia_10_para_dia_5_e_volta(self):
+        """
+        Valida que ao alterar o fechamento do cartão (ex: 10 para 5 e depois 5 para 10):
+        1. Compras no dia 07/10 em 3x têm TODAS as 3 parcelas deslocadas em cadeia (1 fatura pra frente).
+        2. Nenhuma fatura acumula duas parcelas da mesma compra (ex: 1ª e 2ª em 11/2026).
+        3. Compras fora da faixa (dia 04/10 e dia 12/10) permanecem intocadas em suas faturas originais.
+        4. Ao retornar para o dia 10, todas as parcelas retornam ordenadamente para as faturas de origem.
+        """
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            lancar_despesa_cartao
+        )
+
+        # Configura cartão inicial com fechamento dia 10
+        self.cartao.dia_fechamento_padrao = 10
+        self.cartao.dia_vencimento = 20
+        self.cartao.save()
+
+        fatura_out = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        fatura_nov = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-11", user=self.operador)
+        fatura_dez = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-12", user=self.operador)
+
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 10))
+        self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 10))
+        self.assertEqual(fatura_dez.data_fechamento_real, date(2026, 12, 10))
+
+        # 1. Compra 1: Dia 07/10 parcelada em 3x (R$ 300,00)
+        parcelas_c1 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("300.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA NUBANK DIA 07 PARCELADA",
+            data_compra=date(2026, 10, 7),
+            total_parcelas=3,
+            user=self.operador
+        )
+        self.assertEqual(len(parcelas_c1), 3)
+        self.assertEqual(parcelas_c1[0].fatura_cartao.mes_referencia, "2026-10")
+        self.assertEqual(parcelas_c1[1].fatura_cartao.mes_referencia, "2026-11")
+        self.assertEqual(parcelas_c1[2].fatura_cartao.mes_referencia, "2026-12")
+        # Todas compartilham mesmo grupo_pagamento_id
+        gid = parcelas_c1[0].grupo_pagamento_id
+        self.assertIsNotNone(gid)
+        self.assertEqual(parcelas_c1[1].grupo_pagamento_id, gid)
+        self.assertEqual(parcelas_c1[2].grupo_pagamento_id, gid)
+
+        # 2. Compra 2: Dia 04/10 à vista (R$ 50,00) -> deve permanecer em 2026-10
+        c_dia4 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("50.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA DIA 04",
+            data_compra=date(2026, 10, 4),
+            total_parcelas=1,
+            user=self.operador
+        )
+        self.assertEqual(c_dia4.fatura_cartao.mes_referencia, "2026-10")
+
+        # 3. Compra 3: Dia 12/10 à vista (R$ 75,00) -> pós-fechamento do dia 10, já entra em 2026-11
+        c_dia12 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("75.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA DIA 12",
+            data_compra=date(2026, 10, 12),
+            total_parcelas=1,
+            user=self.operador
+        )
+        self.assertEqual(c_dia12.fatura_cartao.mes_referencia, "2026-11")
+
+        # =========================================================================
+        # PASSO A: Altera fechamento padrão do cartão para DIA 5 a partir de 2026-10
+        # =========================================================================
+        payload_dia5 = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 5,
+            "dia_vencimento": 15,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-10"
+        }
+        resp_dia5 = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_dia5, format='json')
+        self.assertEqual(resp_dia5.status_code, status.HTTP_200_OK)
+        dados_recalc = resp_dia5.json()['recalculo']
+        self.assertGreaterEqual(dados_recalc['faturas_recalculadas'], 1)
+
+        # Faturas devem estar com fechamento no dia 5
+        fatura_out.refresh_from_db()
+        fatura_nov.refresh_from_db()
+        fatura_dez.refresh_from_db()
+        self.assertEqual(fatura_out.data_fechamento_real, date(2026, 10, 5))
+        self.assertEqual(fatura_nov.data_fechamento_real, date(2026, 11, 5))
+        self.assertEqual(fatura_dez.data_fechamento_real, date(2026, 12, 5))
+
+        # A compra do dia 07/10 (3x) agora deve estar em 11/2026, 12/2026 e 01/2027!
+        for p in parcelas_c1:
+            p.refresh_from_db()
+
+        self.assertEqual(parcelas_c1[0].fatura_cartao.mes_referencia, "2026-11")  # Parcela 1 foi pra Nov!
+        self.assertEqual(parcelas_c1[1].fatura_cartao.mes_referencia, "2026-12")  # Parcela 2 foi pra Dez!
+        self.assertEqual(parcelas_c1[2].fatura_cartao.mes_referencia, "2027-01")  # Parcela 3 foi pra Jan!
+
+        # Verifica se compras fora da faixa NÃO mudaram:
+        c_dia4.refresh_from_db()
+        self.assertEqual(c_dia4.fatura_cartao.mes_referencia, "2026-10")  # Permaneceu no dia 04 em 10/2026!
+
+        c_dia12.refresh_from_db()
+        self.assertEqual(c_dia12.fatura_cartao.mes_referencia, "2026-11")  # Permaneceu em 11/2026!
+
+        # Confere que na fatura 11/2026 existe apenas UMA parcela da compra 1 (não tem 1ª e 2ª juntas!)
+        itens_nov = fatura_nov.despesas_fatura.filter(grupo_pagamento_id=gid)
+        self.assertEqual(itens_nov.count(), 1)
+        self.assertEqual(itens_nov.first().numero_parcela, 1)
+
+        # =========================================================================
+        # PASSO B: Altera fechamento padrão do cartão de VOLTA para DIA 10
+        # =========================================================================
+        payload_dia10 = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 10,
+            "dia_vencimento": 20,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-10"
+        }
+        resp_dia10 = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_dia10, format='json')
+        self.assertEqual(resp_dia10.status_code, status.HTTP_200_OK)
+
+        for p in parcelas_c1:
+            p.refresh_from_db()
+
+        # Parcelas devem ter voltado ordenadamente para 10/2026, 11/2026 e 12/2026
+        self.assertEqual(parcelas_c1[0].fatura_cartao.mes_referencia, "2026-10")
+        self.assertEqual(parcelas_c1[1].fatura_cartao.mes_referencia, "2026-11")
+        self.assertEqual(parcelas_c1[2].fatura_cartao.mes_referencia, "2026-12")
+
+        c_dia4.refresh_from_db()
+        self.assertEqual(c_dia4.fatura_cartao.mes_referencia, "2026-10")
+
+        c_dia12.refresh_from_db()
+        self.assertEqual(c_dia12.fatura_cartao.mes_referencia, "2026-11")
+
+    def test_recalculo_bloqueio_faturas_fechadas_sem_confirmacao_e_sucesso_com_confirmacao(self):
+        """Valida que recálculo contendo faturas FECHADAS requer confirmação explícita."""
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            fechar_fatura_cartao,
+            lancar_despesa_cartao
+        )
+
+        fatura_out = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        c1 = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("120.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA FATURA FECHADA",
+            data_compra=date(2026, 10, 8),
+            user=self.operador
+        )
+        # Fecha a fatura de outubro
+        fechar_fatura_cartao(fatura_out, user=self.operador)
+        fatura_out.refresh_from_db()
+        self.assertEqual(fatura_out.status, 'FECHADA')
+
+        # 1. Tenta recalcular sem confirmar faturas fechadas -> Deve ser bloqueado com erro 400
+        payload_sem_confirmar = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 5,
+            "dia_vencimento": 15,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-10",
+            "confirmar_retroativo_fechadas": False
+        }
+        resp = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_sem_confirmar, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        err = resp.json()
+        detalhes = err.get('details', err)
+        self.assertTrue(detalhes.get('alerta_faturas_fechadas'))
+        self.assertGreaterEqual(len(detalhes.get('faturas_afetadas', [])), 1)
+
+        # 2. Tenta com confirmar_retroativo_fechadas = True -> Deve ter sucesso e ajustar valores
+        payload_com_confirmar = {
+            "nome": self.cartao.nome,
+            "dia_fechamento_padrao": 5,
+            "dia_vencimento": 15,
+            "limite": str(self.cartao.limite),
+            "conta_bancaria_id": self.conta.id,
+            "recalcular_faturas": True,
+            "competencia_inicial_recalculo": "2026-10",
+            "confirmar_retroativo_fechadas": True
+        }
+        resp2 = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_com_confirmar, format='json')
+        self.assertEqual(resp2.status_code, status.HTTP_200_OK)
+
 
 

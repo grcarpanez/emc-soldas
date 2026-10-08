@@ -990,24 +990,6 @@ window.FinanceiroView = {
     const dProx = new Date(dHoje.getFullYear(), dHoje.getMonth() + 1, 1);
     const mesProximo = dProx.toISOString().substring(0, 7);
 
-    let optsMesesEspecificos = '';
-    if (isEdicao) {
-      let faturasAbertas = [];
-      try {
-        const resFat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartao.id}/faturas/?status=ABERTA`);
-        faturasAbertas = resFat.results || (Array.isArray(resFat) ? resFat : []);
-        faturasAbertas.sort((a, b) => (a.mes_referencia || '').localeCompare(b.mes_referencia || ''));
-      } catch (err) {
-        console.warn('Erro ao carregar faturas abertas do cartão:', err);
-      }
-
-      if (faturasAbertas.length > 0) {
-        optsMesesEspecificos = faturasAbertas.map(f => `<option value="${f.mes_referencia}">Competência ${f.mes_referencia} (Fechamento Atual: ${window.EMCUtils.formatarDataPtBr(f.data_fechamento_real)})</option>`).join('');
-      } else {
-        optsMesesEspecificos = `<option value="${mesAtual}">Competência ${mesAtual}</option><option value="${mesProximo}">Competência ${mesProximo}</option>`;
-      }
-    }
-
     window.EMCUtils.openModal({
       title: isEdicao ? `EDITAR CARTÃO CORPORATIVO #${cartao.id}` : 'NOVO CARTÃO CORPORATIVO',
       size: 'md',
@@ -1049,10 +1031,10 @@ window.FinanceiroView = {
         ${isEdicao ? `
           <div style="background: var(--color-surface-container); border: 1px solid var(--color-outline-variant); border-left: 3px solid var(--color-rust-orange); padding: 12px; margin-top: 14px;">
             <label class="form-label" style="display: flex; align-items: center; gap: 6px; color: var(--color-rust-orange); font-weight: 700; margin-bottom: 4px;">
-              ⚡ REPERCUSSÃO NAS FATURAS ABERTAS EXISTENTES
+              ⚡ REPERCUSSÃO NAS FATURAS EXISTENTES
             </label>
             <div style="font-size: 11.5px; color: var(--color-on-surface-variant); margin-bottom: 8px; line-height: 1.4;">
-              Ao alterar os dias de fechamento ou vencimento, escolha a partir de qual competência as faturas em aberto devem ser recalculadas e seus lançamentos remanejados:
+              Ao alterar os dias de fechamento ou vencimento, escolha a partir de qual competência as faturas devem ser recalculadas e seus lançamentos remanejados:
             </div>
             <select id="cartao-escopo-recalculo" class="form-control" style="font-size: 12.5px;">
               <option value="ATUAL">A partir da competência atual (${mesAtual}) e futuras</option>
@@ -1060,10 +1042,11 @@ window.FinanceiroView = {
               <option value="ESPECIFICA">A partir de uma competência específica...</option>
             </select>
             <div id="wrapper-competencia-especifica" style="display: none; margin-top: 8px;">
-              <label class="form-label">Competência Inicial para Recálculo *</label>
-              <select id="cartao-mes-especifico" class="form-control mono-text">
-                ${optsMesesEspecificos}
-              </select>
+              <label class="form-label">Competência Inicial para Recálculo (Mês/Ano) *</label>
+              <input type="month" id="cartao-mes-especifico" class="form-control mono-text font-bold" value="${mesAtual}" style="max-width: 220px;">
+              <small style="color: var(--color-on-surface-variant); font-size: 11px; display: block; margin-top: 4px;">
+                Permite selecionar qualquer competência retroativa ou futura (formato AAAA-MM).
+              </small>
             </div>
           </div>
         ` : ''}
@@ -1083,6 +1066,7 @@ window.FinanceiroView = {
 
         let recalcular_faturas = false;
         let competencia_inicial_recalculo = null;
+        let confirmar_retroativo_fechadas = false;
 
         if (isEdicao) {
           const escopo = document.getElementById('cartao-escopo-recalculo')?.value || 'ATUAL';
@@ -1093,6 +1077,63 @@ window.FinanceiroView = {
             competencia_inicial_recalculo = mesProximo;
           } else if (escopo === 'ESPECIFICA') {
             competencia_inicial_recalculo = document.getElementById('cartao-mes-especifico')?.value || mesAtual;
+          }
+
+          // Verificação prévia de faturas fechadas ou pagas no escopo
+          try {
+            const resFat = await window.api.get(`${window.CONFIG.ENDPOINTS.FINANCEIRO.CARTOES_CREDITO}${cartao.id}/faturas/`);
+            const listaFat = resFat.results || (Array.isArray(resFat) ? resFat : []);
+            const faturasAfetadas = listaFat.filter(f => f.mes_referencia >= competencia_inicial_recalculo && (f.status === 'FECHADA' || f.status === 'PAGA'));
+
+            if (faturasAfetadas.length > 0) {
+              const htmlFaturas = faturasAfetadas.map(f => `• Competência ${f.mes_referencia} (${f.status}) - Fechamento: ${window.EMCUtils.formatarDataPtBr(f.data_fechamento_real)}`).join('<br>');
+              const confirmar = await new Promise((resolve) => {
+                window.EMCUtils.openModal({
+                  title: '⚠️ ALERTA: FATURAS FECHADAS OU PAGAS AFETADAS',
+                  size: 'md',
+                  confirmText: 'CONFIRMAR E RECALCULAR MESMO ASSIM',
+                  cancelText: 'CANCELAR ALTERAÇÃO',
+                  content: `
+                    <div style="background: var(--color-surface-container); border: 1px solid var(--color-error); border-left: 4px solid var(--color-error); padding: 12px; margin-bottom: 14px;">
+                      <div style="color: var(--color-error); font-weight: 700; font-size: 13px; margin-bottom: 6px;">
+                        ⚡ ATENÇÃO: A alteração atingirá faturas com ciclo já encerrado!
+                      </div>
+                      <div style="font-size: 12px; color: var(--color-on-surface); line-height: 1.5; margin-bottom: 10px;">
+                        Foram identificadas <strong>${faturasAfetadas.length}</strong> fatura(s) com status <strong>FECHADA</strong> ou <strong>PAGA</strong> a partir da competência <strong>${competencia_inicial_recalculo}</strong>:
+                      </div>
+                      <div class="mono-text" style="font-size: 11.5px; background: var(--color-surface); padding: 8px; border: 1px solid var(--color-outline-variant); margin-bottom: 12px;">
+                        ${htmlFaturas}
+                      </div>
+                      <div style="font-size: 11.5px; color: var(--color-on-surface-variant); line-height: 1.4;">
+                        <strong>Consequências desta ação:</strong>
+                        <ul style="margin: 4px 0 0 16px; padding: 0;">
+                          <li><strong>Faturas Fechadas:</strong> O valor consolidado no título de Contas a Pagar será recalculado com o novo total decorrente das compras que saíram ou entraram.</li>
+                          <li><strong>Faturas Pagas:</strong> A fatura já possui liquidação financeira registrada no banco/caixa. Mover compras de/para uma fatura já paga gerará divergência em relação ao valor já debitado do extrato bancário.</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div style="font-size: 12.5px; font-weight: 600; text-align: center; color: var(--color-on-surface);">
+                      Deseja prosseguir com o recálculo retroativo mesmo assim?
+                    </div>
+                  `,
+                  onConfirm: () => {
+                    resolve(true);
+                    return true;
+                  },
+                  onCancel: () => {
+                    resolve(false);
+                  }
+                });
+              });
+
+              if (!confirmar) {
+                window.EMCUtils.showToast('Operação cancelada pelo usuário.', 'info');
+                return false;
+              }
+              confirmar_retroativo_fechadas = true;
+            }
+          } catch (errCheck) {
+            console.warn('Erro ao verificar faturas fechadas:', errCheck);
           }
         }
 
@@ -1105,7 +1146,8 @@ window.FinanceiroView = {
           conta_bancaria_id: conta_bancaria_id ? Number(conta_bancaria_id) : null,
           permite_limite_emergencial,
           recalcular_faturas,
-          competencia_inicial_recalculo
+          competencia_inicial_recalculo,
+          confirmar_retroativo_fechadas
         };
 
         try {

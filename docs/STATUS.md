@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-07 (Preservação de Conta Vinculada do Cartão Corporativo e Recálculo em Lote de Faturas Abertas por Competência - PWA v4.62)  
+**Última Atualização:** 2026-10-08 (Recálculo Atômico em Cadeia de Parcelas, Seletor Livre de Competência e Governança de Faturas Fechadas de Cartão Corporativo - PWA v4.64)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -776,6 +776,20 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 212 testes passando com 100% de sucesso (novo teste `test_atualizacao_cartao_preservacao_e_remocao_conta_bancaria` adicionado).
   - **Versionamento PWA:** Cache `emc-soldas-v4.63` em `sw.js` e `?v=4.63` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-07_06_recuperacao_conta_vinculada_cartao.md`.
+- [x] **Recálculo Atômico em Cadeia de Parcelas, Seletor Livre de Mês/Ano e Governança de Faturas Fechadas/Pagas (PWA v4.64):**
+  - **Recálculo Atômico em Cadeia de Parcelas:**
+    - Correção fundamental no motor financeiro (`services_cartao.py`): ao alternar o dia de corte da fatura (ex: dia 10 para 5 e vice-versa), compras parceladas em N vezes deslocam todas as suas parcelas de forma encadeada e atômica (`M, M+1, M+2...`), eliminando o acúmulo incorreto de múltiplas parcelas na mesma fatura e evitando lacunas temporais.
+    - Preservação estrita das compras fora da faixa de transição (ex: compras no dia 04 ou no dia 12 não são tocadas pela alteração de corte entre 5 e 10).
+    - Agrupamento inteligente via `grupo_pagamento_id` (UUID garantido para novas compras e heurística de cura para compras legadas).
+  - **Governança de Faturas Fechadas e Pagas:**
+    - Trava de integridade contábil: se o recálculo atingir faturas já `FECHADA` ou `PAGA`, o backend bloqueia preventivamente exigindo a flag `confirmar_retroativo_fechadas=True`.
+    - Ao confirmar, o sistema atualiza as faturas passadas, remaneja os lançamentos e sincroniza automaticamente o valor e vencimento do título correspondente em Contas a Pagar (`LancamentoFinanceiro` mestre).
+  - **Interface com Seletor Livre e Modal de Alerta de Alto Impacto:**
+    - No modal de Cartão, substituição do dropdown restrito por seletor nativo `<input type="month">`, permitindo escolher livremente qualquer mês e ano passado ou futuro.
+    - Exibição de modal com visual *Industrial Integrity* detalhando as faturas fechadas/pagas impactadas e alertando sobre repercussões em extratos bancários já conferidos antes de confirmar.
+  - **Bateria de Testes Automatizados:** 2 novos testes completos adicionados (`test_recalculo_em_cadeia_parcelas_cartao_dia_10_para_dia_5_e_volta` e `test_recalculo_bloqueio_faturas_fechadas_sem_confirmacao_e_sucesso_com_confirmacao`). Todos os 39 testes do módulo financeiro aprovados com 100% de sucesso.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.64` em `sw.js` e query strings de assets atualizadas para `?v=4.64` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-08_01_recalculo_atomico_faturas_e_cadeia_parcelas_cartao.md`.
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

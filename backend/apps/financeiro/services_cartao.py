@@ -3,6 +3,7 @@ Serviços e regras de negócio para Cartões de Crédito Corporativos e Faturas 
 Em conformidade com docs/FSD.md e docs/PLANO.md (Fase 10).
 """
 import logging
+import uuid
 from decimal import Decimal
 from datetime import date, timedelta
 from django.utils import timezone
@@ -131,6 +132,45 @@ def obter_ou_criar_fatura_aberta(cartao, mes_referencia=None, user=None):
     return fatura
 
 
+def adicionar_meses_competencia(mes_referencia, delta_meses):
+    """
+    Adiciona delta_meses (positivo ou negativo) a uma competência YYYY-MM e retorna o novo YYYY-MM.
+    """
+    partes = mes_referencia.split('-')
+    ano = int(partes[0])
+    mes = int(partes[1]) + delta_meses
+    while mes > 12:
+        mes -= 12
+        ano += 1
+    while mes < 1:
+        mes += 12
+        ano -= 1
+    return f"{ano:04d}-{mes:02d}"
+
+
+def determinar_fatura_base_compra(cartao, data_compra, user=None):
+    """
+    Determina a FaturaCartao ABERTA correspondente à primeira parcela de uma compra realizada em data_compra.
+    Regra de Negócio:
+    1. Obtém ou cria a fatura do mês em que a compra ocorreu (YYYY-MM).
+    2. Se data_compra <= fatura_mes.data_fechamento_real:
+       A 1ª parcela pertence à fatura desse mês.
+    3. Se data_compra > fatura_mes.data_fechamento_real:
+       A 1ª parcela é transferida para o mês subsequente (+1 mês).
+    """
+    if isinstance(data_compra, str):
+        data_compra = date.fromisoformat(data_compra)
+
+    mes_ref = f"{data_compra.year:04d}-{data_compra.month:02d}"
+    fatura_mes = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref, user=user)
+
+    if data_compra > fatura_mes.data_fechamento_real:
+        mes_ref_prox = adicionar_meses_competencia(mes_ref, 1)
+        return obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_prox, user=user)
+
+    return fatura_mes
+
+
 def calcular_limite_disponivel_cartao(cartao):
     """
     Calcula o limite disponível atual do cartão:
@@ -194,6 +234,9 @@ def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_comp
 
     desc_base = sanitizar_texto_maiusculo(descricao or f"COMPRA CARTAO {cartao.nome} - {categoria.nome}")
 
+    if not grupo_pagamento_id:
+        grupo_pagamento_id = uuid.uuid4()
+
     # Determinação da primeira fatura
     if fatura_cartao_id and total_parcelas == 1:
         fatura_inicial = FaturaCartao.objects.filter(id=fatura_cartao_id, cartao=cartao, deleted_at__isnull=True).first()
@@ -202,38 +245,16 @@ def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_comp
         if fatura_inicial.status != 'ABERTA':
             raise ValidationError({'fatura_cartao_id': f"Não é possível lançar despesas em fatura com status '{fatura_inicial.get_status_display()}'."})
     else:
-        mes_ref = f"{data_compra.year:04d}-{data_compra.month:02d}"
-        fatura_inicial = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref, user=user)
-
-        # Se a compra for após o fechamento real da fatura desse mês, joga para o próximo mês
-        if data_compra > fatura_inicial.data_fechamento_real:
-            prox_mes = data_compra.month + 1
-            prox_ano = data_compra.year
-            if prox_mes > 12:
-                prox_mes = 1
-                prox_ano += 1
-            mes_ref_prox = f"{prox_ano:04d}-{prox_mes:02d}"
-            fatura_inicial = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_prox, user=user)
+        fatura_inicial = determinar_fatura_base_compra(cartao, data_compra, user=user)
 
     # Cálculo da divisão de parcelas
     parcela_base = (valor / total_parcelas).quantize(Decimal('0.01'))
     centavos_excedentes = valor - (parcela_base * total_parcelas)
 
-    partes = fatura_inicial.mes_referencia.split('-')
-    ano_base = int(partes[0])
-    mes_base = int(partes[1])
-
     lancamentos_criados = []
 
     for i in range(1, total_parcelas + 1):
-        # Mês da parcela i
-        mes_i = mes_base + (i - 1)
-        ano_i = ano_base
-        while mes_i > 12:
-            mes_i -= 12
-            ano_i += 1
-
-        mes_ref_i = f"{ano_i:04d}-{mes_i:02d}"
+        mes_ref_i = adicionar_meses_competencia(fatura_inicial.mes_referencia, i - 1)
         if i == 1:
             fatura_i = fatura_inicial
         else:
@@ -310,19 +331,108 @@ def remanejar_despesa_cartao(lancamento, nova_fatura_cartao_id=None, novo_mes_re
     return lancamento
 
 
+def agrupar_lancamentos_por_compra(lancamentos_qs):
+    """
+    Agrupa uma lista/queryset de LancamentoFinanceiro em compras atômicas.
+    1. Lançamentos com grupo_pagamento_id preenchido são agrupados pelo UUID.
+    2. Lançamentos legados com total_parcelas > 1 e grupo_pagamento_id nulo são agrupados por
+       (cartao_credito_id, data_competencia, total_parcelas, descricao_base) e recebem um UUID gerado.
+    3. Lançamentos unitários (total_parcelas == 1) sem grupo_pagamento_id formam grupos de 1 item.
+    """
+    grupos = {}
+    grupos_legados = {}
+
+    for lanc in lancamentos_qs:
+        if lanc.grupo_pagamento_id:
+            gid = str(lanc.grupo_pagamento_id)
+            if gid not in grupos:
+                grupos[gid] = []
+            grupos[gid].append(lanc)
+        elif (lanc.total_parcelas or 1) > 1:
+            desc_limpa = (lanc.descricao or '').split('(')[0].strip()
+            chave_legada = (
+                lanc.cartao_credito_id,
+                lanc.data_competencia,
+                lanc.total_parcelas,
+                desc_limpa
+            )
+            if chave_legada not in grupos_legados:
+                grupos_legados[chave_legada] = []
+            grupos_legados[chave_legada].append(lanc)
+        else:
+            grupos[f"single_{lanc.id}"] = [lanc]
+
+    for chave, itens in grupos_legados.items():
+        novo_gid = uuid.uuid4()
+        ids_para_atualizar = [item.id for item in itens]
+        LancamentoFinanceiro.objects.filter(id__in=ids_para_atualizar).update(
+            grupo_pagamento_id=novo_gid
+        )
+        for item in itens:
+            item.grupo_pagamento_id = novo_gid
+        grupos[str(novo_gid)] = itens
+
+    return list(grupos.values())
+
+
+def reposicionar_compra_cartao(cartao, itens_compra, user=None):
+    """
+    Reposiciona atomicamente toda a cadeia de parcelas de uma compra de cartão.
+    Garante que:
+    1. A 1ª parcela caia na fatura correta conforme a data da compra e o fechamento do cartão.
+    2. As parcelas subsequentes (2..N) caiam estritamente nos meses consecutivos (+1, +2, etc.).
+    3. O vencimento de cada parcela seja sincronizado com o data_fechamento_real da respectiva fatura.
+    Retorna o número de itens que tiveram sua fatura alterada.
+    """
+    if not itens_compra:
+        return 0
+
+    itens_ordenados = sorted(itens_compra, key=lambda x: (x.numero_parcela or 1))
+    primeiro_item = itens_ordenados[0]
+    data_compra = primeiro_item.data_competencia or (primeiro_item.created_at.date() if primeiro_item.created_at else timezone.localdate())
+
+    fatura_base = determinar_fatura_base_compra(cartao, data_compra, user=user)
+    mes_ref_base = fatura_base.mes_referencia
+
+    itens_movidos = 0
+
+    for item in itens_ordenados:
+        num_parcela = item.numero_parcela or 1
+        delta_mes = num_parcela - 1
+        mes_ref_target = adicionar_meses_competencia(mes_ref_base, delta_mes)
+
+        if delta_mes == 0:
+            fatura_target = fatura_base
+        else:
+            fatura_target = obter_ou_criar_fatura_aberta(cartao, mes_referencia=mes_ref_target, user=user)
+
+        mudou_fatura = (item.fatura_cartao_id != fatura_target.id)
+        mudou_venc = (item.data_vencimento != fatura_target.data_fechamento_real)
+
+        if mudou_fatura or mudou_venc:
+            item.fatura_cartao = fatura_target
+            item.data_vencimento = fatura_target.data_fechamento_real
+            item.updated_at = timezone.now()
+            item.updated_by_id = getattr(user, 'id', None)
+            item.save(update_fields=['fatura_cartao', 'data_vencimento', 'updated_at', 'updated_by_id'])
+            if mudou_fatura:
+                itens_movidos += 1
+
+    return itens_movidos
+
+
 @transaction.atomic
 def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
     """
     Ajusta a data de fechamento real de uma fatura específica de cartão.
-    Regras de Recálculo Dinâmico:
-    1. Apenas faturas com status ABERTA podem ter a data de fechamento alterada.
+    Regras de Recálculo Dinâmico em Cadeia:
+    1. Apenas faturas com status ABERTA podem ter a data de fechamento ajustada diretamente.
     2. Se nova_data_fechamento < data_antiga (antecipação do fechamento):
        - As compras já efetuadas após o novo corte (data_competencia > nova_data_fechamento)
-         são redistribuídas automaticamente para a fatura do mês subsequente.
-       - A fatura do mês subsequente deve estar em status ABERTA (se já estiver FECHADA ou PAGA, bloqueia).
+         são redistribuídas automaticamente para o mês subsequente COM TODAS AS SUAS PARCELAS EM CADEIA.
     3. Se nova_data_fechamento > data_antiga (adiamento do fechamento):
        - As compras da fatura do mês subsequente que ocorreram até a nova data de corte
-         (data_competencia <= nova_data_fechamento) são puxadas de volta para esta fatura.
+         (data_competencia <= nova_data_fechamento) são puxadas de volta COM TODAS AS SUAS PARCELAS EM CADEIA.
     4. Sincroniza a data_vencimento de todos os lançamentos abertos restantes da fatura.
     """
     if fatura.status != 'ABERTA':
@@ -334,75 +444,84 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
         nova_data_fechamento = date.fromisoformat(nova_data_fechamento)
 
     data_antiga = fatura.data_fechamento_real
+    fatura.data_fechamento_real = nova_data_fechamento
+    fatura.updated_by_id = getattr(user, 'id', None)
+    fatura.save(update_fields=['data_fechamento_real', 'updated_at', 'updated_by_id'])
 
-    partes = fatura.mes_referencia.split('-')
-    ano = int(partes[0])
-    mes = int(partes[1])
-    prox_mes = mes + 1
-    prox_ano = ano
-    if prox_mes > 12:
-        prox_mes = 1
-        prox_ano += 1
-    mes_ref_prox = f"{prox_ano:04d}-{prox_mes:02d}"
-
+    mes_ref_prox = adicionar_meses_competencia(fatura.mes_referencia, 1)
     itens_movidos_adiante = 0
     itens_puxados_de_volta = 0
 
     if nova_data_fechamento < data_antiga:
-        # Antecipação do corte: itens com data_competencia > nova_data_fechamento vão para a fatura seguinte
-        fatura_prox = obter_ou_criar_fatura_aberta(fatura.cartao, mes_referencia=mes_ref_prox, user=user)
-        if fatura_prox.status != 'ABERTA':
-            raise ValidationError({
-                'nova_data_fechamento': f"Não é possível antecipar o fechamento: existem compras posteriores ao novo corte que precisariam ser transferidas para a fatura {mes_ref_prox}, porém ela já se encontra {fatura_prox.get_status_display()}."
-            })
-
-        despesas_posteriores = fatura.despesas_fatura.filter(
+        # Antecipação do corte: compras com data_competencia > nova_data_fechamento na fatura atual
+        despesas_afetadas = fatura.despesas_fatura.filter(
             status_pagamento='A_VENCER',
             deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith="PAGAMENTO FATURA CARTAO"
         ).filter(
             Q(data_competencia__gt=nova_data_fechamento) |
             (Q(data_competencia__isnull=True) & Q(data_vencimento__gt=nova_data_fechamento))
         )
-        itens_movidos_adiante = despesas_posteriores.count()
-        despesas_posteriores.update(
-            fatura_cartao=fatura_prox,
-            data_vencimento=fatura_prox.data_fechamento_real,
-            updated_at=timezone.now(),
-            updated_by_id=getattr(user, 'id', None)
-        )
+
+        grupos = agrupar_lancamentos_por_compra(despesas_afetadas)
+        for itens_compra in grupos:
+            primeiro = itens_compra[0]
+            if primeiro.grupo_pagamento_id:
+                todas_parcelas = list(LancamentoFinanceiro.objects.filter(
+                    grupo_pagamento_id=primeiro.grupo_pagamento_id,
+                    status_pagamento='A_VENCER',
+                    deleted_at__isnull=True
+                ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
+            else:
+                todas_parcelas = itens_compra
+
+            movidos = reposicionar_compra_cartao(fatura.cartao, todas_parcelas, user=user)
+            itens_movidos_adiante += movidos
 
     elif nova_data_fechamento > data_antiga:
-        # Adiamento do corte: se a fatura seguinte tem compras com data_competencia <= nova_data_fechamento, puxa de volta
+        # Adiamento do corte: se a fatura seguinte tem compras com data_competencia <= nova_data_fechamento
         fatura_prox = FaturaCartao.objects.filter(
             cartao=fatura.cartao,
             mes_referencia=mes_ref_prox,
             deleted_at__isnull=True
         ).first()
 
-        if fatura_prox and fatura_prox.status == 'ABERTA':
+        if fatura_prox:
             despesas_a_puxar = fatura_prox.despesas_fatura.filter(
                 status_pagamento='A_VENCER',
                 deleted_at__isnull=True
+            ).exclude(
+                descricao__startswith="PAGAMENTO FATURA CARTAO"
             ).filter(
                 Q(numero_parcela=1) | Q(total_parcelas=1) | Q(numero_parcela__isnull=True)
             ).filter(
                 Q(data_competencia__lte=nova_data_fechamento) |
                 (Q(data_competencia__isnull=True) & Q(created_at__date__lte=nova_data_fechamento))
             )
-            itens_puxados_de_volta = despesas_a_puxar.count()
-            despesas_a_puxar.update(
-                fatura_cartao=fatura,
-                data_vencimento=nova_data_fechamento,
-                updated_at=timezone.now(),
-                updated_by_id=getattr(user, 'id', None)
-            )
 
-    fatura.data_fechamento_real = nova_data_fechamento
-    fatura.updated_by_id = getattr(user, 'id', None)
-    fatura.save(update_fields=['data_fechamento_real', 'updated_at', 'updated_by_id'])
+            grupos = agrupar_lancamentos_por_compra(despesas_a_puxar)
+            for itens_compra in grupos:
+                primeiro = itens_compra[0]
+                if primeiro.grupo_pagamento_id:
+                    todas_parcelas = list(LancamentoFinanceiro.objects.filter(
+                        grupo_pagamento_id=primeiro.grupo_pagamento_id,
+                        status_pagamento='A_VENCER',
+                        deleted_at__isnull=True
+                    ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
+                else:
+                    todas_parcelas = itens_compra
+
+                movidos = reposicionar_compra_cartao(fatura.cartao, todas_parcelas, user=user)
+                itens_puxados_de_volta += movidos
 
     # Sincroniza lançamentos que permaneceram nesta fatura
-    fatura.despesas_fatura.filter(status_pagamento='A_VENCER', deleted_at__isnull=True).update(
+    fatura.despesas_fatura.filter(
+        status_pagamento='A_VENCER',
+        deleted_at__isnull=True
+    ).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).update(
         data_vencimento=nova_data_fechamento,
         updated_at=timezone.now()
     )
@@ -420,52 +539,144 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
 
 
 @transaction.atomic
-def recalcular_faturas_cartao(cartao, competencia_inicial, user=None):
+def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_retroativo_fechadas=False):
     """
-    Recalcula as faturas abertas do cartão de crédito a partir da competência inicial informada (YYYY-MM).
-    Para cada fatura aberta (mes_referencia >= competencia_inicial):
-    1. Calcula a nova data de fechamento real baseada em cartao.dia_fechamento_padrao.
-    2. Se a data_fechamento_real for diferente da nova data calculada, executa ajustar_fechamento_fatura,
-       redistribuindo despesas entre as faturas abertas e sincronizando vencimentos.
-    Retorna o sumário de faturas recalculadas e despesas remanejadas.
+    Recalcula as faturas do cartão de crédito a partir da competência inicial informada (YYYY-MM).
+    Regras de Negócio e Governança Contábil:
+    1. Valida o formato da competência inicial (YYYY-MM).
+    2. Identifica todas as faturas cadastradas a partir dessa competência.
+    3. Se houver faturas com status FECHADA ou PAGA:
+       - Se confirmar_retroativo_fechadas for False: gera ValidationError alertando o usuário e listando as faturas.
+       - Se confirmar_retroativo_fechadas for True: autoriza o recálculo e ajusta os títulos consolidados em Contas a Pagar.
+    4. Atualiza a data_fechamento_real de cada fatura baseada no dia_fechamento_padrao do cartão.
+    5. Coleta todas as despesas abertas no intervalo e reposiciona atomicamente cada compra inteira
+       (com todas as suas parcelas em cadeia sequencial).
+    6. Atualiza os títulos consolidados de Contas a Pagar para faturas fechadas que sofreram alteração.
+    Retorna o sumário completo de faturas recalculadas, compras avaliadas e parcelas remanejadas.
     """
     if not competencia_inicial or not isinstance(competencia_inicial, str) or len(competencia_inicial) != 7:
         raise ValidationError({'competencia_inicial': 'Competência inicial inválida. Formato esperado: YYYY-MM.'})
 
-    faturas_abertas = FaturaCartao.objects.filter(
+    faturas_qs = FaturaCartao.objects.filter(
         cartao=cartao,
-        status='ABERTA',
         mes_referencia__gte=competencia_inicial,
         deleted_at__isnull=True
     ).order_by('mes_referencia')
 
-    total_faturas_recalculadas = 0
-    total_movidos_adiante = 0
-    total_puxados_de_volta = 0
+    faturas_fechadas_ou_pagas = [f for f in faturas_qs if f.status in ('FECHADA', 'PAGA')]
+    if faturas_fechadas_ou_pagas and not confirmar_retroativo_fechadas:
+        detalhes = [
+            {
+                'id': f.id,
+                'mes_referencia': f.mes_referencia,
+                'status': f.status,
+                'data_fechamento_real': str(f.data_fechamento_real),
+            }
+            for f in faturas_fechadas_ou_pagas
+        ]
+        raise ValidationError({
+            'alerta_faturas_fechadas': True,
+            'faturas_afetadas': detalhes,
+            'detail': (
+                f"Existem {len(detalhes)} fatura(s) com status FECHADA ou PAGA no período selecionado a partir de {competencia_inicial}. "
+                f"O recálculo retroativo pode alterar valores de títulos no Contas a Pagar e gerar divergência com extratos bancários já quitados. "
+                f"Confirmação explícita do operador é necessária."
+            )
+        })
 
-    for fatura in faturas_abertas:
+    # Atualiza data_fechamento_real de todas as faturas do período
+    total_faturas_recalculadas = 0
+    for fatura in faturas_qs:
         partes = fatura.mes_referencia.split('-')
         ano = int(partes[0])
         mes = int(partes[1])
         nova_data_fech = calcular_data_fechamento_padrao(cartao, ano, mes)
 
-        if nova_data_fech != fatura.data_fechamento_real:
-            res = ajustar_fechamento_fatura(fatura, nova_data_fech, user=user)
+        if fatura.data_fechamento_real != nova_data_fech:
+            fatura.data_fechamento_real = nova_data_fech
+            fatura.updated_at = timezone.now()
+            fatura.updated_by_id = getattr(user, 'id', None)
+            fatura.save(update_fields=['data_fechamento_real', 'updated_at', 'updated_by_id'])
             total_faturas_recalculadas += 1
-            total_movidos_adiante += res.get('itens_movidos_adiante', 0)
-            total_puxados_de_volta += res.get('itens_puxados_de_volta', 0)
+
+    # Coleta todas as despesas vinculadas a este cartão no período
+    despesas_qs = LancamentoFinanceiro.objects.filter(
+        origem='CARTAO',
+        cartao_credito=cartao,
+        status_pagamento='A_VENCER',
+        deleted_at__isnull=True
+    ).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).filter(
+        fatura_cartao__mes_referencia__gte=competencia_inicial
+    ).select_related('fatura_cartao')
+
+    # Agrupa por compra inteira
+    grupos_compras = agrupar_lancamentos_por_compra(despesas_qs)
+    total_compras = len(grupos_compras)
+    total_parcelas_remanejadas = 0
+
+    for itens_compra in grupos_compras:
+        primeiro = itens_compra[0]
+        if primeiro.grupo_pagamento_id:
+            todas_parcelas = list(LancamentoFinanceiro.objects.filter(
+                grupo_pagamento_id=primeiro.grupo_pagamento_id,
+                status_pagamento='A_VENCER',
+                deleted_at__isnull=True
+            ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
+        else:
+            todas_parcelas = itens_compra
+
+        movidos = reposicionar_compra_cartao(cartao, todas_parcelas, user=user)
+        total_parcelas_remanejadas += movidos
+
+    # Atualiza títulos de Contas a Pagar de faturas FECHADAS
+    for fatura in faturas_qs:
+        if fatura.status == 'FECHADA':
+            total_despesas = fatura.despesas_fatura.filter(
+                tipo_lancamento='SAIDA',
+                deleted_at__isnull=True
+            ).exclude(
+                descricao__startswith="PAGAMENTO FATURA CARTAO"
+            ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+
+            titulo_fatura = LancamentoFinanceiro.objects.filter(
+                fatura_cartao=fatura,
+                descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
+                deleted_at__isnull=True
+            ).first()
+
+            if titulo_fatura:
+                partes = fatura.mes_referencia.split('-')
+                data_vencimento = calcular_data_vencimento_fatura(fatura.cartao, int(partes[0]), int(partes[1]))
+                titulo_fatura.valor = total_despesas
+                titulo_fatura.data_vencimento = data_vencimento
+                titulo_fatura.save(update_fields=['valor', 'data_vencimento', 'updated_at'])
+
+        # Sincroniza vencimento dos lançamentos da fatura
+        fatura.despesas_fatura.filter(
+            status_pagamento='A_VENCER',
+            deleted_at__isnull=True
+        ).exclude(
+            descricao__startswith="PAGAMENTO FATURA CARTAO"
+        ).update(
+            data_vencimento=fatura.data_fechamento_real,
+            updated_at=timezone.now()
+        )
 
     logger.info(
         f"[RECALCULO FATURAS CARTAO] Cartão '{cartao.nome}' a partir de {competencia_inicial}: "
-        f"{total_faturas_recalculadas} fatura(s) recalculada(s). "
-        f"Itens adiante: {total_movidos_adiante}, Itens de volta: {total_puxados_de_volta}."
+        f"{total_faturas_recalculadas} fatura(s) com data ajustada, {total_compras} compra(s) avaliada(s), "
+        f"{total_parcelas_remanejadas} parcela(s) remanejada(s)."
     )
     return {
         'cartao_id': cartao.id,
         'competencia_inicial': competencia_inicial,
         'faturas_recalculadas': total_faturas_recalculadas,
-        'itens_movidos_adiante': total_movidos_adiante,
-        'itens_puxados_de_volta': total_puxados_de_volta
+        'compras_recalculadas': total_compras,
+        'itens_movidos_adiante': total_parcelas_remanejadas,
+        'itens_puxados_de_volta': 0,
+        'parcelas_remanejadas': total_parcelas_remanejadas
     }
 
 

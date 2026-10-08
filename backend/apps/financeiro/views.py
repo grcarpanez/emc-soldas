@@ -338,6 +338,7 @@ class CartaoCreditoViewSet(viewsets.ModelViewSet):
 
         recalcular = request.data.get('recalcular_faturas', False)
         competencia_inicial = request.data.get('competencia_inicial_recalculo')
+        confirmar_retroativo_fechadas = request.data.get('confirmar_retroativo_fechadas', False)
 
         stats_recalculo = None
         with transaction.atomic():
@@ -348,7 +349,8 @@ class CartaoCreditoViewSet(viewsets.ModelViewSet):
                 stats_recalculo = recalcular_faturas_cartao(
                     cartao=instance,
                     competencia_inicial=competencia_inicial,
-                    user=request.user
+                    user=request.user,
+                    confirmar_retroativo_fechadas=confirmar_retroativo_fechadas
                 )
 
         data = serializer.data
@@ -358,12 +360,18 @@ class CartaoCreditoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='recalcular-faturas')
     def recalcular_faturas(self, request, pk=None):
-        """Dispara recálculo em lote das faturas abertas do cartão a partir de uma competência."""
+        """Dispara recálculo em lote das faturas do cartão a partir de uma competência."""
         cartao = self.get_object()
         competencia_inicial = request.data.get('competencia_inicial')
+        confirmar_retroativo_fechadas = request.data.get('confirmar_retroativo_fechadas', False)
         if not competencia_inicial:
             raise ValidationError({'competencia_inicial': 'Campo obrigatório no formato YYYY-MM.'})
-        res = recalcular_faturas_cartao(cartao=cartao, competencia_inicial=competencia_inicial, user=request.user)
+        res = recalcular_faturas_cartao(
+            cartao=cartao,
+            competencia_inicial=competencia_inicial,
+            user=request.user,
+            confirmar_retroativo_fechadas=confirmar_retroativo_fechadas
+        )
         return Response({
             'status': 'success',
             'message': f"{res['faturas_recalculadas']} fatura(s) recalculada(s) com sucesso.",
