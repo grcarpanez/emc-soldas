@@ -290,9 +290,12 @@ class AdministracaoTests(TestCase):
         caminhos = [item['caminho_arquivo_fisico'] for item in lista_dados]
         self.assertTrue(any(nome_arquivo in c for c in caminhos))
 
-        # Limpeza
+        # Limpeza segura (resiliente ao lock de arquivo no Windows)
         if os.path.exists(caminho_arquivo):
-            os.remove(caminho_arquivo)
+            try:
+                os.remove(caminho_arquivo)
+            except OSError:
+                pass
 
     def test_rotina_expurgo_com_envio_backup_email_e_exclusao_fisica(self):
         """Valida que logs expirados são enviados por e-mail e excluídos fisicamente."""

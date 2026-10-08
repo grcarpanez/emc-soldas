@@ -316,7 +316,29 @@ window.CadastrosView = {
 
             if (equipObj && equipObj.cliente_atual && equipObj.cliente_atual.id !== clienteId) {
               const donoAntigo = equipObj.cliente_atual_nome || 'outro cliente';
-              const confirma = confirm(`Este equipamento pertence atualmente a '${donoAntigo}'. Deseja transferir a titularidade e vinculá-lo a '${cliente.nome_razao}'?`);
+              const equipDesc = equipObj.descricao || ((equipObj.tipo_equipamento || 'EQUIPAMENTO') + ' ' + (equipObj.placa || ''));
+              const contentHtml = `
+                <div style="padding: 4px 0;">
+                  <p style="font-size: 13.5px; line-height: 1.5; margin-bottom: 12px; color: var(--color-on-surface);">
+                    Este equipamento atualmente pertence à frota de <strong>${window.EMCUtils.escapeHtml(donoAntigo)}</strong>.
+                  </p>
+                  <div class="card p-12 mb-12" style="background-color: var(--color-surface-container-low); border: 1px solid var(--color-steel-gray); font-size: 13px;">
+                    <div><strong>Equipamento:</strong> ${window.EMCUtils.escapeHtml(equipDesc)}</div>
+                    ${equipObj.placa ? `<div><strong>Placa:</strong> <span class="mono-text">${window.EMCUtils.escapeHtml(equipObj.placa)}</span></div>` : ''}
+                  </div>
+                  <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+                    Deseja transferir a titularidade e vinculá-lo à frota de <strong>${window.EMCUtils.escapeHtml(cliente.nome_razao)}</strong>?
+                  </div>
+                </div>
+              `;
+              const confirma = await window.EMCUtils.confirmDialog({
+                title: 'TRANSFERÊNCIA DE TITULARIDADE',
+                contentHtml,
+                confirmText: 'CONFIRMAR TRANSFERÊNCIA',
+                cancelText: 'CANCELAR',
+                confirmVariant: 'primary',
+                size: 'sm'
+              });
               if (!confirma) return false;
 
               try {
@@ -631,7 +653,15 @@ window.CadastrosView = {
   },
 
   async desvincularEquipamento(vinculoId, clienteId) {
-    if (!confirm('Deseja realmente desvincular este equipamento do cliente?')) return;
+    const confirma = await window.EMCUtils.confirmDialog({
+      title: 'DESVINCULAR EQUIPAMENTO DA FROTA',
+      message: 'Deseja realmente desvincular este equipamento da frota do cliente? O cadastro do equipamento continuará ativo no sistema.',
+      confirmText: 'DESVINCULAR EQUIPAMENTO',
+      cancelText: 'CANCELAR',
+      confirmVariant: 'danger',
+      size: 'sm'
+    });
+    if (!confirma) return;
 
     try {
       await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.CLIENTE_EQUIPAMENTOS}${vinculoId}/`);

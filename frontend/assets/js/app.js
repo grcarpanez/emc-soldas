@@ -39,7 +39,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 4. Botão de Logout
   document.getElementById('btn-topbar-logout')?.addEventListener('click', async () => {
-    if (confirm('Deseja realmente encerrar sua sessão?')) {
+    const confirmado = await window.EMCUtils.confirmDialog({
+      title: 'ENCERRAR SESSÃO',
+      message: 'Deseja realmente encerrar sua sessão de trabalho no EMC Soldas?',
+      confirmText: 'ENCERRAR SESSÃO',
+      cancelText: 'CANCELAR',
+      confirmVariant: 'danger',
+      size: 'sm'
+    });
+    if (confirmado) {
       await window.auth.logout();
     }
   });

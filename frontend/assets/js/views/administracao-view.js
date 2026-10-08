@@ -329,8 +329,17 @@ window.AdministracaoView = {
         }
 
         const emailPadrao = user && user.includes('@') ? user : (window.auth.user?.email || 'admin@emcsoldas.com.br');
-        const email_destino = prompt('Digite o e-mail de destino para receber a mensagem de teste:', emailPadrao);
-        if (!email_destino) return;
+        const email_destino = await window.EMCUtils.promptDialog({
+          title: 'TESTE DE DISPARO SMTP',
+          message: 'Digite o e-mail de destino para receber a mensagem de teste de conectividade:',
+          defaultValue: emailPadrao,
+          placeholder: 'destinatario@exemplo.com.br',
+          inputType: 'email',
+          confirmText: 'DISPARAR TESTE',
+          cancelText: 'CANCELAR',
+          size: 'sm'
+        });
+        if (!email_destino || !email_destino.trim()) return;
 
         btn.disabled = true;
         btn.textContent = 'CONECTANDO E DISPARANDO...';
@@ -1440,7 +1449,25 @@ window.AdministracaoView = {
     });
 
     document.getElementById('btn-expurgar-logs')?.addEventListener('click', async () => {
-      if (!confirm('Deseja executar a rotina de expurgo TTL com envio prévio de backup por e-mail?')) return;
+      const contentHtml = `
+        <div style="padding: 4px 0;">
+          <p style="font-size: 13.5px; line-height: 1.5; margin-bottom: 12px; color: var(--color-on-surface);">
+            Deseja executar a rotina de expurgo TTL para os arquivos de log que ultrapassaram a janela de retenção configurada?
+          </p>
+          <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+            <strong>[SEGURANÇA]</strong> Será gerado e enviado um backup prévio consolidado por e-mail antes da exclusão física dos arquivos no servidor.
+          </div>
+        </div>
+      `;
+      const confirmado = await window.EMCUtils.confirmDialog({
+        title: 'EXPURGO DE LOGS DIÁRIOS (TTL)',
+        contentHtml,
+        confirmText: 'EXECUTAR EXPURGO',
+        cancelText: 'CANCELAR',
+        confirmVariant: 'danger',
+        size: 'sm'
+      });
+      if (!confirmado) return;
       try {
         const res = await window.api.post(window.CONFIG.ENDPOINTS.ADMINISTRACAO.EXPURGAR_LOGS, {});
         window.EMCUtils.showToast(res.message || 'Rotina de expurgo executada com sucesso!', 'success');
@@ -1919,7 +1946,25 @@ window.AdministracaoView = {
   },
 
   async confirmarExclusaoUom(id, sigla) {
-    if (!confirm(`Deseja realmente inativar a UOM "${sigla}" (#${id})? Ela não poderá ser excluída se estiver vinculada a insumos ou produtos.`)) return;
+    const contentHtml = `
+      <div style="padding: 4px 0;">
+        <p style="font-size: 13.5px; line-height: 1.5; margin-bottom: 12px; color: var(--color-on-surface);">
+          Deseja realmente inativar a UOM <strong>"${window.EMCUtils.escapeHtml(sigla)}"</strong> (#${id})?
+        </p>
+        <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+          <strong>[INTEGRIDADE]</strong> A unidade de medida não poderá ser inativada ou excluída se estiver vinculada a insumos ou produtos cadastrados.
+        </div>
+      </div>
+    `;
+    const confirmado = await window.EMCUtils.confirmDialog({
+      title: 'INATIVAR UNIDADE DE MEDIDA (UOM)',
+      contentHtml,
+      confirmText: 'INATIVAR UOM',
+      cancelText: 'CANCELAR',
+      confirmVariant: 'danger',
+      size: 'sm'
+    });
+    if (!confirmado) return;
 
     try {
       await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_UOM}${id}/`);
@@ -1996,7 +2041,25 @@ window.AdministracaoView = {
   },
 
   async confirmarExclusaoAtributo(id, nome) {
-    if (!confirm(`Deseja realmente inativar o atributo técnico "${nome}" (#${id})? Ele não poderá ser excluído se estiver vinculado a insumos.`)) return;
+    const contentHtml = `
+      <div style="padding: 4px 0;">
+        <p style="font-size: 13.5px; line-height: 1.5; margin-bottom: 12px; color: var(--color-on-surface);">
+          Deseja realmente inativar o atributo técnico <strong>"${window.EMCUtils.escapeHtml(nome)}"</strong> (#${id})?
+        </p>
+        <div class="alert-banner alert-warning" style="font-size: 12px; margin-bottom: 0;">
+          <strong>[INTEGRIDADE]</strong> O atributo técnico não poderá ser inativado ou excluído se estiver vinculado a insumos cadastrados.
+        </div>
+      </div>
+    `;
+    const confirmado = await window.EMCUtils.confirmDialog({
+      title: 'INATIVAR ATRIBUTO TÉCNICO',
+      contentHtml,
+      confirmText: 'INATIVAR ATRIBUTO',
+      cancelText: 'CANCELAR',
+      confirmVariant: 'danger',
+      size: 'sm'
+    });
+    if (!confirmado) return;
 
     try {
       await window.api.delete(`${window.CONFIG.ENDPOINTS.CADASTROS.DICIONARIO_ATRIBUTOS}${id}/`);

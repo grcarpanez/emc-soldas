@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-08 (Recálculo Atômico em Cadeia de Parcelas, Seletor Livre de Competência e Governança de Faturas Fechadas de Cartão Corporativo - PWA v4.64)  
+**Última Atualização:** 2026-10-08 (Erradicação de Diálogos Nativos do Navegador e Implementação Universal de Modais e Prompts Industrial Integrity - PWA v4.65)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -790,6 +790,21 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 2 novos testes completos adicionados (`test_recalculo_em_cadeia_parcelas_cartao_dia_10_para_dia_5_e_volta` e `test_recalculo_bloqueio_faturas_fechadas_sem_confirmacao_e_sucesso_com_confirmacao`). Todos os 39 testes do módulo financeiro aprovados com 100% de sucesso.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.64` em `sw.js` e query strings de assets atualizadas para `?v=4.64` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-08_01_recalculo_atomico_faturas_e_cadeia_parcelas_cartao.md`.
+
+- [x] **Substituição Universal de Diálogos Nativos por Modais Industrial Integrity (08/10/2026):**
+  - **Erradicação Completa de Diálogos Nativos:** Eliminação de 100% das chamadas a caixas brutas do navegador (`window.confirm()`, `window.prompt()`, `window.alert()`) em todo o frontend da SPA.
+  - **Criação de Utilitários Baseados em Promise (`utils.js`):**
+    - `window.EMCUtils.confirmDialog(options)`: Diálogo assíncrono retornando `Promise<boolean>`, com suporte a títulos técnicos, banners de alerta contextualizados, botões `primary` e `danger`, e tecla ESC.
+    - `window.EMCUtils.promptDialog(options)`: Diálogo assíncrono de entrada de dados retornando `Promise<string|null>`, com autofocus, seleção de texto, envio automático via Enter e botão customizável.
+  - **Modais Estruturados e Especializados:**
+    - **Fechamento de Fatura de Cartão (`financeiro-view.js`):** Modal com card de resumo (Cartão, Competência e Valor Consolidado em destaque BRL), alerta de integração contábil com Contas a Pagar e botões `CANCELAR` / `CONFIRMAR FECHAMENTO`.
+    - **Logout da Topbar (`app.js`):** Modal compacto com confirmação segura e botão em destaque de perigo `ENCERRAR SESSÃO`.
+    - **Transferência e Desvinculação de Frota (`cadastros-view.js`):** Modais informativos com resumo do veículo, proprietário anterior e novo cliente.
+    - **Administração (`administracao-view.js`):** Modal de teste SMTP com input estilizado, modal de expurgo de logs com alerta de backup por e-mail e modais de inativação de UOMs e Atributos Técnicos com regras de integridade.
+  - **Bateria de Testes:** Testes automatizados Django aprovados com 100% de sucesso.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.65` em `sw.js` e query strings de assets atualizadas para `?v=4.65` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-08_02_substituicao_dialogos_nativos_modais_industrial_integrity.md`.
+
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
 Abaixo estão registradas as entidades que já possuem modelos ORM, validações e rotas de API REST prontas e blindadas no backend, mas que ainda não contam com tela/painel de gestão visual dedicado no frontend (aparecendo atualmente apenas como comboboxes ou subitens):

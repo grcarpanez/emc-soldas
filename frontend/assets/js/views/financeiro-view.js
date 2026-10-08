@@ -1243,8 +1243,47 @@ window.FinanceiroView = {
   },
 
   async fecharFaturaConfirmacao(fatura) {
-    const confirmar = confirm(`Confirma o fechamento da fatura ${fatura.mes_referencia}?\n\nIsso consolidará o valor total de R$ ${fatura.total_despesas || 0} e gerará o título correspondente no Contas a Pagar.`);
-    if (!confirmar) return;
+    const valorFormatado = window.EMCUtils.formatarMoeda(fatura.total_despesas || 0);
+    const mesRef = fatura.mes_referencia || 'COMPETÊNCIA ATUAL';
+    const cartaoNome = this.cartaoAtivo?.nome_identificador || 'CARTÃO CORPORATIVO';
+
+    const contentHtml = `
+      <div style="padding: 4px 0;">
+        <p style="font-size: 13.5px; line-height: 1.5; margin-bottom: 14px; color: var(--color-on-surface);">
+          Confirma o fechamento definitivo da fatura com os dados consolidados abaixo?
+        </p>
+
+        <div class="card p-12 mb-16" style="background-color: var(--color-surface-container-low); border: 1px solid var(--color-steel-gray);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-family: var(--font-mono); color: var(--color-on-surface-variant); text-transform: uppercase;">CARTÃO</span>
+            <strong style="font-size: 13px;">${window.EMCUtils.escapeHtml(cartaoNome)}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-family: var(--font-mono); color: var(--color-on-surface-variant); text-transform: uppercase;">COMPETÊNCIA</span>
+            <span class="status-chip info" style="font-size: 11px; font-weight: 700;">${window.EMCUtils.escapeHtml(mesRef)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--color-steel-gray); padding-top: 8px; margin-top: 6px;">
+            <span style="font-size: 12px; font-weight: 700; color: var(--color-rust-orange);">TOTAL DA FATURA</span>
+            <span style="font-family: var(--font-mono); font-size: 16px; font-weight: 800; color: var(--color-on-surface);">${valorFormatado}</span>
+          </div>
+        </div>
+
+        <div class="alert-banner alert-warning" style="font-size: 12px; line-height: 1.5; margin-bottom: 0;">
+          <strong>[INTEGRAÇÃO CONTÁBIL]</strong> Ao confirmar o fechamento, as despesas da competência serão consolidadas e será gerado automaticamente um título a pagar no <strong>Contas a Pagar</strong>.
+        </div>
+      </div>
+    `;
+
+    const confirmado = await window.EMCUtils.confirmDialog({
+      title: `FECHAMENTO DE FATURA - ${mesRef}`,
+      contentHtml,
+      confirmText: 'CONFIRMAR FECHAMENTO',
+      cancelText: 'CANCELAR',
+      confirmVariant: 'primary',
+      size: 'sm'
+    });
+
+    if (!confirmado) return;
 
     try {
       const endpoint = window.CONFIG.ENDPOINTS.FINANCEIRO.FECHAR_FATURA.replace('{id}', fatura.id);

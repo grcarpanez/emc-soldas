@@ -496,6 +496,7 @@ function openModal(options = {}) {
     content = '',
     confirmText = 'CONFIRMAR',
     cancelText = 'CANCELAR',
+    confirmVariant = 'primary',
     onConfirm = null,
     onCancel = null,
     size = 'md',
@@ -511,6 +512,8 @@ function openModal(options = {}) {
   overlay.id = overlayId;
   overlay.style.zIndex = zIndex;
 
+  const btnConfirmClass = confirmVariant === 'danger' ? 'btn-danger' : 'btn-primary';
+
   overlay.innerHTML = `
     <div class="modal-card modal-size-${size}">
       <div class="modal-header">
@@ -523,7 +526,7 @@ function openModal(options = {}) {
       ${!hideFooter ? `
         <div class="modal-footer">
           ${showCancel !== false ? `<button class="btn btn-secondary modal-cancel-btn">${escapeHtml(cancelText)}</button>` : ''}
-          <button class="btn btn-primary modal-confirm-btn">${escapeHtml(confirmText)}</button>
+          <button class="btn ${btnConfirmClass} modal-confirm-btn">${escapeHtml(confirmText)}</button>
         </div>
       ` : ''}
     </div>
@@ -569,6 +572,133 @@ function openModal(options = {}) {
       }
     });
   }
+}
+
+/**
+ * Abre uma caixa de diálogo de confirmação assíncrona baseada em Promise.
+ * Substitui o confirm() nativo do navegador pelo padrão Industrial Integrity.
+ * @param {Object} options
+ * @param {string} [options.title='CONFIRMAÇÃO']
+ * @param {string} [options.message='']
+ * @param {string} [options.contentHtml='']
+ * @param {string} [options.confirmText='CONFIRMAR']
+ * @param {string} [options.cancelText='CANCELAR']
+ * @param {'primary'|'danger'} [options.confirmVariant='primary']
+ * @param {'sm'|'md'|'lg'} [options.size='sm']
+ * @returns {Promise<boolean>}
+ */
+function confirmDialog(options = {}) {
+  return new Promise((resolve) => {
+    const {
+      title = 'CONFIRMAÇÃO',
+      message = '',
+      contentHtml = '',
+      confirmText = 'CONFIRMAR',
+      cancelText = 'CANCELAR',
+      confirmVariant = 'primary',
+      size = 'sm'
+    } = options;
+
+    const content = contentHtml || `
+      <div style="padding: 6px 0;">
+        <p style="font-size: 14px; line-height: 1.5; color: var(--color-on-surface); margin: 0;">
+          ${escapeHtml(message)}
+        </p>
+      </div>
+    `;
+
+    openModal({
+      title,
+      size,
+      confirmText,
+      cancelText,
+      confirmVariant,
+      content,
+      onConfirm: () => {
+        resolve(true);
+        return true;
+      },
+      onCancel: () => {
+        resolve(false);
+      }
+    });
+  });
+}
+
+/**
+ * Abre uma caixa de diálogo de entrada de texto assíncrona baseada em Promise.
+ * Substitui o prompt() nativo do navegador pelo padrão Industrial Integrity.
+ * @param {Object} options
+ * @param {string} [options.title='ENTRADA DE DADOS']
+ * @param {string} [options.message='']
+ * @param {string} [options.defaultValue='']
+ * @param {string} [options.placeholder='']
+ * @param {string} [options.inputType='text']
+ * @param {string} [options.confirmText='CONFIRMAR']
+ * @param {string} [options.cancelText='CANCELAR']
+ * @param {'sm'|'md'} [options.size='sm']
+ * @returns {Promise<string|null>}
+ */
+function promptDialog(options = {}) {
+  return new Promise((resolve) => {
+    const {
+      title = 'ENTRADA DE DADOS',
+      message = '',
+      defaultValue = '',
+      placeholder = '',
+      inputType = 'text',
+      confirmText = 'CONFIRMAR',
+      cancelText = 'CANCELAR',
+      size = 'sm'
+    } = options;
+
+    const inputId = 'prompt-input-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+    const content = `
+      <div style="padding: 4px 0;">
+        ${message ? `<label class="form-label" for="${inputId}" style="margin-bottom: 8px;">${escapeHtml(message)}</label>` : ''}
+        <input type="${escapeHtml(inputType)}" id="${inputId}" class="form-control" value="${escapeHtml(defaultValue)}" placeholder="${escapeHtml(placeholder)}" />
+      </div>
+    `;
+
+    let resolvido = false;
+
+    openModal({
+      title,
+      size,
+      confirmText,
+      cancelText,
+      content,
+      onConfirm: () => {
+        const inputElem = document.getElementById(inputId);
+        const val = inputElem ? inputElem.value : '';
+        resolvido = true;
+        resolve(val);
+        return true;
+      },
+      onCancel: () => {
+        if (!resolvido) {
+          resolvido = true;
+          resolve(null);
+        }
+      }
+    });
+
+    setTimeout(() => {
+      const inputElem = document.getElementById(inputId);
+      if (inputElem) {
+        inputElem.focus();
+        if (typeof inputElem.select === 'function') inputElem.select();
+        inputElem.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const modalOverlay = inputElem.closest('.modal-overlay');
+            const confirmBtn = modalOverlay?.querySelector('.modal-confirm-btn');
+            confirmBtn?.click();
+          }
+        });
+      }
+    }, 50);
+  });
 }
 
 /**
@@ -1503,6 +1633,8 @@ window.EMCUtils = {
   showToast,
   openModal,
   closeModal,
+  confirmDialog,
+  promptDialog,
   initSearchableSelect,
   initMultiSelectCombobox,
   aplicarMascarasEmContainer,
