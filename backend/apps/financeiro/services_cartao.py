@@ -175,12 +175,16 @@ def calcular_limite_disponivel_cartao(cartao):
     """
     Calcula o limite disponível atual do cartão:
     Limite Cadastrado - Total de Despesas em Faturas Abertas e Fechadas (Não Pagas).
+    Não contabiliza os títulos consolidados de fatura para evitar dupla contagem.
     """
     total_comprometido = LancamentoFinanceiro.objects.filter(
         cartao_credito=cartao,
         tipo_lancamento='SAIDA',
         status_pagamento='A_VENCER',
+        is_fatura_cartao_consolidada=False,
         deleted_at__isnull=True
+    ).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     limite_disponivel = cartao.limite - total_comprometido
@@ -192,6 +196,93 @@ def calcular_limite_disponivel_cartao(cartao):
         'limite_disponivel': float(limite_disponivel),
         'permite_limite_emergencial': cartao.permite_limite_emergencial
     }
+
+
+def sincronizar_titulo_fatura_cartao(fatura, user=None):
+    """
+    Sincroniza atomicamente o título consolidado da Fatura de Cartão no Contas a Pagar.
+    Garante que:
+    1. Apenas compras individuais (is_fatura_cartao_consolidada=False) componham o total da fatura.
+    2. Exista exatamente 1 lançamento financeiro consolidado no Contas a Pagar com is_fatura_cartao_consolidada=True.
+    3. A data de vencimento e valor estejam estritamente alinhados com o fechamento e competência da fatura.
+    4. Se a fatura estiver PAGA, o título consolidado esteja PAGO; caso contrário, A_VENCER (ou VENCIDO se data_vencimento < hoje).
+    """
+    total_despesas = fatura.despesas_fatura.filter(
+        tipo_lancamento='SAIDA',
+        is_fatura_cartao_consolidada=False,
+        deleted_at__isnull=True
+    ).exclude(
+        descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
+
+    partes = fatura.mes_referencia.split('-')
+    ano = int(partes[0])
+    mes = int(partes[1])
+    data_vencimento = calcular_data_vencimento_fatura(fatura.cartao, ano, mes)
+
+    desc = f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome} - {fatura.mes_referencia}"
+
+    # Localiza título consolidado prévio (ou legado com prefixo PAGAMENTO FATURA CARTAO)
+    titulo_fatura = LancamentoFinanceiro.objects.filter(
+        fatura_cartao=fatura,
+        is_fatura_cartao_consolidada=True,
+        deleted_at__isnull=True
+    ).first()
+
+    if not titulo_fatura:
+        titulo_fatura = LancamentoFinanceiro.objects.filter(
+            fatura_cartao=fatura,
+            descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
+            deleted_at__isnull=True
+        ).first()
+
+    if total_despesas > Decimal('0.00'):
+        categoria_cartao = obter_ou_criar_categoria_despesa_cartao()
+        status_pagto = 'PAGO' if fatura.status == 'PAGA' else 'A_VENCER'
+
+        if not titulo_fatura:
+            titulo_fatura = LancamentoFinanceiro.objects.create(
+                origem='CARTAO',
+                cartao_credito=fatura.cartao,
+                fatura_cartao=fatura,
+                conta=fatura.cartao.conta_bancaria,
+                categoria=categoria_cartao,
+                tipo_lancamento='SAIDA',
+                descricao=desc,
+                valor=total_despesas,
+                data_competencia=fatura.data_fechamento_real,
+                data_vencimento=data_vencimento,
+                status_pagamento=status_pagto,
+                is_fatura_cartao_consolidada=True,
+                created_by_id=getattr(user, 'id', None)
+            )
+            logger.info(f"[TITULO CONSOLIDADO CRIADO] Fatura #{fatura.id} ({fatura.mes_referencia}) - R$ {total_despesas}.")
+        else:
+            campos_update = ['valor', 'data_vencimento', 'data_competencia', 'is_fatura_cartao_consolidada', 'updated_at']
+            titulo_fatura.valor = total_despesas
+            titulo_fatura.data_vencimento = data_vencimento
+            titulo_fatura.data_competencia = fatura.data_fechamento_real
+            titulo_fatura.is_fatura_cartao_consolidada = True
+            if fatura.cartao.conta_bancaria and not titulo_fatura.conta:
+                titulo_fatura.conta = fatura.cartao.conta_bancaria
+                campos_update.append('conta')
+            if fatura.status == 'PAGA' and titulo_fatura.status_pagamento != 'PAGO':
+                titulo_fatura.status_pagamento = 'PAGO'
+                campos_update.append('status_pagamento')
+            elif fatura.status in ('ABERTA', 'FECHADA') and titulo_fatura.status_pagamento == 'PAGO':
+                titulo_fatura.status_pagamento = 'A_VENCER'
+                campos_update.append('status_pagamento')
+            titulo_fatura.save(update_fields=campos_update)
+            logger.info(f"[TITULO CONSOLIDADO ATUALIZADO] Fatura #{fatura.id} ({fatura.mes_referencia}) - R$ {total_despesas}.")
+    else:
+        # Se total é zero e existe título não pago, atualiza para zero
+        if titulo_fatura and titulo_fatura.status_pagamento != 'PAGO':
+            titulo_fatura.valor = Decimal('0.00')
+            titulo_fatura.data_vencimento = data_vencimento
+            titulo_fatura.is_fatura_cartao_consolidada = True
+            titulo_fatura.save(update_fields=['valor', 'data_vencimento', 'is_fatura_cartao_consolidada', 'updated_at'])
+
+    return titulo_fatura
 
 
 @transaction.atomic
@@ -286,10 +377,12 @@ def lancar_despesa_cartao(cartao, valor, categoria_id, descricao=None, data_comp
             cliente_fornecedor_id=cliente_fornecedor_id,
             comprovante=comprovante or None,
             nome_arquivo_comprovante=nome_arquivo_comprovante or None,
+            is_fatura_cartao_consolidada=False,
             created_by_id=getattr(user, 'id', None)
         )
         lancamentos_criados.append(lanc)
         logger.info(f"[DESPESA CARTAO REGISTRADA] #{lanc.id} R$ {valor_parcela} na fatura {fatura_i.mes_referencia} ({i}/{total_parcelas}) do cartão '{cartao.nome}'.")
+        sincronizar_titulo_fatura_cartao(fatura_i, user=user)
 
     if total_parcelas == 1:
         primeiro = lancamentos_criados[0]
@@ -326,6 +419,11 @@ def remanejar_despesa_cartao(lancamento, nova_fatura_cartao_id=None, novo_mes_re
     lancamento.data_vencimento = nova_fatura.data_fechamento_real
     lancamento.updated_by_id = getattr(user, 'id', None)
     lancamento.save(update_fields=['fatura_cartao', 'data_vencimento', 'updated_at', 'updated_by_id'])
+
+    # Sincroniza os títulos consolidados das duas faturas envolvidas
+    if fatura_antiga:
+        sincronizar_titulo_fatura_cartao(fatura_antiga, user=user)
+    sincronizar_titulo_fatura_cartao(nova_fatura, user=user)
 
     logger.info(f"[DESPESA CARTAO REMANEJADA] Lançamento #{lancamento.id} movido de '{getattr(fatura_antiga, 'mes_referencia', 'N/A')}' para '{nova_fatura.mes_referencia}'.")
     return lancamento
@@ -425,19 +523,23 @@ def reposicionar_compra_cartao(cartao, itens_compra, user=None):
 def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
     """
     Ajusta a data de fechamento real de uma fatura específica de cartão.
-    Regras de Recálculo Dinâmico em Cadeia:
-    1. Apenas faturas com status ABERTA podem ter a data de fechamento ajustada diretamente.
-    2. Se nova_data_fechamento < data_antiga (antecipação do fechamento):
+    Regras de Recálculo Dinâmico em Cadeia e Governança de Faturas:
+    1. Faturas com status PAGA não podem ter a data de fechamento alterada.
+    2. Se a fatura estiver FECHADA e a nova data de fechamento for ajustada, a fatura é reaberta
+       para permitir que compras sejam redistribuídas ou reavaliadas dinamicamente.
+    3. Se nova_data_fechamento < data_antiga (antecipação do fechamento):
        - As compras já efetuadas após o novo corte (data_competencia > nova_data_fechamento)
          são redistribuídas automaticamente para o mês subsequente COM TODAS AS SUAS PARCELAS EM CADEIA.
-    3. Se nova_data_fechamento > data_antiga (adiamento do fechamento):
+    4. Se nova_data_fechamento > data_antiga (adiamento do fechamento):
        - As compras da fatura do mês subsequente que ocorreram até a nova data de corte
          (data_competencia <= nova_data_fechamento) são puxadas de volta COM TODAS AS SUAS PARCELAS EM CADEIA.
-    4. Sincroniza a data_vencimento de todos os lançamentos abertos restantes da fatura.
+    5. O título consolidado da fatura (is_fatura_cartao_consolidada=True) NUNCA é movido como compra.
+    6. Sincroniza compulsoriamente os títulos consolidados em Contas a Pagar da fatura atual e das adjacentes
+       (fatura anterior e fatura posterior).
     """
-    if fatura.status != 'ABERTA':
+    if fatura.status == 'PAGA':
         raise ValidationError({
-            'status': f"Apenas faturas em status ABERTA podem ter a data de fechamento ajustada. Status atual: {fatura.get_status_display()}."
+            'status': "Faturas já liquidadas/pagas não podem ter a data de fechamento ajustada."
         })
 
     if isinstance(nova_data_fechamento, str):
@@ -445,17 +547,26 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
 
     data_antiga = fatura.data_fechamento_real
     fatura.data_fechamento_real = nova_data_fechamento
+
+    # Se a fatura estava FECHADA, reabre para acomodar as possíveis reclassificações de compras
+    campos_salvar = ['data_fechamento_real', 'updated_at', 'updated_by_id']
+    if fatura.status == 'FECHADA':
+        fatura.status = 'ABERTA'
+        campos_salvar.append('status')
+
     fatura.updated_by_id = getattr(user, 'id', None)
-    fatura.save(update_fields=['data_fechamento_real', 'updated_at', 'updated_by_id'])
+    fatura.save(update_fields=campos_salvar)
 
     mes_ref_prox = adicionar_meses_competencia(fatura.mes_referencia, 1)
+    mes_ref_ant = adicionar_meses_competencia(fatura.mes_referencia, -1)
     itens_movidos_adiante = 0
     itens_puxados_de_volta = 0
 
     if nova_data_fechamento < data_antiga:
-        # Antecipação do corte: compras com data_competencia > nova_data_fechamento na fatura atual
+        # Antecipação do corte: compras reais com data_competencia > nova_data_fechamento na fatura atual
         despesas_afetadas = fatura.despesas_fatura.filter(
             status_pagamento='A_VENCER',
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -471,6 +582,7 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
                 todas_parcelas = list(LancamentoFinanceiro.objects.filter(
                     grupo_pagamento_id=primeiro.grupo_pagamento_id,
                     status_pagamento='A_VENCER',
+                    is_fatura_cartao_consolidada=False,
                     deleted_at__isnull=True
                 ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
             else:
@@ -490,6 +602,7 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
         if fatura_prox:
             despesas_a_puxar = fatura_prox.despesas_fatura.filter(
                 status_pagamento='A_VENCER',
+                is_fatura_cartao_consolidada=False,
                 deleted_at__isnull=True
             ).exclude(
                 descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -507,6 +620,7 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
                     todas_parcelas = list(LancamentoFinanceiro.objects.filter(
                         grupo_pagamento_id=primeiro.grupo_pagamento_id,
                         status_pagamento='A_VENCER',
+                        is_fatura_cartao_consolidada=False,
                         deleted_at__isnull=True
                     ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
                 else:
@@ -515,9 +629,10 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
                 movidos = reposicionar_compra_cartao(fatura.cartao, todas_parcelas, user=user)
                 itens_puxados_de_volta += movidos
 
-    # Sincroniza lançamentos que permaneceram nesta fatura
+    # Sincroniza vencimento dos lançamentos individuais que permaneceram nesta fatura
     fatura.despesas_fatura.filter(
         status_pagamento='A_VENCER',
+        is_fatura_cartao_consolidada=False,
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -526,10 +641,27 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
         updated_at=timezone.now()
     )
 
+    # Sincronização em cadeia dos títulos consolidados: fatura atual e adjacentes (anterior e posterior)
+    sincronizar_titulo_fatura_cartao(fatura, user=user)
+
+    fatura_prox_obj = FaturaCartao.objects.filter(cartao=fatura.cartao, mes_referencia=mes_ref_prox, deleted_at__isnull=True).first()
+    if fatura_prox_obj:
+        sincronizar_titulo_fatura_cartao(fatura_prox_obj, user=user)
+
+    fatura_ant_obj = FaturaCartao.objects.filter(cartao=fatura.cartao, mes_referencia=mes_ref_ant, deleted_at__isnull=True).first()
+    if fatura_ant_obj:
+        sincronizar_titulo_fatura_cartao(fatura_ant_obj, user=user)
+
     logger.info(
         f"[FECHAMENTO FATURA AJUSTADO] Fatura #{fatura.id} ({fatura.mes_referencia}) fechamento: {nova_data_fechamento}. "
         f"Itens movidos adiante: {itens_movidos_adiante}, Itens puxados de volta: {itens_puxados_de_volta}."
     )
+    return {
+        'fatura': fatura,
+        'nova_data_fechamento': nova_data_fechamento,
+        'itens_movidos_adiante': itens_movidos_adiante,
+        'itens_puxados_de_volta': itens_puxados_de_volta
+    }
     return {
         'fatura': fatura,
         'nova_data_fechamento': nova_data_fechamento,
@@ -604,6 +736,7 @@ def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_
         origem='CARTAO',
         cartao_credito=cartao,
         status_pagamento='A_VENCER',
+        is_fatura_cartao_consolidada=False,
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -622,6 +755,7 @@ def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_
             todas_parcelas = list(LancamentoFinanceiro.objects.filter(
                 grupo_pagamento_id=primeiro.grupo_pagamento_id,
                 status_pagamento='A_VENCER',
+                is_fatura_cartao_consolidada=False,
                 deleted_at__isnull=True
             ).exclude(descricao__startswith="PAGAMENTO FATURA CARTAO"))
         else:
@@ -630,32 +764,12 @@ def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_
         movidos = reposicionar_compra_cartao(cartao, todas_parcelas, user=user)
         total_parcelas_remanejadas += movidos
 
-    # Atualiza títulos de Contas a Pagar de faturas FECHADAS
+    # Sincroniza títulos de Contas a Pagar de todas as faturas do período
     for fatura in faturas_qs:
-        if fatura.status == 'FECHADA':
-            total_despesas = fatura.despesas_fatura.filter(
-                tipo_lancamento='SAIDA',
-                deleted_at__isnull=True
-            ).exclude(
-                descricao__startswith="PAGAMENTO FATURA CARTAO"
-            ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
-
-            titulo_fatura = LancamentoFinanceiro.objects.filter(
-                fatura_cartao=fatura,
-                descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
-                deleted_at__isnull=True
-            ).first()
-
-            if titulo_fatura:
-                partes = fatura.mes_referencia.split('-')
-                data_vencimento = calcular_data_vencimento_fatura(fatura.cartao, int(partes[0]), int(partes[1]))
-                titulo_fatura.valor = total_despesas
-                titulo_fatura.data_vencimento = data_vencimento
-                titulo_fatura.save(update_fields=['valor', 'data_vencimento', 'updated_at'])
-
         # Sincroniza vencimento dos lançamentos da fatura
         fatura.despesas_fatura.filter(
             status_pagamento='A_VENCER',
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -663,6 +777,7 @@ def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_
             data_vencimento=fatura.data_fechamento_real,
             updated_at=timezone.now()
         )
+        sincronizar_titulo_fatura_cartao(fatura, user=user)
 
     logger.info(
         f"[RECALCULO FATURAS CARTAO] Cartão '{cartao.nome}' a partir de {competencia_inicial}: "
@@ -687,13 +802,14 @@ def fechar_fatura_cartao(fatura, user=None):
     Efeitos:
     1. Consolida o total de despesas da fatura.
     2. Calcula a data de vencimento do pagamento.
-    3. Gera o título de Contas a Pagar consolidado no LancamentoFinanceiro (SAIDA, A_VENCER).
+    3. Atualiza/gera o título de Contas a Pagar consolidado no LancamentoFinanceiro (SAIDA, A_VENCER).
     """
     if fatura.status != 'ABERTA':
         raise ValidationError({'status': f"Apenas faturas em status ABERTA podem ser fechadas. Status atual: {fatura.get_status_display()}."})
 
     total_despesas = fatura.despesas_fatura.filter(
         tipo_lancamento='SAIDA',
+        is_fatura_cartao_consolidada=False,
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -708,38 +824,8 @@ def fechar_fatura_cartao(fatura, user=None):
     fatura.updated_by_id = getattr(user, 'id', None)
     fatura.save(update_fields=['status', 'updated_at', 'updated_by_id'])
 
-    # Gera o título mestre no Contas a Pagar se houver valor > 0
-    titulo_fatura = None
-    if total_despesas > Decimal('0.00'):
-        categoria_cartao = obter_ou_criar_categoria_despesa_cartao()
-        desc = f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome} - {fatura.mes_referencia}"
-
-        # Verifica se já existia título mestre prévio
-        titulo_fatura = LancamentoFinanceiro.objects.filter(
-            fatura_cartao=fatura,
-            descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
-            deleted_at__isnull=True
-        ).first()
-
-        if not titulo_fatura:
-            titulo_fatura = LancamentoFinanceiro.objects.create(
-                origem='CARTAO',
-                cartao_credito=fatura.cartao,
-                fatura_cartao=fatura,
-                conta=fatura.cartao.conta_bancaria,
-                categoria=categoria_cartao,
-                tipo_lancamento='SAIDA',
-                descricao=desc,
-                valor=total_despesas,
-                data_competencia=fatura.data_fechamento_real,
-                data_vencimento=data_vencimento,
-                status_pagamento='A_VENCER',
-                created_by_id=getattr(user, 'id', None)
-            )
-        else:
-            titulo_fatura.valor = total_despesas
-            titulo_fatura.data_vencimento = data_vencimento
-            titulo_fatura.save(update_fields=['valor', 'data_vencimento', 'updated_at'])
+    # Sincroniza o título mestre consolidado no Contas a Pagar
+    titulo_fatura = sincronizar_titulo_fatura_cartao(fatura, user=user)
 
     logger.info(f"[FATURA CARTAO FECHADA] Fatura #{fatura.id} ({fatura.mes_referencia}) fechada. Total: R$ {total_despesas}. Vencimento: {data_vencimento}.")
     return {
@@ -759,12 +845,13 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     2. Pagamento Total (valor_pago >= total_fatura):
        - Transita a fatura para 'PAGA'.
        - Transita todas as despesas vinculadas para 'PAGO'.
-       - Quita o título mestre gerado no Contas a Pagar.
+       - Quita o título mestre consolidado no Contas a Pagar.
     3. Pagamento Parcial (valor_pago < total_fatura):
        - Aplica ROLLOVER DE SALDO DEVEDOR: calcula o saldo residual não pago (total - valor_pago).
        - Transita a fatura atual para 'PAGA'.
        - Abre/localiza a fatura do mês seguinte para o mesmo cartão.
        - Cria um lançamento de despesa na fatura do mês seguinte: "SALDO ANTERIOR / ROLLOVER FATURA {mes_referencia}".
+       - Sincroniza o título consolidado da fatura seguinte.
     """
     if fatura.status != 'FECHADA':
         if fatura.status == 'PAGA':
@@ -777,6 +864,7 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
 
     total_despesas = fatura.despesas_fatura.filter(
         tipo_lancamento='SAIDA',
+        is_fatura_cartao_consolidada=False,
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
@@ -809,8 +897,11 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
     conta.saldo -= valor_pago
     conta.save(update_fields=['saldo', 'updated_at'])
 
-    # 2. Atualiza despesas da fatura
-    fatura.despesas_fatura.filter(deleted_at__isnull=True).exclude(
+    # 2. Atualiza despesas individuais da fatura
+    fatura.despesas_fatura.filter(
+        is_fatura_cartao_consolidada=False,
+        deleted_at__isnull=True
+    ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
     ).update(
         status_pagamento='PAGO',
@@ -819,12 +910,13 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
         updated_at=timezone.now()
     )
 
-    # 3. Quita ou atualiza o título mestre de contas a pagar se existir
-    titulo_fatura = LancamentoFinanceiro.objects.filter(
-        fatura_cartao=fatura,
-        descricao__startswith=f"PAGAMENTO FATURA CARTAO {fatura.cartao.nome}",
-        deleted_at__isnull=True
-    ).first()
+    # 3. Transita a fatura para PAGA
+    fatura.status = 'PAGA'
+    fatura.updated_by_id = getattr(user, 'id', None)
+    fatura.save(update_fields=['status', 'updated_at', 'updated_by_id'])
+
+    # 4. Sincroniza e quita o título consolidado em Contas a Pagar
+    titulo_fatura = sincronizar_titulo_fatura_cartao(fatura, user=user)
     if titulo_fatura:
         titulo_fatura.status_pagamento = 'PAGO'
         titulo_fatura.data_pagamento = data_pagamento
@@ -835,15 +927,11 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
             titulo_fatura.nome_arquivo_comprovante = nome_arquivo_comprovante
         titulo_fatura.save()
 
-    fatura.status = 'PAGA'
-    fatura.updated_by_id = getattr(user, 'id', None)
-    fatura.save(update_fields=['status', 'updated_at', 'updated_by_id'])
-
     saldo_devedor_remanescente = max(Decimal('0.00'), total_despesas - valor_pago)
     fatura_proxima = None
     lancamento_rollover = None
 
-    # 4. Rollover de Pagamento Parcial
+    # 5. Rollover de Pagamento Parcial
     if saldo_devedor_remanescente > Decimal('0.00'):
         partes = fatura.mes_referencia.split('-')
         ano = int(partes[0])
@@ -869,9 +957,12 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
             data_competencia=timezone.localdate(),
             data_vencimento=fatura_proxima.data_fechamento_real,
             status_pagamento='A_VENCER',
+            is_fatura_cartao_consolidada=False,
             created_by_id=getattr(user, 'id', None)
         )
         logger.info(f"[ROLLOVER DE CARTAO APLICADO] R$ {saldo_devedor_remanescente} transferido da fatura {fatura.mes_referencia} para {mes_ref_prox}.")
+        # Sincroniza o título consolidado da fatura seguinte
+        sincronizar_titulo_fatura_cartao(fatura_proxima, user=user)
 
     return {
         'fatura': fatura,

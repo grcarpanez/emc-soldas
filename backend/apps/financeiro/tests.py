@@ -1668,5 +1668,116 @@ class CartaoParcelamentoMatrizPagamentoTestCase(TestCase):
         resp2 = self.client.put(f'/api/cartoes-credito/{self.cartao.id}/', data=payload_com_confirmar, format='json')
         self.assertEqual(resp2.status_code, status.HTTP_200_OK)
 
+    def test_compras_individuais_cartao_excluidas_do_contas_a_pagar_e_fatura_agrupada_exibida(self):
+        """Valida que compras de cartão não poluem o Contas a Pagar e apenas o título consolidado é exibido."""
+        from apps.financeiro.services_cartao import lancar_despesa_cartao
+
+        # Cria compra parcelada em 3x de R$ 300,00 (R$ 100,00 por mês)
+        lancamentos = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("300.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA TESTE PARCELADA",
+            total_parcelas=3,
+            data_compra=date(2026, 10, 5),
+            user=self.operador
+        )
+        self.assertEqual(len(lancamentos), 3)
+
+        # Consulta listagem de Contas a Pagar
+        resp = self.client.get('/api/lancamentos-financeiros/?tipo_lancamento=SAIDA&status_pagamento=A_VENCER')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        dados = resp.json()
+        itens = dados.get('results', dados)
+
+        # IDs das compras individuais
+        ids_compras = [l.id for l in lancamentos]
+        ids_retornados = [item['id'] for item in itens]
+
+        # Nenhuma compra individual deve constar na listagem de Contas a Pagar
+        for id_compra in ids_compras:
+            self.assertNotIn(id_compra, ids_retornados)
+
+        # Deve haver títulos consolidados de fatura para as competências
+        faturas_consolidadas = [item for item in itens if item.get('is_fatura_cartao_consolidada')]
+        self.assertGreaterEqual(len(faturas_consolidadas), 3)
+
+        # O título da fatura 2026-10 deve ter valor R$ 100,00
+        fatura_out = next((f for f in faturas_consolidadas if '2026-10' in f.get('descricao', '')), None)
+        self.assertIsNotNone(fatura_out)
+        self.assertEqual(Decimal(str(fatura_out['valor'])), Decimal("100.00"))
+
+    def test_bloqueio_liquidacao_avulsa_compra_cartao(self):
+        """Valida que não é permitido liquidar individualmente compras realizadas no cartão."""
+        from apps.financeiro.services_cartao import lancar_despesa_cartao
+        from apps.financeiro.services import liquidar_lancamento
+        from rest_framework.exceptions import ValidationError
+
+        compra = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("75.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA AVULSA BLOQUEIO",
+            total_parcelas=1,
+            data_compra=date(2026, 10, 5),
+            user=self.operador
+        )
+        self.assertFalse(compra.is_fatura_cartao_consolidada)
+        self.assertIsNotNone(compra.fatura_cartao)
+
+        with self.assertRaises(ValidationError) as ctx:
+            liquidar_lancamento(
+                lancamento=compra,
+                conta_id=self.conta.id,
+                user=self.operador
+            )
+        self.assertIn("Compras efetuadas pelo cartão de crédito não podem ser baixadas individualmente", str(ctx.exception))
+
+    def test_liquidacao_fatura_cartao_sincroniza_titulo_consolidado_e_itens(self):
+        """Valida que liquidar a fatura transita tanto o título consolidado quanto os itens para PAGO."""
+        from apps.financeiro.services_cartao import (
+            lancar_despesa_cartao,
+            obter_ou_criar_fatura_aberta,
+            fechar_fatura_cartao,
+            liquidar_fatura_cartao
+        )
+
+        fatura = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+        compra = lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("250.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA TESTE LIQUIDACAO",
+            total_parcelas=1,
+            data_compra=date(2026, 10, 5),
+            user=self.operador
+        )
+
+        fechar_fatura_cartao(fatura, user=self.operador)
+        fatura.refresh_from_db()
+        self.assertEqual(fatura.status, 'FECHADA')
+
+        saldo_inicial = self.conta.saldo
+        resultado = liquidar_fatura_cartao(
+            fatura=fatura,
+            valor_pago=Decimal("250.00"),
+            conta_id=self.conta.id,
+            user=self.operador
+        )
+
+        fatura.refresh_from_db()
+        compra.refresh_from_db()
+        self.conta.refresh_from_db()
+
+        self.assertEqual(fatura.status, 'PAGA')
+        self.assertEqual(compra.status_pagamento, 'PAGO')
+        self.assertEqual(self.conta.saldo, saldo_inicial - Decimal("250.00"))
+
+        # O título consolidado da fatura deve estar como PAGO
+        from apps.financeiro.models import LancamentoFinanceiro
+        titulo_consolidado = LancamentoFinanceiro.objects.get(fatura_cartao=fatura, is_fatura_cartao_consolidada=True)
+        self.assertEqual(titulo_consolidado.status_pagamento, 'PAGO')
+        self.assertEqual(titulo_consolidado.valor, Decimal("250.00"))
+
 
 

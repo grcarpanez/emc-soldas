@@ -103,6 +103,25 @@ def liquidar_lancamento(lancamento, conta_id, meio_pagamento_id=None, data_pagam
     if lancamento.status_pagamento == 'CANCELADO':
         raise ValidationError({'status_pagamento': 'Não é possível liquidar um título que foi cancelado.'})
 
+    # Blindagem de Cartões: Compras individuais não podem ser liquidadas avulsamente
+    if lancamento.fatura_cartao_id and not lancamento.is_fatura_cartao_consolidada:
+        raise ValidationError({
+            'detail': 'Compras efetuadas pelo cartão de crédito não podem ser baixadas individualmente. A liquidação deve ser realizada exclusivamente através da fatura do cartão.'
+        })
+
+    # Se for o título consolidado da fatura de cartão, delega para a liquidação oficial da fatura
+    if lancamento.is_fatura_cartao_consolidada and lancamento.fatura_cartao:
+        from apps.financeiro.services_cartao import liquidar_fatura_cartao
+        liquidar_fatura_cartao(
+            fatura=lancamento.fatura_cartao,
+            valor_pago=valor_pago or lancamento.valor,
+            conta_id=conta_id,
+            data_pagamento=data_pagamento,
+            user=user
+        )
+        lancamento.refresh_from_db()
+        return lancamento
+
     conta = ContaBancaria.objects.filter(id=conta_id, deleted_at__isnull=True).first()
     if not conta:
         raise ValidationError({'conta_id': 'Conta bancária informada não encontrada ou inativa.'})

@@ -379,6 +379,9 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
     origem_display = serializers.CharField(source='get_origem_display', read_only=True)
     status_pagamento_display = serializers.CharField(source='get_status_pagamento_display', read_only=True)
     eh_conta_agendada = serializers.BooleanField(read_only=True)
+    is_fatura_cartao_consolidada = serializers.BooleanField(read_only=True)
+    fatura_cartao_status = serializers.CharField(source='fatura_cartao.status', read_only=True, allow_null=True)
+    fatura_cartao_mes = serializers.CharField(source='fatura_cartao.mes_referencia', read_only=True, allow_null=True)
 
     class Meta:
         model = LancamentoFinanceiro
@@ -387,6 +390,7 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'origem',
             'origem_display',
             'eh_conta_agendada',
+            'is_fatura_cartao_consolidada',
             'fatura',
             'cliente_fornecedor',
             'cliente_fornecedor_nome',
@@ -400,6 +404,8 @@ class LancamentoFinanceiroSerializer(serializers.ModelSerializer):
             'cartao_credito',
             'cartao_credito_nome',
             'fatura_cartao',
+            'fatura_cartao_status',
+            'fatura_cartao_mes',
             'categoria',
             'categoria_nome',
             'categoria_tipo',

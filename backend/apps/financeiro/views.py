@@ -416,12 +416,15 @@ class FaturaCartaoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='itens')
     def itens(self, request, pk=None):
-        """Retorna os lançamentos associados a esta fatura."""
+        """Retorna os lançamentos associados a esta fatura (apenas compras individuais)."""
         fatura = self.get_object()
         despesas = fatura.despesas_fatura.filter(
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith="PAGAMENTO FATURA CARTAO"
+        ).exclude(
+            descricao__startswith="FATURA CARTAO"
         ).order_by('data_competencia', 'data_vencimento', 'id')
         serializer = LancamentoFinanceiroSerializer(despesas, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -602,6 +605,21 @@ class LancamentoFinanceiroViewSet(viewsets.ModelViewSet):
             qs = qs.filter(data_pagamento__date__gte=pagto_ini)
         if pagto_fim:
             qs = qs.filter(data_pagamento__date__lte=pagto_fim)
+
+        # Filtro explícito por Título Consolidado de Fatura de Cartão
+        is_consolidada = params.get('is_fatura_cartao_consolidada')
+        if is_consolidada is not None:
+            is_cons = is_consolidada.lower() in ['true', '1', 't']
+            qs = qs.filter(is_fatura_cartao_consolidada=is_cons)
+
+        # Isolamento de Compras de Cartão: compras individuais não devem poluir a listagem de Contas a Pagar nem o Extrato Geral.
+        # Apenas os títulos consolidados de fatura (is_fatura_cartao_consolidada=True) devem figurar na listagem.
+        incluir_itens_cartao = params.get('incluir_itens_cartao', 'false').lower() in ['true', '1']
+        if self.action == 'list' and not incluir_itens_cartao and not params.get('fatura_cartao_id') and not params.get('fatura_cartao'):
+            qs = qs.exclude(
+                fatura_cartao__isnull=False,
+                is_fatura_cartao_consolidada=False
+            )
 
         return qs
 

@@ -432,3 +432,17 @@ ull, falhando silenciosamente a troca de estilo.
 - **Solução aplicada:** O filtro do queryset em `EquipamentoViewSet.historico_manutencao` foi refinado para `Q(equipamento=equipamento) | Q(equipamento__isnull=True, orcamento__equipamento=equipamento)`. Desta forma, o equipamento do cabeçalho só é herdado para as linhas caso o item não possua vínculo granular explícito (`equipamento__isnull=True`), preservando a segregação estrita entre múltiplos veículos/equipamentos atendidos no mesmo orçamento.
 - **Como evitar no futuro:** Sempre que modelar relações com possibilidade de sobrescrita local (override granular por linha em relação ao cabeçalho), a consulta de agregação deve verificar explicitamente a nulidade do campo da linha antes de considerar a herança do cabeçalho (`Q(field=val) | Q(field__isnull=True, parent__field=val)`).
 
+---
+
+## 2026-10-24 - Erro 404 em Ações de Detalhe por Filtro Restritivo Amplo no get_queryset() do DRF
+
+- **Sintoma:** Ao executar testes automatizados que invocavam rotas de detalhe em lançamentos de cartão (como `POST /api/lancamentos-financeiros/{id}/alterar-fatura-cartao/`), a API retornava `404 Not Found`, mesmo com o ID existindo no banco de dados.
+- **Causa:** O método `get_queryset()` do `LancamentoFinanceiroViewSet` aplicava uma cláusula `.exclude(fatura_cartao__isnull=False, is_fatura_cartao_consolidada=False)` globalmente em todas as ações do ViewSet para impedir que compras avulsas aparecessem no Contas a Pagar. Porém, no Django REST Framework, rotas com `@action(detail=True)` invocam `self.get_object()`, que utiliza internamente `self.get_queryset()`. Com o filtro global ativo, o objeto individual era excluído do queryset base antes do lookup por chave primária, resultando em `Http404`.
+- **Solução aplicada:** Restringir o filtro de ocultação de itens individuais estritamente para ações de listagem:
+  ```python
+  if self.action == 'list' and not self.request.query_params.get('incluir_itens_cartao') == 'true':
+      qs = qs.exclude(fatura_cartao__isnull=False, is_fatura_cartao_consolidada=False)
+  ```
+  Dessa forma, a listagem geral de Contas a Pagar fica limpa, enquanto rotas de detalhe (`retrieve`, `update`, `destroy`, `alterar-fatura-cartao`, etc.) continuam resolvendo o registro específico pelo ID com sucesso.
+- **Como evitar no futuro:** Ao filtrar ou restringir querysets no método `get_queryset()` de um ViewSet do DRF com o objetivo de alterar a listagem principal, condicionar o filtro a `if self.action == 'list'`, garantindo que métodos de detalhe (`detail=True`) continuem tendo visibilidade dos registros individuais por chave primária.
+

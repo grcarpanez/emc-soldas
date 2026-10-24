@@ -469,6 +469,11 @@ class LancamentoFinanceiro(BaseModel):
         default=1,
         verbose_name="Total de Parcelas"
     )
+    is_fatura_cartao_consolidada = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Título Consolidado da Fatura de Cartão"
+    )
 
     class Meta:
         db_table = 'lancamentos_financeiros'

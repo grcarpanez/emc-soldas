@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-24 (Criação do README.md mestre com instruções completas de execução local para testes)  
+**Última Atualização:** 2026-10-24 (Isolamento de compras com cartão e agrupamento de faturas consolidadas no Contas a Pagar)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -804,6 +804,16 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes:** Testes automatizados Django aprovados com 100% de sucesso.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.65` em `sw.js` e query strings de assets atualizadas para `?v=4.65` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-08_02_substituicao_dialogos_nativos_modais_industrial_integrity.md`.
+
+- [x] **Isolamento de Compras de Cartão e Agrupamento de Faturas no Contas a Pagar (24/10/2026):**
+  - **Isolamento no Contas a Pagar:** Compras e parcelas avulsas de cartões de crédito corporativos não são mais exibidas individualmente na listagem de Contas a Pagar, eliminando a poluição visual e a possibilidade indevida de liquidação avulsa via botão `PAGAR (BAIXA)`.
+  - **Título Consolidado da Fatura:** Criação e manutenção automática do campo `is_fatura_cartao_consolidada` no modelo `LancamentoFinanceiro`, gerando um único registro representativo para cada fatura ativa com valor consolidado, vencimento e chip temático `FATURA CARTÃO`.
+  - **Sincronização Contínua e Recálculo em Cadeia:** Implementação da rotina `sincronizar_titulo_fatura_cartao` integrada a todos os eventos do cartão (compras à vista, parcelamentos, remanejamentos de despesas entre faturas, alteração de fechamento com recálculo em cadeia de faturas adjacentes, recálculo atômico global, fechamento e liquidação).
+  - **Blindagem no Backend (DRF):** Bloqueio estrito de liquidação avulsa de compras de cartão com `ValidationError` em `liquidar_lancamento`. Ações de liquidação sobre o título consolidado direcionam para a rotina oficial `liquidar_fatura_cartao`. Queryset do `LancamentoFinanceiroViewSet` oculta itens avulsos em `self.action == 'list'`, mantendo rotas de detalhe acessíveis.
+  - **Experiência Visual Industrial Integrity:** Ações contextuais na tabela de Contas a Pagar: `💰 LIQUIDAR FATURA` para faturas fechadas (abrindo modal oficial), `🔍 CONFERIR FATURA (ABERTA)` para faturas abertas (navegando para a aba de cartões corporativos) e tag `FATURA QUITADA` para faturas pagas.
+  - **Bateria de Testes Automatizados:** 3 novos testes adicionados no módulo financeiro (42 testes em `apps.financeiro` e 217 testes no backend geral aprovados com 100% de sucesso).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.66` em `sw.js` e query strings de assets atualizadas para `?v=4.66` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-09_01_isolamento_compras_cartao_e_agrupamento_faturas_contas_pagar.md`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

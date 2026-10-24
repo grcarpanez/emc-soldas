@@ -375,10 +375,36 @@ window.FinanceiroView = {
       let html = '';
       lista.forEach((l) => {
         const badge = l.status_pagamento === 'PAGO' ? 'success' : (l.status_pagamento === 'VENCIDO' ? 'danger' : 'warning');
+        const isFaturaCartao = !!l.is_fatura_cartao_consolidada;
+
+        let descHtml = '';
+        if (isFaturaCartao) {
+          descHtml = `<span class="status-chip info" style="font-size: 10px; margin-right: 6px; padding: 2px 6px;">FATURA CARTÃO</span><strong>${window.EMCUtils.escapeHtml(l.descricao)}</strong>`;
+        } else {
+          descHtml = `<strong>${window.EMCUtils.escapeHtml(l.descricao)}</strong>`;
+        }
+
+        let acaoHtml = '';
+        if (isFaturaCartao) {
+          if (l.status_pagamento === 'PAGO') {
+            acaoHtml = '<span class="mono-text" style="font-size: 11px; color: var(--color-success); font-weight: 700;">FATURA QUITADA</span>';
+          } else if (l.fatura_cartao_status === 'FECHADA') {
+            acaoHtml = `<button class="btn btn-primary btn-sm" style="background-color: var(--color-success); border-color: var(--color-success);" onclick="window.FinanceiroView.abrirModalLiquidarFaturaId(${l.fatura_cartao})">💰 LIQUIDAR FATURA</button>`;
+          } else {
+            acaoHtml = `<button class="btn btn-secondary btn-sm" onclick="window.FinanceiroView.navegarParaFaturaCartao(${l.cartao_credito || 'null'}, ${l.fatura_cartao || 'null'})" title="Fatura aberta acumulando compras. Clique para conferir ou fechar.">🔍 CONFERIR FATURA (ABERTA)</button>`;
+          }
+        } else {
+          if (l.status_pagamento !== 'PAGO') {
+            acaoHtml = `<button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalLiquidarLancamento(${l.id})">PAGAR (BAIXA)</button>`;
+          } else {
+            acaoHtml = '<span class="mono-text" style="font-size: 11px; color: var(--color-success);">LIQUIDADO</span>';
+          }
+        }
+
         html += `
           <tr>
             <td class="mono-text">#${l.id}</td>
-            <td><strong>${window.EMCUtils.escapeHtml(l.descricao)}</strong></td>
+            <td>${descHtml}</td>
             <td>${window.EMCUtils.escapeHtml(l.categoria_nome || 'Geral')}</td>
             <td class="mono-text">${window.EMCUtils.formatarDataPtBr(l.data_vencimento)}</td>
             <td class="mono-text" style="color: var(--color-error); font-weight: 700;">
@@ -386,9 +412,7 @@ window.FinanceiroView = {
             </td>
             <td><span class="status-chip ${badge}">${window.EMCUtils.formatarStatus(l.status_pagamento)}</span></td>
             <td style="text-align: right;">
-              ${l.status_pagamento !== 'PAGO' ? `
-                <button class="btn btn-primary btn-sm" onclick="window.FinanceiroView.abrirModalLiquidarLancamento(${l.id})">PAGAR (BAIXA)</button>
-              ` : '<span class="mono-text" style="font-size: 11px; color: var(--color-success);">LIQUIDADO</span>'}
+              ${acaoHtml}
             </td>
           </tr>
         `;
@@ -1386,7 +1410,8 @@ window.FinanceiroView = {
 
           await window.api.post(endpoint, payload);
           window.EMCUtils.showToast('Fatura liquidada com sucesso! Débito efetuado em conta bancária.', 'success');
-          await this.carregarMetricasEFaturasCartao();
+          if (this.carregarMetricasEFaturasCartao) await this.carregarMetricasEFaturasCartao();
+          if (document.getElementById('lista-pagar-tbody')) await this.carregarListaContasPagar();
           return true;
         } catch (e) {
           window.EMCUtils.showToast(e.message || 'Erro ao liquidar fatura.', 'error');
@@ -1401,6 +1426,40 @@ window.FinanceiroView = {
         selectConta.value = String(contaCartaoId);
       }
     }, 50);
+  },
+
+  async abrirModalLiquidarFaturaId(faturaId) {
+    try {
+      const endpoint = `${window.CONFIG.ENDPOINTS.FINANCEIRO.FATURAS_CARTAO}${faturaId}/`;
+      const fatura = await window.api.get(endpoint);
+      if (fatura.cartao_id && !this.cartaoAtivo) {
+        this.cartaoAtivo = { id: fatura.cartao_id, conta_bancaria_id: fatura.cartao?.conta_bancaria_id };
+      }
+      await this.abrirModalLiquidarFatura(fatura);
+    } catch (e) {
+      window.EMCUtils.showToast(e.message || 'Erro ao carregar detalhes da fatura.', 'error');
+    }
+  },
+
+  navegarParaFaturaCartao(cartaoId, faturaId) {
+    const btnTabCartoes = document.getElementById('tab-btn-fin-cartoes');
+    if (btnTabCartoes) {
+      btnTabCartoes.click();
+      if (cartaoId) {
+        setTimeout(() => {
+          const selCartao = document.getElementById('cartao-ativo-select');
+          if (selCartao) {
+            selCartao.value = String(cartaoId);
+            selCartao.dispatchEvent(new Event('change'));
+          }
+          if (faturaId) {
+            setTimeout(() => {
+              this.selecionarFatura(faturaId);
+            }, 300);
+          }
+        }, 150);
+      }
+    }
   },
 
   async abrirModalLancarDespesaCartao(cartao, fatura = null) {
