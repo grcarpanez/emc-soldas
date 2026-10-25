@@ -797,8 +797,11 @@ window.FinanceiroView = {
         return;
       }
 
-      // Seleciona primeira fatura aberta ou a mais recente
-      if (!this.faturaAtiva || !this.faturasLista.some(f => f.id === this.faturaAtiva.id)) {
+      // Re-sincroniza ou seleciona primeira fatura aberta ou a mais recente
+      if (this.faturaAtiva) {
+        this.faturaAtiva = this.faturasLista.find(f => f.id === this.faturaAtiva.id) || null;
+      }
+      if (!this.faturaAtiva) {
         const aberta = this.faturasLista.find(f => f.status === 'ABERTA');
         this.faturaAtiva = aberta || this.faturasLista[0];
       }
@@ -1253,6 +1256,10 @@ window.FinanceiroView = {
           }
           if (dados.itens_puxados_de_volta > 0) {
             msg += ` ${dados.itens_puxados_de_volta} compra(s) puxada(s) de volta para esta fatura.`;
+          }
+
+          if (dados && dados.fatura) {
+            this.faturaAtiva = dados.fatura;
           }
 
           window.EMCUtils.showToast(msg, 'success');

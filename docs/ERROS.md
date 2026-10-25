@@ -455,3 +455,18 @@ ull, falhando silenciosamente a troca de estilo.
 - **Solução aplicada:** Inclusão do filtro `is_fatura_cartao_consolidada=False` e exclusões defensivas de descrições em `get_total_despesas()`, `get_quantidade_itens()` e `get_despesas_detalhadas()` no `FaturaCartaoSerializer` (`backend/apps/financeiro/serializers.py`), bem como reforço defensivo em `services_cartao.py`.
 - **Como evitar no futuro:** Sempre que um modelo relacional (como `LancamentoFinanceiro`) puder conter tanto registros operacionais (itens/compras) quanto registros sintéticos/consolidados (faturas agrupadas), utilizar flags booleanas explícitas de classificação (`is_fatura_cartao_consolidada=False`) em 100% dos métodos de agregação e serialização, evitando confiar unicamente em testes por prefixos de texto (`startswith`).
 
+---
+
+## 2026-10-24 - Retenção de Referência de Objeto Stale em Memória no Cabeçalho de Faturas
+
+- **Sintoma:** Ao alterar a data de fechamento real de uma fatura de cartão na visualização de Cartões Corporativos, a tabela de lançamentos era atualizada com sucesso, mas o cabeçalho da fatura ativa (Corte / Fechamento Real e Total da Fatura) continuava exibindo a data e o valor anteriores até que o operador pressionasse `F5`.
+- **Causa:** Ao recarregar a lista de faturas da API via `this.carregarMetricasEFaturasCartao()`, o código verificava `if (!this.faturaAtiva || !this.faturasLista.some(f => f.id === this.faturaAtiva.id))`. Como `this.faturaAtiva` já estava instanciada e pertencia à lista, a condição era ignorada e o atributo de classe continuava apontando para o objeto JavaScript em memória desatualizado, nunca sendo reassociado com o novo objeto retornado pela API.
+- **Solução aplicada:** Re-associação explícita de `this.faturaAtiva` no método `carregarMetricasEFaturasCartao`:
+  ```javascript
+  if (this.faturaAtiva) {
+    this.faturaAtiva = this.faturasLista.find(f => f.id === this.faturaAtiva.id) || null;
+  }
+  ```
+  Além disso, o callback de ajuste de corte agora atribui `this.faturaAtiva = dados.fatura` imediatamente antes do recarregamento.
+- **Como evitar no futuro:** Em aplicações client-side Vanilla JS que mantêm referências a objetos selecionados (como "item ativo" ou "registro em foco"), sempre reassociar a referência buscando o ID na lista atualizada recém-chegada da API (`this.lista.find(...)`) ao invés de apenas checar se a referência anterior continua existindo.
+

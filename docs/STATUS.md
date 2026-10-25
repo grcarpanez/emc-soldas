@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-24 (Correção de duplicação de total e contagem de itens em Faturas de Cartão)  
+**Última Atualização:** 2026-10-24 (Reatividade instantânea do cabeçalho da fatura após ajuste de fechamento)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -821,6 +821,12 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Sincronização da Fatura 2026-10 e Subsequentes:** Fechamento da fatura 2026-10 do cartão NUBANK mantido no padrão (10/10/2026), acomodando os R$ 303,00 (2 itens) na fatura 2026-10 e R$ 1,00 nas 9 faturas subsequentes, sem duplicações de valores no frontend ou no Contas a Pagar.
   - **Bateria de Testes Automatizados:** Adicionado teste de regressão em `backend/apps/financeiro/tests.py` (43 testes de financeiro e 218 testes gerais do sistema aprovados com 100% de sucesso).
   - **Registro de Planejamento:** `Planejamento/2026-10-24_02_correcao_duplicacao_total_faturas_cartao.md`.
+
+- [x] **Reatividade Instantânea do Cabeçalho da Fatura após Ajuste de Fechamento (24/10/2026):**
+  - **Re-sincronização do Estado em Memória (`financeiro-view.js`):** Ajuste na atribuição de `this.faturaAtiva` em `carregarMetricasEFaturasCartao` para reassociar a instância atualizada do objeto retornada pela API (`this.faturasLista.find(...)`), eliminando a retenção de dados stale em memória.
+  - **Reatividade Imediata pós-Ajuste:** Atribuição direta de `this.faturaAtiva = dados.fatura` no callback de confirmação do modal `abrirModalAjustarFechamento`, atualizando instantaneamente o Corte / Fechamento Real, Vencimento e Total da Fatura sem necessidade de recarregar a tela (`F5`).
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.67` em `sw.js` e query strings de assets atualizadas para `?v=4.67` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-24_03_reatividade_cabecalho_fatura_apos_ajuste_fechamento.md`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
