@@ -908,7 +908,7 @@ window.FinanceiroView = {
               <td class="mono-text">#${item.id}</td>
               <td class="mono-text">${window.EMCUtils.formatarDataPtBr(dtCompetencia)}</td>
               <td><strong>${window.EMCUtils.escapeHtml(item.descricao)}</strong></td>
-              <td><span class="status-chip info" style="font-size: 9px;">${window.EMCUtils.escapeHtml(item.categoria?.nome || 'CATEGORIA')}</span></td>
+              <td style="text-align: center;"><span class="status-chip info" style="font-size: 9px;">${window.EMCUtils.escapeHtml(item.categoria?.nome || 'CATEGORIA')}</span></td>
               <td class="mono-text" style="text-align: center;"><span class="badge-parcela">${parcelaTag}</span></td>
               <td class="mono-text font-bold" style="color: var(--color-error); text-align: right;">
                 ${window.EMCUtils.formatarMoeda(item.valor)}
@@ -957,7 +957,7 @@ window.FinanceiroView = {
                 <th style="width: 60px;">ID</th>
                 <th style="width: 110px;">DATA COMPRA</th>
                 <th>DESCRIÇÃO / HISTÓRICO</th>
-                <th>CATEGORIA</th>
+                <th style="width: 140px; text-align: center;">CATEGORIA</th>
                 <th style="width: 80px; text-align: center;">PARCELA</th>
                 <th style="width: 120px; text-align: right;">VALOR</th>
                 <th style="width: 90px; text-align: center;">ANEXO</th>
