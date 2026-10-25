@@ -542,26 +542,35 @@ class FaturaCartaoSerializer(serializers.ModelSerializer):
         from django.db.models import Sum
         total = obj.despesas_fatura.filter(
             tipo_lancamento='SAIDA',
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).exclude(
+            descricao__startswith='FATURA CARTAO'
         ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
         return float(total)
 
     def get_quantidade_itens(self, obj):
         return obj.despesas_fatura.filter(
             tipo_lancamento='SAIDA',
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).exclude(
+            descricao__startswith='FATURA CARTAO'
         ).count()
 
     def get_despesas_detalhadas(self, obj):
         despesas = obj.despesas_fatura.filter(
             tipo_lancamento='SAIDA',
+            is_fatura_cartao_consolidada=False,
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith='PAGAMENTO FATURA CARTAO'
+        ).exclude(
+            descricao__startswith='FATURA CARTAO'
         ).order_by('-data_vencimento', '-id')
         return LancamentoFinanceiroSerializer(despesas, many=True).data
 

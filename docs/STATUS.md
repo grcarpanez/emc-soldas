@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-24 (Isolamento de compras com cartão e agrupamento de faturas consolidadas no Contas a Pagar)  
+**Última Atualização:** 2026-10-24 (Correção de duplicação de total e contagem de itens em Faturas de Cartão)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -814,6 +814,13 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Bateria de Testes Automatizados:** 3 novos testes adicionados no módulo financeiro (42 testes em `apps.financeiro` e 217 testes no backend geral aprovados com 100% de sucesso).
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.66` em `sw.js` e query strings de assets atualizadas para `?v=4.66` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-09_01_isolamento_compras_cartao_e_agrupamento_faturas_contas_pagar.md`.
+
+- [x] **Correção da Duplicação de Total e Contagem de Itens em Faturas de Cartão (24/10/2026):**
+  - **Eliminação de Duplicação no Serializer:** Inclusão de filtro estrito `is_fatura_cartao_consolidada=False` e exclusões defensivas de descrições nos métodos `get_total_despesas()`, `get_quantidade_itens()` e `get_despesas_detalhadas()` de `FaturaCartaoSerializer` (`backend/apps/financeiro/serializers.py`), impedindo que o título financeiro consolidado de Contas a Pagar seja somado e computado dentro da própria fatura.
+  - **Blindagem nos Serviços de Cartão:** Reforço de filtros em `services_cartao.py` para cálculos de fechamento, liquidação e sincronização.
+  - **Sincronização da Fatura 2026-10 e Subsequentes:** Fechamento da fatura 2026-10 do cartão NUBANK mantido no padrão (10/10/2026), acomodando os R$ 303,00 (2 itens) na fatura 2026-10 e R$ 1,00 nas 9 faturas subsequentes, sem duplicações de valores no frontend ou no Contas a Pagar.
+  - **Bateria de Testes Automatizados:** Adicionado teste de regressão em `backend/apps/financeiro/tests.py` (43 testes de financeiro e 218 testes gerais do sistema aprovados com 100% de sucesso).
+  - **Registro de Planejamento:** `Planejamento/2026-10-24_02_correcao_duplicacao_total_faturas_cartao.md`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend

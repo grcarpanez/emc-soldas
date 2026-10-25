@@ -1779,5 +1779,57 @@ class CartaoParcelamentoMatrizPagamentoTestCase(TestCase):
         self.assertEqual(titulo_consolidado.status_pagamento, 'PAGO')
         self.assertEqual(titulo_consolidado.valor, Decimal("250.00"))
 
+    def test_fatura_cartao_serializer_nao_duplica_total_com_titulo_consolidado(self):
+        """Garante que FaturaCartaoSerializer não soma o título consolidado ao total da fatura nem nos itens."""
+        from apps.financeiro.services_cartao import (
+            obter_ou_criar_fatura_aberta,
+            lancar_despesa_cartao,
+            sincronizar_titulo_fatura_cartao
+        )
+        from apps.financeiro.serializers import FaturaCartaoSerializer
+
+        fatura = obter_ou_criar_fatura_aberta(self.cartao, mes_referencia="2026-10", user=self.operador)
+
+        # Compra 1: Parcela de R$ 1,00
+        lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("1.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="PARCELA COMPRA TESTE",
+            total_parcelas=1,
+            data_compra=date(2026, 10, 7),
+            user=self.operador
+        )
+
+        # Compra 2: Compra à vista de R$ 302,00
+        lancar_despesa_cartao(
+            cartao=self.cartao,
+            valor=Decimal("302.00"),
+            categoria_id=self.cat_despesa.id,
+            descricao="COMPRA A VISTA TESTE",
+            total_parcelas=1,
+            data_compra=date(2026, 10, 9),
+            user=self.operador
+        )
+
+        # Sincroniza título consolidado explicitamente
+        sincronizar_titulo_fatura_cartao(fatura, user=self.operador)
+
+        # Serializa via FaturaCartaoSerializer
+        fatura.refresh_from_db()
+        serializer_data = FaturaCartaoSerializer(fatura).data
+
+        # total_despesas deve ser estritamente 303.00 (e NÃO 606.00)
+        self.assertEqual(serializer_data['total_despesas'], 303.00)
+        # quantidade_itens deve ser estritamente 2 (e NÃO 3)
+        self.assertEqual(serializer_data['quantidade_itens'], 2)
+
+        # despesas_detalhadas deve ter 2 itens e nenhum consolidado
+        itens_detalhados = serializer_data['despesas_detalhadas']
+        self.assertEqual(len(itens_detalhados), 2)
+        for it in itens_detalhados:
+            self.assertFalse(it.get('is_fatura_cartao_consolidada', False))
+            self.assertNotIn("FATURA CARTAO", it['descricao'])
+
 
 

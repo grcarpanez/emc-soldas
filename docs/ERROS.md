@@ -446,3 +446,12 @@ ull, falhando silenciosamente a troca de estilo.
   Dessa forma, a listagem geral de Contas a Pagar fica limpa, enquanto rotas de detalhe (`retrieve`, `update`, `destroy`, `alterar-fatura-cartao`, etc.) continuam resolvendo o registro específico pelo ID com sucesso.
 - **Como evitar no futuro:** Ao filtrar ou restringir querysets no método `get_queryset()` de um ViewSet do DRF com o objetivo de alterar a listagem principal, condicionar o filtro a `if self.action == 'list'`, garantindo que métodos de detalhe (`detail=True`) continuem tendo visibilidade dos registros individuais por chave primária.
 
+---
+
+## 2026-10-24 - Duplicação de Total e Contagem de Itens em Faturas de Cartão por Ausência de Filtro de Títulos Consolidados no Serializer
+
+- **Sintoma:** O total de todas as faturas de cartão de crédito aparecia com valor dobrado (ex: fatura com compras de R$ 303,00 exibia R$ 606,00; faturas com parcela de R$ 1,00 exibiam R$ 2,00) e a quantidade de itens vinha com +1 item espúrio.
+- **Causa:** O `FaturaCartaoSerializer` filtrava as despesas da fatura com `.exclude(descricao__startswith='PAGAMENTO FATURA CARTAO')`. Quando foi implementado o agrupamento de faturas no Contas a Pagar via títulos com `is_fatura_cartao_consolidada=True` e descrição `FATURA CARTAO {cartao.nome} - {fatura.mes_referencia}`, esses títulos consolidados (que pertencem à mesma `FaturaCartao`) não foram excluídos pelo serializer. Como consequência, o serializer somava o total de compras reais com o próprio título consolidado representativo da dívida, duplicando o valor da fatura e adicionando o título na lista de itens detalhados.
+- **Solução aplicada:** Inclusão do filtro `is_fatura_cartao_consolidada=False` e exclusões defensivas de descrições em `get_total_despesas()`, `get_quantidade_itens()` e `get_despesas_detalhadas()` no `FaturaCartaoSerializer` (`backend/apps/financeiro/serializers.py`), bem como reforço defensivo em `services_cartao.py`.
+- **Como evitar no futuro:** Sempre que um modelo relacional (como `LancamentoFinanceiro`) puder conter tanto registros operacionais (itens/compras) quanto registros sintéticos/consolidados (faturas agrupadas), utilizar flags booleanas explícitas de classificação (`is_fatura_cartao_consolidada=False`) em 100% dos métodos de agregação e serialização, evitando confiar unicamente em testes por prefixos de texto (`startswith`).
+

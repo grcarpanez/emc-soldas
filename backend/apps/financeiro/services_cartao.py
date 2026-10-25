@@ -213,6 +213,8 @@ def sincronizar_titulo_fatura_cartao(fatura, user=None):
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).exclude(
+        descricao__startswith="FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     partes = fatura.mes_referencia.split('-')
@@ -636,6 +638,8 @@ def ajustar_fechamento_fatura(fatura, nova_data_fechamento, user=None):
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).exclude(
+        descricao__startswith="FATURA CARTAO"
     ).update(
         data_vencimento=nova_data_fechamento,
         updated_at=timezone.now()
@@ -773,6 +777,8 @@ def recalcular_faturas_cartao(cartao, competencia_inicial, user=None, confirmar_
             deleted_at__isnull=True
         ).exclude(
             descricao__startswith="PAGAMENTO FATURA CARTAO"
+        ).exclude(
+            descricao__startswith="FATURA CARTAO"
         ).update(
             data_vencimento=fatura.data_fechamento_real,
             updated_at=timezone.now()
@@ -813,6 +819,8 @@ def fechar_fatura_cartao(fatura, user=None):
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).exclude(
+        descricao__startswith="FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     partes = fatura.mes_referencia.split('-')
@@ -868,6 +876,8 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).exclude(
+        descricao__startswith="FATURA CARTAO"
     ).aggregate(total=Sum('valor'))['total'] or Decimal('0.00')
 
     # Conta de pagamento
@@ -903,6 +913,8 @@ def liquidar_fatura_cartao(fatura, valor_pago, conta_id=None, data_pagamento=Non
         deleted_at__isnull=True
     ).exclude(
         descricao__startswith="PAGAMENTO FATURA CARTAO"
+    ).exclude(
+        descricao__startswith="FATURA CARTAO"
     ).update(
         status_pagamento='PAGO',
         data_pagamento=data_pagamento,
