@@ -914,7 +914,7 @@ window.FinanceiroView = {
                 ${window.EMCUtils.formatarMoeda(item.valor)}
               </td>
               <td style="text-align: center;">${anexoHtml}</td>
-              <td style="text-align: right;">${remanejarBtn}</td>
+              <td style="text-align: center;">${remanejarBtn}</td>
             </tr>
           `;
         }).join('');
@@ -961,7 +961,7 @@ window.FinanceiroView = {
                 <th style="width: 80px; text-align: center;">PARCELA</th>
                 <th style="width: 120px; text-align: right;">VALOR</th>
                 <th style="width: 90px; text-align: center;">ANEXO</th>
-                <th style="width: 100px; text-align: right;">AÇÕES</th>
+                <th style="width: 100px; text-align: center;">AÇÕES</th>
               </tr>
             </thead>
             <tbody>

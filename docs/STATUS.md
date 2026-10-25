@@ -2,7 +2,7 @@
 
 Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimento, o progresso por fase, o checklist de tarefas e o prÃ³ximo passo recomendado.
 
-**Última Atualização:** 2026-10-24 (Centralização visual da coluna de categorias na tabela de Faturas de Cartão)  
+**Última Atualização:** 2026-10-25 (Centralização visual da coluna de Ações na tabela de Faturas de Cartão)  
 **Fase Atual:** Fase 14.5 - Refinamentos de UX, Mobile e Conectividade Operacional (Compras, Tesouraria & Fluxo de Caixa, Conciliação, Faturamento, Dashboard, Prontuário de Manutenção e Gestão de Cartões/Faturas)  
 **Próxima Fase:** Fase 15 - Bateria de Testes Integrados, Hardening, Pentest de Conclusão e Deploy (Pendente - com checklist de rollback do túnel registrado)  
 
@@ -832,6 +832,11 @@ Este documento Ã© um arquivo vivo que registra o estado atual do desenvolvimen
   - **Alinhamento e Respiro Visual (`financeiro-view.js`):** Ajuste do cabeçalho `<th>` para largura fixa de `140px` com `text-align: center;` e centralização da célula `<td>` do chip de categoria, eliminando a colisão com a coluna de descrição e harmonizando o espaçamento com a coluna de parcela.
   - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.68` em `sw.js` e query strings de assets atualizadas para `?v=4.68` em `index.html`.
   - **Registro de Planejamento:** `Planejamento/2026-10-24_04_centralizacao_coluna_categoria_fatura_cartao.md`.
+
+- [x] **Centralização Visual da Coluna de Ações na Fatura de Cartão (25/10/2026):**
+  - **Alinhamento do Cabeçalho e Botão (`financeiro-view.js`):** Ajuste de `text-align: right` para `text-align: center` no `<th>` da coluna `AÇÕES` e no `<td>` correspondente do botão `REMANEJAR`, harmonizando a composição visual da tabela de compras da fatura.
+  - **Versionamento PWA:** Cache elevado para `emc-soldas-v4.69` em `sw.js` e query strings de assets atualizadas para `?v=4.69` em `index.html`.
+  - **Registro de Planejamento:** `Planejamento/2026-10-25_01_centralizacao_coluna_acoes_fatura_cartao.md`.
 
 
 ### Mapeamento de Funcionalidades do Backend com Views/Telas Pendentes no Frontend
